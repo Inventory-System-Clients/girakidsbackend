@@ -101,9 +101,16 @@ const Produto = sequelize.define(
       type: DataTypes.TEXT,
       allowNull: true,
     },
+    // Capa do produto (sempre a primeira de "imagens").
     imagemUrl: {
       type: DataTypes.TEXT,
       allowNull: true,
+    },
+    // Carrossel de imagens do produto, na ordem de exibição.
+    imagens: {
+      type: DataTypes.JSONB,
+      allowNull: false,
+      defaultValue: [],
     },
     imagemSemEstoqueUrl: {
       type: DataTypes.TEXT,

@@ -9,7 +9,8 @@
     "start": "node src/server.js",
     "migrate": "node src/database/migrate.js",
     "seed": "node src/database/seed.js",
-    "import:legado": "node src/database/importarLegado.js"
+    "import:legado": "node src/database/importarLegado.js",
+    "imagens:cloudinary": "node src/database/migrarImagensCloudinary.js"
   },
   "keywords": [
     "girakids",

@@ -50,6 +50,7 @@ const serializarCatalogo = (produto) => {
     destaque: p.destaque,
     disponivel,
     imagemUrl: !disponivel && p.imagemSemEstoqueUrl ? p.imagemSemEstoqueUrl : p.imagemUrl,
+    imagens: p.imagens?.length ? p.imagens : p.imagemUrl ? [p.imagemUrl] : [],
   };
 };
 
@@ -253,6 +254,11 @@ const normalizar = (corpo) => {
   if (dados.tipoEmbalagem && !TIPOS_EMBALAGEM[dados.tipoEmbalagem]) dados.tipoEmbalagem = null;
   if (dados.fornecedorPreferencialId === "") dados.fornecedorPreferencialId = null;
   if (dados.categoria) dados.categoria = String(dados.categoria).trim();
+  // Carrossel: lista de URLs; a primeira vira a capa.
+  if (Array.isArray(corpo.imagens)) {
+    dados.imagens = corpo.imagens.filter((url) => typeof url === "string" && url.trim()).slice(0, 15);
+    dados.imagemUrl = dados.imagens[0] || null;
+  }
   return dados;
 };
 

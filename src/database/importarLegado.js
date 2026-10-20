@@ -141,6 +141,7 @@ const importar = async () => {
       fornecedorPreferencialId: parceiroPorLegado.get(p.preferred_supplier_id) || null,
       observacoesCompra: p.purchase_notes || null,
       imagemUrl: p.instock_image_url || null,
+      imagens: p.instock_image_url ? [p.instock_image_url] : [],
       imagemSemEstoqueUrl: p.outofstock_image_url || null,
       destaque: Boolean(p.catalog_featured),
       arquivado: Boolean(p.excluded),
