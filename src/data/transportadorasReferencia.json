@@ -1,0 +1,3364 @@
+[
+  {
+    "nome": "Aceville",
+    "telefones": [
+      "2085-7233"
+    ],
+    "telefone_original": "2085-7233",
+    "estados": [
+      "PR",
+      "RS",
+      "SC"
+    ],
+    "abrangencia_original": "PR - RS - SC (LIT)",
+    "pagina_fonte": 1,
+    "observacoes": ""
+  },
+  {
+    "nome": "Águia Branca",
+    "telefones": [
+      "2188-2863",
+      "2188-2897"
+    ],
+    "telefone_original": "2188-2863/2188-2897",
+    "estados": [
+      "BA",
+      "ES",
+      "MG",
+      "RJ",
+      "SE",
+      "MT",
+      "MS"
+    ],
+    "abrangencia_original": "BA - ES - MG - RJ - SE - MT - MS",
+    "pagina_fonte": 1,
+    "observacoes": ""
+  },
+  {
+    "nome": "Alfa Transp",
+    "telefones": [
+      "2595-0880",
+      "(55) 3211-1160"
+    ],
+    "telefone_original": "2595-0880/(55) 3211-1160",
+    "estados": [
+      "RS",
+      "SP",
+      "MG",
+      "SC",
+      "PR"
+    ],
+    "abrangencia_original": "RS - SP - MG - SC - PR",
+    "pagina_fonte": 1,
+    "observacoes": ""
+  },
+  {
+    "nome": "Aliança",
+    "telefones": [
+      "2446-0087"
+    ],
+    "telefone_original": "2446-0087",
+    "estados": [
+      "RS",
+      "SC",
+      "SP"
+    ],
+    "abrangencia_original": "RS - SC - SP",
+    "pagina_fonte": 1,
+    "observacoes": ""
+  },
+  {
+    "nome": "Americana Transp",
+    "telefones": [
+      "(19) 2108-9138",
+      "2131-9200"
+    ],
+    "telefone_original": "(19) 2108-9138/2131-9200",
+    "estados": [
+      "RS",
+      "SC",
+      "PR",
+      "SP",
+      "RJ",
+      "MG",
+      "ES"
+    ],
+    "abrangencia_original": "RS - SC - PR - SP - RJ - MG - ES",
+    "pagina_fonte": 1,
+    "observacoes": ""
+  },
+  {
+    "nome": "Andorinha",
+    "telefones": [
+      "3357-2600"
+    ],
+    "telefone_original": "3357-2600",
+    "estados": [
+      "MS",
+      "PR",
+      "SP",
+      "MT"
+    ],
+    "abrangencia_original": "MS - PR - SP - MT",
+    "pagina_fonte": 1,
+    "observacoes": ""
+  },
+  {
+    "nome": "Atuante",
+    "telefones": [
+      "2411-2054",
+      "2482-3277",
+      "(92)3657-8799"
+    ],
+    "telefone_original": "2411-2054/2482-3277/(92)3657-8799",
+    "estados": [
+      "AM",
+      "RR"
+    ],
+    "abrangencia_original": "AM - RR",
+    "pagina_fonte": 1,
+    "observacoes": ""
+  },
+  {
+    "nome": "Atual Cargas",
+    "telefones": [
+      "3903-0600"
+    ],
+    "telefone_original": "3903-0600",
+    "estados": [
+      "PR",
+      "SC",
+      "RS",
+      "MA",
+      "PI"
+    ],
+    "abrangencia_original": "Todos (Sul.SC; NE: MA - PI)",
+    "pagina_fonte": 1,
+    "observacoes": "Texto original: 'Todos (Sul.SC; NE: MA - PI)'. Normalizado para PR, SC, RS, MA e PI."
+  },
+  {
+    "nome": "Bela Vista",
+    "telefones": [
+      "2636-4262",
+      "2631-5063"
+    ],
+    "telefone_original": "2636-4262/2631-5063",
+    "estados": [
+      "AL"
+    ],
+    "abrangencia_original": "AL",
+    "pagina_fonte": 1,
+    "observacoes": ""
+  },
+  {
+    "nome": "Bento Belém",
+    "telefones": [
+      "2179-3000"
+    ],
+    "telefone_original": "2179-3000",
+    "estados": [
+      "PA"
+    ],
+    "abrangencia_original": "PA",
+    "pagina_fonte": 1,
+    "observacoes": ""
+  },
+  {
+    "nome": "Bertoline",
+    "telefones": [
+      "2482-8000"
+    ],
+    "telefone_original": "2482-8000",
+    "estados": [
+      "MT",
+      "MS",
+      "GO",
+      "DF",
+      "TO",
+      "AC",
+      "AM",
+      "RO",
+      "RR",
+      "AP",
+      "PA"
+    ],
+    "abrangencia_original": "MT-MS-GO-DF-TO-AC-AM-RO-RR-AP-PA",
+    "pagina_fonte": 1,
+    "observacoes": ""
+  },
+  {
+    "nome": "BR Cargo",
+    "telefones": [
+      "4063-1164"
+    ],
+    "telefone_original": "4063-1164",
+    "estados": [
+      "AC",
+      "AL",
+      "AP",
+      "AM",
+      "BA",
+      "CE",
+      "DF",
+      "ES",
+      "GO",
+      "MA",
+      "MT",
+      "MS",
+      "MG",
+      "PA",
+      "PB",
+      "PR",
+      "PE",
+      "PI",
+      "RJ",
+      "RN",
+      "RS",
+      "RO",
+      "RR",
+      "SC",
+      "SP",
+      "SE",
+      "TO"
+    ],
+    "abrangencia_original": "TODOS OS ESTADOS",
+    "pagina_fonte": 1,
+    "observacoes": ""
+  },
+  {
+    "nome": "Brasil Cargas",
+    "telefones": [
+      "2939-8746"
+    ],
+    "telefone_original": "2939-8746",
+    "estados": [
+      "MG"
+    ],
+    "abrangencia_original": "MG",
+    "pagina_fonte": 1,
+    "observacoes": ""
+  },
+  {
+    "nome": "Brasil Sul",
+    "telefones": [
+      "3331-4837"
+    ],
+    "telefone_original": "3331-4837",
+    "estados": [
+      "PR",
+      "MS"
+    ],
+    "abrangencia_original": "PR - MS",
+    "pagina_fonte": 1,
+    "observacoes": ""
+  },
+  {
+    "nome": "Braspress",
+    "telefones": [
+      "2188-9000"
+    ],
+    "telefone_original": "2188-9000",
+    "estados": [
+      "AC",
+      "AL",
+      "AP",
+      "AM",
+      "BA",
+      "CE",
+      "DF",
+      "ES",
+      "GO",
+      "MA",
+      "MT",
+      "MS",
+      "MG",
+      "PA",
+      "PB",
+      "PR",
+      "PE",
+      "PI",
+      "RJ",
+      "RN",
+      "RS",
+      "RO",
+      "RR",
+      "SC",
+      "SP",
+      "SE",
+      "TO"
+    ],
+    "abrangencia_original": "TODOS OS ESTADOS",
+    "pagina_fonte": 1,
+    "observacoes": ""
+  },
+  {
+    "nome": "By Bus",
+    "telefones": [
+      "3858-8116"
+    ],
+    "telefone_original": "3858-8116",
+    "estados": [
+      "SP"
+    ],
+    "abrangencia_original": "SP",
+    "pagina_fonte": 1,
+    "observacoes": ""
+  },
+  {
+    "nome": "Cadore",
+    "telefones": [
+      "2209-9090",
+      "(51) 3470-3700"
+    ],
+    "telefone_original": "2209-9090/(51) 3470-3700",
+    "estados": [
+      "RS",
+      "SC",
+      "PR"
+    ],
+    "abrangencia_original": "RS - SC - PR",
+    "pagina_fonte": 1,
+    "observacoes": ""
+  },
+  {
+    "nome": "Caiapó",
+    "telefones": [
+      "2193-4510"
+    ],
+    "telefone_original": "2193-4510",
+    "estados": [
+      "MG",
+      "GO",
+      "DF"
+    ],
+    "abrangencia_original": "MG - GO - DF",
+    "pagina_fonte": 1,
+    "observacoes": ""
+  },
+  {
+    "nome": "Cairu",
+    "telefones": [
+      "2412-7068",
+      "2488-0455"
+    ],
+    "telefone_original": "2412-7068/2488-0455",
+    "estados": [
+      "RO",
+      "AC"
+    ],
+    "abrangencia_original": "RO - AC",
+    "pagina_fonte": 1,
+    "observacoes": ""
+  },
+  {
+    "nome": "Camilo dos Santos",
+    "telefones": [
+      "2901-8114-6604",
+      "2909-9910"
+    ],
+    "telefone_original": "2901-8114-6604/2909-9910",
+    "estados": [
+      "MG",
+      "RJ",
+      "ES"
+    ],
+    "abrangencia_original": "MG - RJ - ES",
+    "pagina_fonte": 1,
+    "observacoes": ""
+  },
+  {
+    "nome": "Cachoeiro",
+    "telefones": [
+      "2482-0896-0735",
+      "2446-2487-2887"
+    ],
+    "telefone_original": "2482-0896-0735/2446-2487-2887",
+    "estados": [
+      "ES",
+      "RJ"
+    ],
+    "abrangencia_original": "ES - RJ",
+    "pagina_fonte": 1,
+    "observacoes": ""
+  },
+  {
+    "nome": "Campinense",
+    "telefones": [
+      "2193-4777"
+    ],
+    "telefone_original": "2193-4777",
+    "estados": [
+      "PB",
+      "PE",
+      "ES"
+    ],
+    "abrangencia_original": "PB - PE - ES",
+    "pagina_fonte": 1,
+    "observacoes": ""
+  },
+  {
+    "nome": "Chapecó",
+    "telefones": [
+      "2088-6530"
+    ],
+    "telefone_original": "2088-6530",
+    "estados": [
+      "RS",
+      "SC",
+      "PR"
+    ],
+    "abrangencia_original": "RS - SC - PR",
+    "pagina_fonte": 1,
+    "observacoes": ""
+  },
+  {
+    "nome": "Carvalima",
+    "telefones": [
+      "2141-3100"
+    ],
+    "telefone_original": "2141-3100",
+    "estados": [
+      "MT",
+      "MS",
+      "RO",
+      "AC"
+    ],
+    "abrangencia_original": "MT - MS - RO - AC",
+    "pagina_fonte": 1,
+    "observacoes": ""
+  },
+  {
+    "nome": "Competex",
+    "telefones": [
+      "2905-4217",
+      "2089-1206",
+      "2633-8100"
+    ],
+    "telefone_original": "2905-4217/2089-1206/2633-8100",
+    "estados": [],
+    "abrangencia_original": "",
+    "pagina_fonte": 1,
+    "observacoes": "Abrangência não informada na folha."
+  },
+  {
+    "nome": "Cooperbig",
+    "telefones": [
+      "3611-7041",
+      "3611-8099"
+    ],
+    "telefone_original": "3611-7041/3611-8099",
+    "estados": [
+      "SP"
+    ],
+    "abrangencia_original": "SP",
+    "pagina_fonte": 1,
+    "observacoes": ""
+  },
+  {
+    "nome": "Conexão Bahia",
+    "telefones": [
+      "2955-6336",
+      "2207-1975"
+    ],
+    "telefone_original": "2955-6336/2207-1975",
+    "estados": [
+      "BA"
+    ],
+    "abrangencia_original": "BA",
+    "pagina_fonte": 1,
+    "observacoes": ""
+  },
+  {
+    "nome": "Continental",
+    "telefones": [
+      "2085-7220"
+    ],
+    "telefone_original": "2085-7220",
+    "estados": [
+      "ES",
+      "SP",
+      "RJ"
+    ],
+    "abrangencia_original": "ES - SP - RJ",
+    "pagina_fonte": 1,
+    "observacoes": ""
+  },
+  {
+    "nome": "Cristina",
+    "telefones": [
+      "2631-2761",
+      "2636-1698",
+      "2656-0270"
+    ],
+    "telefone_original": "2631-2761/2636-1698/2656-0270",
+    "estados": [
+      "MT",
+      "PA"
+    ],
+    "abrangencia_original": "MT - PA",
+    "pagina_fonte": 1,
+    "observacoes": ""
+  },
+  {
+    "nome": "Cruzeiro do Sul",
+    "telefones": [
+      "3931-4900",
+      "6875",
+      "3057"
+    ],
+    "telefone_original": "3931-4900/6875/3057",
+    "estados": [
+      "MS"
+    ],
+    "abrangencia_original": "MS",
+    "pagina_fonte": 1,
+    "observacoes": ""
+  },
+  {
+    "nome": "D'Agostini",
+    "telefones": [
+      "3611-7028"
+    ],
+    "telefone_original": "3611-7028",
+    "estados": [
+      "PR"
+    ],
+    "abrangencia_original": "PR",
+    "pagina_fonte": 1,
+    "observacoes": ""
+  },
+  {
+    "nome": "Daniela Transp",
+    "telefones": [
+      "2085-4200"
+    ],
+    "telefone_original": "2085-4200",
+    "estados": [
+      "AC",
+      "AL",
+      "AP",
+      "AM",
+      "BA",
+      "CE",
+      "DF",
+      "ES",
+      "GO",
+      "MA",
+      "MT",
+      "MS",
+      "MG",
+      "PA",
+      "PB",
+      "PR",
+      "PE",
+      "PI",
+      "RJ",
+      "RN",
+      "RS",
+      "RO",
+      "RR",
+      "SC",
+      "SP",
+      "SE",
+      "TO"
+    ],
+    "abrangencia_original": "TODOS OS ESTADOS",
+    "pagina_fonte": 1,
+    "observacoes": ""
+  },
+  {
+    "nome": "Danúbio Azul",
+    "telefones": [
+      "3950-8080",
+      "3950-8084"
+    ],
+    "telefone_original": "3950-8080/3950-8084",
+    "estados": [
+      "SP",
+      "MG"
+    ],
+    "abrangencia_original": "SP - MG",
+    "pagina_fonte": 1,
+    "observacoes": ""
+  },
+  {
+    "nome": "Data Transp",
+    "telefones": [
+      "2496-0266",
+      "3381-0600"
+    ],
+    "telefone_original": "2496-0266/3381-0600",
+    "estados": [
+      "CE"
+    ],
+    "abrangencia_original": "CE",
+    "pagina_fonte": 1,
+    "observacoes": ""
+  },
+  {
+    "nome": "Destak",
+    "telefones": [
+      "2901-3288",
+      "5574"
+    ],
+    "telefone_original": "2901-3288/5574",
+    "estados": [
+      "MT",
+      "RS",
+      "SC",
+      "PR"
+    ],
+    "abrangencia_original": "MT - RS - SC - PR",
+    "pagina_fonte": 1,
+    "observacoes": ""
+  },
+  {
+    "nome": "Descalvado",
+    "telefones": [
+      "2412-7299",
+      "2255"
+    ],
+    "telefone_original": "2412-7299/2255",
+    "estados": [
+      "SP",
+      "MG"
+    ],
+    "abrangencia_original": "SP - MG",
+    "pagina_fonte": 1,
+    "observacoes": ""
+  },
+  {
+    "nome": "D'Mari",
+    "telefones": [
+      "(98) 4009-5555",
+      "3321-9000",
+      "2631-6527"
+    ],
+    "telefone_original": "(98) 4009-5555/3321-9000/2631-6527",
+    "estados": [
+      "MA",
+      "PI",
+      "PA",
+      "TO"
+    ],
+    "abrangencia_original": "MA - PI - PA - TO",
+    "pagina_fonte": 1,
+    "observacoes": ""
+  },
+  {
+    "nome": "EPST Tr.Log.",
+    "telefones": [
+      "2481-3511"
+    ],
+    "telefone_original": "2481-3511",
+    "estados": [
+      "SE",
+      "AL",
+      "PB",
+      "PE",
+      "BA"
+    ],
+    "abrangencia_original": "SE - AL - PB - PE - BA",
+    "pagina_fonte": 1,
+    "observacoes": ""
+  },
+  {
+    "nome": "Econômica",
+    "telefones": [
+      "4218-0709",
+      "0909"
+    ],
+    "telefone_original": "4218-0709/0909",
+    "estados": [
+      "CE",
+      "RN"
+    ],
+    "abrangencia_original": "CE - RN",
+    "pagina_fonte": 1,
+    "observacoes": ""
+  },
+  {
+    "nome": "Estrela Dourada",
+    "telefones": [
+      "2955-9104",
+      "98350-1854"
+    ],
+    "telefone_original": "2955-9104/98350-1854",
+    "estados": [
+      "RN",
+      "PE"
+    ],
+    "abrangencia_original": "RN - PE",
+    "pagina_fonte": 1,
+    "observacoes": ""
+  },
+  {
+    "nome": "Eucatur",
+    "telefones": [
+      "3858-0206"
+    ],
+    "telefone_original": "3858-0206",
+    "estados": [
+      "MT",
+      "MS",
+      "GO",
+      "DF",
+      "AC",
+      "RO",
+      "PA",
+      "RS",
+      "SC",
+      "PR"
+    ],
+    "abrangencia_original": "MT-MS-GO-DF-AC-RO-PA-RS-SC-PR",
+    "pagina_fonte": 1,
+    "observacoes": ""
+  },
+  {
+    "nome": "Exp. Alta Z. Mata",
+    "telefones": [
+      "2901-2701",
+      "2369"
+    ],
+    "telefone_original": "2901-2701/2369",
+    "estados": [
+      "SP"
+    ],
+    "abrangencia_original": "SP",
+    "pagina_fonte": 1,
+    "observacoes": ""
+  },
+  {
+    "nome": "Expr. Gardênia",
+    "telefones": [
+      "3966-3966"
+    ],
+    "telefone_original": "3966-3966",
+    "estados": [
+      "MG"
+    ],
+    "abrangencia_original": "MG",
+    "pagina_fonte": 1,
+    "observacoes": ""
+  },
+  {
+    "nome": "Eureka",
+    "telefones": [
+      "2413-1211"
+    ],
+    "telefone_original": "2413-1211",
+    "estados": [
+      "MG",
+      "RJ"
+    ],
+    "abrangencia_original": "MG - RJ",
+    "pagina_fonte": 2,
+    "observacoes": ""
+  },
+  {
+    "nome": "Exp Javali",
+    "telefones": [
+      "3933-6111"
+    ],
+    "telefone_original": "3933-6111",
+    "estados": [],
+    "abrangencia_original": "",
+    "pagina_fonte": 2,
+    "observacoes": "Abrangência não informada na folha."
+  },
+  {
+    "nome": "Exp Jundiaí",
+    "telefones": [
+      "2131-7474",
+      "2795-3100"
+    ],
+    "telefone_original": "2131-7474/2795-3100",
+    "estados": [
+      "SP",
+      "PR"
+    ],
+    "abrangencia_original": "SP - PR",
+    "pagina_fonte": 2,
+    "observacoes": ""
+  },
+  {
+    "nome": "Exp Lamounier",
+    "telefones": [
+      "2469-5888"
+    ],
+    "telefone_original": "2469-5888",
+    "estados": [
+      "MG"
+    ],
+    "abrangencia_original": "MG",
+    "pagina_fonte": 2,
+    "observacoes": ""
+  },
+  {
+    "nome": "Exp Maringá",
+    "telefones": [
+      "2631-0671",
+      "2207-1577"
+    ],
+    "telefone_original": "2631-0671/2207-1577",
+    "estados": [
+      "PR",
+      "MS"
+    ],
+    "abrangencia_original": "PR - MS",
+    "pagina_fonte": 2,
+    "observacoes": ""
+  },
+  {
+    "nome": "Exp Nepomuceno",
+    "telefones": [
+      "4066-5813",
+      "7589"
+    ],
+    "telefone_original": "4066-5813/7589",
+    "estados": [],
+    "abrangencia_original": "",
+    "pagina_fonte": 2,
+    "observacoes": "Abrangência não informada na folha."
+  },
+  {
+    "nome": "Exp Prata",
+    "telefones": [
+      "2202-0202"
+    ],
+    "telefone_original": "2202-0202",
+    "estados": [
+      "SP",
+      "PR"
+    ],
+    "abrangencia_original": "SP - PR",
+    "pagina_fonte": 2,
+    "observacoes": ""
+  },
+  {
+    "nome": "Exp Rio Vermelho",
+    "telefones": [
+      "2633-4041",
+      "2636-2402"
+    ],
+    "telefone_original": "2633-4041/2636-2402",
+    "estados": [
+      "MT"
+    ],
+    "abrangencia_original": "MT",
+    "pagina_fonte": 2,
+    "observacoes": ""
+  },
+  {
+    "nome": "Exp São Luiz",
+    "telefones": [
+      "2218-0390"
+    ],
+    "telefone_original": "2218-0390",
+    "estados": [
+      "GO"
+    ],
+    "abrangencia_original": "GO",
+    "pagina_fonte": 2,
+    "observacoes": ""
+  },
+  {
+    "nome": "Exp Norte & Sul",
+    "telefones": [
+      "2467-7543",
+      "2087-5144"
+    ],
+    "telefone_original": "2467-7543/2087-5144",
+    "estados": [
+      "AM",
+      "RO",
+      "AC"
+    ],
+    "abrangencia_original": "AM - RO - AC",
+    "pagina_fonte": 2,
+    "observacoes": ""
+  },
+  {
+    "nome": "Exp M 2000",
+    "telefones": [
+      "2179-0200"
+    ],
+    "telefone_original": "2179-0200",
+    "estados": [
+      "MG",
+      "SP",
+      "RJ"
+    ],
+    "abrangencia_original": "MG - SP - RJ",
+    "pagina_fonte": 2,
+    "observacoes": ""
+  },
+  {
+    "nome": "Fiorot",
+    "telefones": [
+      "2413-3030"
+    ],
+    "telefone_original": "2413-3030",
+    "estados": [
+      "ES"
+    ],
+    "abrangencia_original": "ES",
+    "pagina_fonte": 2,
+    "observacoes": ""
+  },
+  {
+    "nome": "Formato (ant.BR)",
+    "telefones": [
+      "2536-7215",
+      "6",
+      "7",
+      "8"
+    ],
+    "telefone_original": "2536-7215/6/7/8",
+    "estados": [
+      "BA",
+      "PE"
+    ],
+    "abrangencia_original": "BA - PE",
+    "pagina_fonte": 2,
+    "observacoes": ""
+  },
+  {
+    "nome": "Fri Log",
+    "telefones": [
+      "2901-1007"
+    ],
+    "telefone_original": "2901-1007",
+    "estados": [
+      "RJ",
+      "SP"
+    ],
+    "abrangencia_original": "RJ - SP",
+    "pagina_fonte": 2,
+    "observacoes": ""
+  },
+  {
+    "nome": "Garcia Cargas",
+    "telefones": [
+      "3966-3953"
+    ],
+    "telefone_original": "3966-3953",
+    "estados": [],
+    "abrangencia_original": "",
+    "pagina_fonte": 2,
+    "observacoes": "Abrangência não informada na folha."
+  },
+  {
+    "nome": "Gold Millenium",
+    "telefones": [
+      "2481-6644",
+      "2483-1100",
+      "2412-0936"
+    ],
+    "telefone_original": "2481-6644/2483-1100/2412-0936",
+    "estados": [
+      "RJ"
+    ],
+    "abrangencia_original": "RJ",
+    "pagina_fonte": 2,
+    "observacoes": ""
+  },
+  {
+    "nome": "Gontijo/S. Geraldo",
+    "telefones": [
+      "2412-3938",
+      "2482-3050"
+    ],
+    "telefone_original": "2412-3938/2482-3050",
+    "estados": [],
+    "abrangencia_original": "",
+    "pagina_fonte": 2,
+    "observacoes": "Abrangência não informada na folha."
+  },
+  {
+    "nome": "Global Cargo",
+    "telefones": [
+      "3017-8998",
+      "3017-8990"
+    ],
+    "telefone_original": "3017-8998/3017-8990",
+    "estados": [],
+    "abrangencia_original": "TODAS AS CAPITAIS",
+    "pagina_fonte": 2,
+    "observacoes": "Cobertura por capitais conforme folha; não foram inferidas UFs além das explicitamente citadas."
+  },
+  {
+    "nome": "Gran Cargo",
+    "telefones": [
+      "2631-2760"
+    ],
+    "telefone_original": "2631-2760",
+    "estados": [
+      "DF",
+      "GO",
+      "TO",
+      "PA",
+      "MG",
+      "MT",
+      "MS"
+    ],
+    "abrangencia_original": "DF-GO-TO-PA-MG-MT-MS",
+    "pagina_fonte": 2,
+    "observacoes": ""
+  },
+  {
+    "nome": "Hellen Tour",
+    "telefones": [
+      "9.6785-9201"
+    ],
+    "telefone_original": "9.6785-9201",
+    "estados": [],
+    "abrangencia_original": "",
+    "pagina_fonte": 2,
+    "observacoes": "Abrangência não informada na folha."
+  },
+  {
+    "nome": "JadLog",
+    "telefones": [
+      "2651-5555"
+    ],
+    "telefone_original": "2651-5555",
+    "estados": [
+      "AC",
+      "AL",
+      "AP",
+      "AM",
+      "BA",
+      "CE",
+      "DF",
+      "ES",
+      "GO",
+      "MA",
+      "MT",
+      "MS",
+      "MG",
+      "PA",
+      "PB",
+      "PR",
+      "PE",
+      "PI",
+      "RJ",
+      "RN",
+      "RS",
+      "RO",
+      "RR",
+      "SC",
+      "SP",
+      "SE",
+      "TO"
+    ],
+    "abrangencia_original": "TODOS OS ESTADOS",
+    "pagina_fonte": 2,
+    "observacoes": ""
+  },
+  {
+    "nome": "KM Transportes",
+    "telefones": [
+      "2207-6070"
+    ],
+    "telefone_original": "2207-6070",
+    "estados": [
+      "MS"
+    ],
+    "abrangencia_original": "MS",
+    "pagina_fonte": 2,
+    "observacoes": ""
+  },
+  {
+    "nome": "KM Cargo",
+    "telefones": [
+      "3341-4106",
+      "3474-1400"
+    ],
+    "telefone_original": "3341-4106/3474-1400",
+    "estados": [
+      "AC",
+      "AL",
+      "AP",
+      "AM",
+      "BA",
+      "CE",
+      "DF",
+      "ES",
+      "GO",
+      "MA",
+      "MT",
+      "MS",
+      "MG",
+      "PA",
+      "PB",
+      "PR",
+      "PE",
+      "PI",
+      "RJ",
+      "RN",
+      "RS",
+      "RO",
+      "RR",
+      "SC",
+      "SP",
+      "SE",
+      "TO"
+    ],
+    "abrangencia_original": "TODOS OS ESTADOS",
+    "pagina_fonte": 2,
+    "observacoes": ""
+  },
+  {
+    "nome": "Lagoinha",
+    "telefones": [
+      "3891-2461",
+      "2714-3200"
+    ],
+    "telefone_original": "3891-2461/2714-3200",
+    "estados": [
+      "DF",
+      "GO",
+      "TO"
+    ],
+    "abrangencia_original": "DF - GO - TO",
+    "pagina_fonte": 2,
+    "observacoes": ""
+  },
+  {
+    "nome": "Lasil",
+    "telefones": [
+      "2197-2599"
+    ],
+    "telefone_original": "2197-2599",
+    "estados": [
+      "PE",
+      "PB",
+      "AL"
+    ],
+    "abrangencia_original": "PE - PB - AL",
+    "pagina_fonte": 2,
+    "observacoes": ""
+  },
+  {
+    "nome": "Lastro",
+    "telefones": [
+      "2431-1517"
+    ],
+    "telefone_original": "2431-1517",
+    "estados": [
+      "MG"
+    ],
+    "abrangencia_original": "MG",
+    "pagina_fonte": 2,
+    "observacoes": ""
+  },
+  {
+    "nome": "LDB",
+    "telefones": [
+      "2141-9500",
+      "(83)3041-6021"
+    ],
+    "telefone_original": "2141-9500/(83)3041-6021",
+    "estados": [
+      "CE",
+      "RN",
+      "PI",
+      "PB",
+      "AL",
+      "SE",
+      "BA",
+      "MA"
+    ],
+    "abrangencia_original": "CE-RN-PI-PB-PB-AL-SE-BA-MA",
+    "pagina_fonte": 2,
+    "observacoes": ""
+  },
+  {
+    "nome": "Líder Cargas",
+    "telefones": [
+      "2636-5000"
+    ],
+    "telefone_original": "2636-5000",
+    "estados": [
+      "AC",
+      "AL",
+      "AP",
+      "AM",
+      "BA",
+      "CE",
+      "DF",
+      "ES",
+      "GO",
+      "MA",
+      "MT",
+      "MS",
+      "MG",
+      "PA",
+      "PB",
+      "PR",
+      "PE",
+      "PI",
+      "RJ",
+      "RN",
+      "RS",
+      "RO",
+      "RR",
+      "SC",
+      "SP",
+      "SE",
+      "TO"
+    ],
+    "abrangencia_original": "TODOS OS ESTADOS",
+    "pagina_fonte": 2,
+    "observacoes": ""
+  },
+  {
+    "nome": "Log Express",
+    "telefones": [
+      "2905-1961",
+      "(62)3296-3906 - cotação"
+    ],
+    "telefone_original": "2905-1961/(62)3296-3906 - cotação",
+    "estados": [
+      "GO",
+      "DF"
+    ],
+    "abrangencia_original": "GO - DF",
+    "pagina_fonte": 2,
+    "observacoes": ""
+  },
+  {
+    "nome": "Logg Cargo",
+    "telefones": [
+      "2088-3412",
+      "3380-7690"
+    ],
+    "telefone_original": "2088-3412/3380-7690",
+    "estados": [],
+    "abrangencia_original": "",
+    "pagina_fonte": 2,
+    "observacoes": "Abrangência não informada na folha."
+  },
+  {
+    "nome": "Magna Transportes",
+    "telefones": [
+      "2254-7385"
+    ],
+    "telefone_original": "2254-7385",
+    "estados": [],
+    "abrangencia_original": "",
+    "pagina_fonte": 2,
+    "observacoes": "Abrangência não informada na folha."
+  },
+  {
+    "nome": "Marajá",
+    "telefones": [
+      "2412-0327"
+    ],
+    "telefone_original": "2412-0327",
+    "estados": [
+      "BA",
+      "SE",
+      "AL",
+      "PB"
+    ],
+    "abrangencia_original": "BA - SE - AL - PB",
+    "pagina_fonte": 2,
+    "observacoes": ""
+  },
+  {
+    "nome": "Mandala",
+    "telefones": [
+      "2413-4577"
+    ],
+    "telefone_original": "2413-4577",
+    "estados": [
+      "DF",
+      "MT",
+      "MS",
+      "GO"
+    ],
+    "abrangencia_original": "DF - MT - MS - GO",
+    "pagina_fonte": 2,
+    "observacoes": ""
+  },
+  {
+    "nome": "Manoel Rodrigues",
+    "telefones": [
+      "3333-7900"
+    ],
+    "telefone_original": "3333-7900",
+    "estados": [
+      "PR",
+      "SP",
+      "RJ",
+      "DF",
+      "ES"
+    ],
+    "abrangencia_original": "PR - SP - RJ - DF - ES",
+    "pagina_fonte": 2,
+    "observacoes": ""
+  },
+  {
+    "nome": "Martins Transp",
+    "telefones": [
+      "2193-4444"
+    ],
+    "telefone_original": "2193-4444",
+    "estados": [],
+    "abrangencia_original": "",
+    "pagina_fonte": 2,
+    "observacoes": "Abrangência não informada na folha."
+  },
+  {
+    "nome": "Maxx Express",
+    "telefones": [
+      "2207-2264"
+    ],
+    "telefone_original": "2207-2264",
+    "estados": [
+      "AP"
+    ],
+    "abrangencia_original": "AP",
+    "pagina_fonte": 2,
+    "observacoes": ""
+  },
+  {
+    "nome": "MDS",
+    "telefones": [
+      "2088-6753"
+    ],
+    "telefone_original": "2088-6753",
+    "estados": [
+      "MA",
+      "PI",
+      "GO"
+    ],
+    "abrangencia_original": "MA - PI - GO",
+    "pagina_fonte": 2,
+    "observacoes": ""
+  },
+  {
+    "nome": "Meridional Cargas",
+    "telefones": [
+      "2989-1515",
+      "(21) 3885-1515"
+    ],
+    "telefone_original": "2989-1515/(21) 3885-1515",
+    "estados": [
+      "RS",
+      "SC",
+      "PR",
+      "SP",
+      "RJ",
+      "ES",
+      "MG"
+    ],
+    "abrangencia_original": "RS-SC-PR-SP-RJ-ES-MG",
+    "pagina_fonte": 2,
+    "observacoes": ""
+  },
+  {
+    "nome": "Mir Transp",
+    "telefones": [
+      "2412-3297",
+      "4579"
+    ],
+    "telefone_original": "2412-3297/4579",
+    "estados": [
+      "PR",
+      "SC",
+      "RS"
+    ],
+    "abrangencia_original": "PR - SC - RS",
+    "pagina_fonte": 2,
+    "observacoes": ""
+  },
+  {
+    "nome": "Mira Transp",
+    "telefones": [
+      "2142-9000"
+    ],
+    "telefone_original": "2142-9000",
+    "estados": [
+      "AC",
+      "AM",
+      "AP",
+      "PA",
+      "RO",
+      "RR",
+      "TO",
+      "GO",
+      "DF",
+      "MT",
+      "MS",
+      "MG"
+    ],
+    "abrangencia_original": "AC-AM-AP-PA-RO-RR-TO-GO-DF-MT-MS-MG",
+    "pagina_fonte": 2,
+    "observacoes": ""
+  },
+  {
+    "nome": "Minas Way",
+    "telefones": [
+      "2693-5767"
+    ],
+    "telefone_original": "2693-5767",
+    "estados": [
+      "MG",
+      "PR"
+    ],
+    "abrangencia_original": "MG - PR",
+    "pagina_fonte": 2,
+    "observacoes": ""
+  },
+  {
+    "nome": "Montri",
+    "telefones": [
+      "2088-6966"
+    ],
+    "telefone_original": "2088-6966",
+    "estados": [
+      "AM"
+    ],
+    "abrangencia_original": "AM",
+    "pagina_fonte": 2,
+    "observacoes": ""
+  },
+  {
+    "nome": "MOS",
+    "telefones": [
+      "2489-5400",
+      "4218-0468",
+      "0465",
+      "2407-7015"
+    ],
+    "telefone_original": "2489-5400/4218-0468/0465/2407-7015",
+    "estados": [
+      "CE",
+      "RN",
+      "PE",
+      "PB",
+      "PI",
+      "MA",
+      "AL",
+      "SE",
+      "BA"
+    ],
+    "abrangencia_original": "CE - RN - PE - PB - PI - MA - AL - SE - BA",
+    "pagina_fonte": 2,
+    "observacoes": ""
+  },
+  {
+    "nome": "MTR",
+    "telefones": [
+      "3915-8888"
+    ],
+    "telefone_original": "3915-8888",
+    "estados": [
+      "RS",
+      "SC",
+      "PR",
+      "RJ"
+    ],
+    "abrangencia_original": "RS - SC - PR - RJ",
+    "pagina_fonte": 2,
+    "observacoes": ""
+  },
+  {
+    "nome": "Nacional Expr",
+    "telefones": [
+      "2221-2249",
+      "3512-2024"
+    ],
+    "telefone_original": "2221-2249/3512-2024",
+    "estados": [
+      "PR",
+      "SP",
+      "MG",
+      "GO",
+      "DF"
+    ],
+    "abrangencia_original": "PR - SP - MG - GO - DF",
+    "pagina_fonte": 2,
+    "observacoes": ""
+  },
+  {
+    "nome": "NDT",
+    "telefones": [
+      "2488-8369",
+      "(81)3330-5145"
+    ],
+    "telefone_original": "2488-8369/(81)3330-5145",
+    "estados": [
+      "PE",
+      "BA",
+      "RN"
+    ],
+    "abrangencia_original": "PE - BA - RN - BA",
+    "pagina_fonte": 2,
+    "observacoes": ""
+  },
+  {
+    "nome": "Nova Geração",
+    "telefones": [
+      "2085-6469"
+    ],
+    "telefone_original": "2085-6469",
+    "estados": [
+      "BA"
+    ],
+    "abrangencia_original": "BA",
+    "pagina_fonte": 2,
+    "observacoes": ""
+  },
+  {
+    "nome": "Novo Progresso",
+    "telefones": [
+      "2833-4434",
+      "(91)3237-7745"
+    ],
+    "telefone_original": "2833-4434/(91)3237-7745",
+    "estados": [
+      "PA",
+      "AM",
+      "AC",
+      "AP",
+      "RO",
+      "RR",
+      "TO"
+    ],
+    "abrangencia_original": "PA - AM - AC - AP - RO - RR - TO",
+    "pagina_fonte": 3,
+    "observacoes": ""
+  },
+  {
+    "nome": "Novo Horizonte",
+    "telefones": [
+      "2201-7199"
+    ],
+    "telefone_original": "2201-7199",
+    "estados": [
+      "BA"
+    ],
+    "abrangencia_original": "BA",
+    "pagina_fonte": 3,
+    "observacoes": ""
+  },
+  {
+    "nome": "Ouro Negro",
+    "telefones": [
+      "2085-5121"
+    ],
+    "telefone_original": "2085-5121",
+    "estados": [
+      "RS",
+      "SC",
+      "PR",
+      "MG"
+    ],
+    "abrangencia_original": "RS - SC - PR - MG",
+    "pagina_fonte": 3,
+    "observacoes": ""
+  },
+  {
+    "nome": "Penha",
+    "telefones": [
+      "2089-0298",
+      "3775-3888"
+    ],
+    "telefone_original": "2089-0298/3775-3888",
+    "estados": [
+      "RS",
+      "MS",
+      "MT",
+      "MG",
+      "BA",
+      "PE",
+      "PB",
+      "CE"
+    ],
+    "abrangencia_original": "RS - MS - MT - MG - BA - PE - PB - CE",
+    "pagina_fonte": 3,
+    "observacoes": ""
+  },
+  {
+    "nome": "Penhense",
+    "telefones": [
+      "2541-2420"
+    ],
+    "telefone_original": "2541-2420",
+    "estados": [
+      "PA"
+    ],
+    "abrangencia_original": "PA",
+    "pagina_fonte": 3,
+    "observacoes": ""
+  },
+  {
+    "nome": "Piccoli",
+    "telefones": [
+      "3988-5120",
+      "0170-2436-6832"
+    ],
+    "telefone_original": "3988-5120/0170-2436-6832",
+    "estados": [
+      "MT",
+      "MS"
+    ],
+    "abrangencia_original": "MT - MS",
+    "pagina_fonte": 3,
+    "observacoes": ""
+  },
+  {
+    "nome": "Plimor",
+    "telefones": [
+      "2131-8000"
+    ],
+    "telefone_original": "2131-8000",
+    "estados": [
+      "RS",
+      "SC",
+      "PR",
+      "SP"
+    ],
+    "abrangencia_original": "RS - SC - PR - SP",
+    "pagina_fonte": 3,
+    "observacoes": ""
+  },
+  {
+    "nome": "Picorelli",
+    "telefones": [
+      "2207-4374"
+    ],
+    "telefone_original": "2207-4374",
+    "estados": [
+      "SP",
+      "MG",
+      "RJ"
+    ],
+    "abrangencia_original": "SP - MG - RJ",
+    "pagina_fonte": 3,
+    "observacoes": ""
+  },
+  {
+    "nome": "Primeira do Nordeste",
+    "telefones": [
+      "2412-3488"
+    ],
+    "telefone_original": "2412-3488",
+    "estados": [
+      "CE",
+      "RN",
+      "PE",
+      "PB",
+      "AL",
+      "SE",
+      "BA"
+    ],
+    "abrangencia_original": "CE - RN - PE - PB - AL - SE - BA",
+    "pagina_fonte": 3,
+    "observacoes": ""
+  },
+  {
+    "nome": "Princesa do Campo",
+    "telefones": [
+      "2101-8700",
+      "3951-7233",
+      "3392-1649"
+    ],
+    "telefone_original": "2101-8700/3951-7233/3392-1649",
+    "estados": [
+      "RS",
+      "SC",
+      "PR"
+    ],
+    "abrangencia_original": "RS - SC - PR",
+    "pagina_fonte": 3,
+    "observacoes": ""
+  },
+  {
+    "nome": "Rap. Rodo Curitiba",
+    "telefones": [
+      "2631-1134"
+    ],
+    "telefone_original": "2631-1134",
+    "estados": [
+      "PR"
+    ],
+    "abrangencia_original": "PR",
+    "pagina_fonte": 3,
+    "observacoes": ""
+  },
+  {
+    "nome": "Rap Figueiredo",
+    "telefones": [
+      "2487-7066",
+      "2861-5942",
+      "(83)3222-7755-cot"
+    ],
+    "telefone_original": "2487-7066/2861-5942/(83)3222-7755-cot",
+    "estados": [
+      "PB"
+    ],
+    "abrangencia_original": "PB",
+    "pagina_fonte": 3,
+    "observacoes": ""
+  },
+  {
+    "nome": "Ranchariense",
+    "telefones": [
+      "3936-3719"
+    ],
+    "telefone_original": "3936-3719",
+    "estados": [
+      "SP"
+    ],
+    "abrangencia_original": "SP",
+    "pagina_fonte": 3,
+    "observacoes": ""
+  },
+  {
+    "nome": "RBL",
+    "telefones": [
+      "2411-1030"
+    ],
+    "telefone_original": "2411-1030",
+    "estados": [
+      "MS"
+    ],
+    "abrangencia_original": "MS",
+    "pagina_fonte": 3,
+    "observacoes": ""
+  },
+  {
+    "nome": "RCM",
+    "telefones": [
+      "4574-1839",
+      "(81)98619-5111"
+    ],
+    "telefone_original": "4574-1839/(81)98619-5111",
+    "estados": [
+      "MA",
+      "CE",
+      "RN",
+      "PB",
+      "PE",
+      "PI",
+      "AL",
+      "SE",
+      "BA"
+    ],
+    "abrangencia_original": "MA-CE-RN-PB-PE-PI-AL-SE-BA",
+    "pagina_fonte": 3,
+    "observacoes": ""
+  },
+  {
+    "nome": "Real Cargas",
+    "telefones": [
+      "3571-6653"
+    ],
+    "telefone_original": "3571-6653",
+    "estados": [],
+    "abrangencia_original": "",
+    "pagina_fonte": 3,
+    "observacoes": "Abrangência não informada na folha."
+  },
+  {
+    "nome": "Real Expresso",
+    "telefones": [
+      "2631-3161",
+      "3157-8762"
+    ],
+    "telefone_original": "2631-3161/3157-8762",
+    "estados": [],
+    "abrangencia_original": "",
+    "pagina_fonte": 3,
+    "observacoes": "Abrangência não informada na folha."
+  },
+  {
+    "nome": "Relâmpago",
+    "telefones": [
+      "2431-1859",
+      "4378-1455"
+    ],
+    "telefone_original": "2431-1859/4378-1455",
+    "estados": [
+      "MA"
+    ],
+    "abrangencia_original": "MA",
+    "pagina_fonte": 3,
+    "observacoes": ""
+  },
+  {
+    "nome": "Recris",
+    "telefones": [
+      "2412-9090"
+    ],
+    "telefone_original": "2412-9090",
+    "estados": [],
+    "abrangencia_original": "",
+    "pagina_fonte": 3,
+    "observacoes": "Abrangência não informada na folha."
+  },
+  {
+    "nome": "Reis Transp",
+    "telefones": [
+      "2303-6737"
+    ],
+    "telefone_original": "2303-6737",
+    "estados": [
+      "BA"
+    ],
+    "abrangencia_original": "BA",
+    "pagina_fonte": 3,
+    "observacoes": ""
+  },
+  {
+    "nome": "Risso",
+    "telefones": [
+      "3933-7570",
+      "3648-4444"
+    ],
+    "telefone_original": "3933-7570/3648-4444",
+    "estados": [
+      "SP",
+      "RS",
+      "RJ",
+      "ES"
+    ],
+    "abrangencia_original": "SP - RS - RJ - ES",
+    "pagina_fonte": 3,
+    "observacoes": ""
+  },
+  {
+    "nome": "Rimais",
+    "telefones": [
+      "2631-7322"
+    ],
+    "telefone_original": "2631-7322",
+    "estados": [
+      "RS",
+      "SC",
+      "PR",
+      "BA"
+    ],
+    "abrangencia_original": "RS - SC - PR - BA",
+    "pagina_fonte": 3,
+    "observacoes": ""
+  },
+  {
+    "nome": "RJJ",
+    "telefones": [
+      "2954-4565"
+    ],
+    "telefone_original": "2954-4565",
+    "estados": [
+      "PA",
+      "AP"
+    ],
+    "abrangencia_original": "PA - AP",
+    "pagina_fonte": 3,
+    "observacoes": ""
+  },
+  {
+    "nome": "Rodo Expr",
+    "telefones": [
+      "2955-0099",
+      "2631-4107",
+      "2209-9820"
+    ],
+    "telefone_original": "2955-0099/2631-4107/2209-9820",
+    "estados": [
+      "SP"
+    ],
+    "abrangencia_original": "SP",
+    "pagina_fonte": 3,
+    "observacoes": ""
+  },
+  {
+    "nome": "Rodo Jaboti",
+    "telefones": [
+      "2954-4300"
+    ],
+    "telefone_original": "2954-4300",
+    "estados": [],
+    "abrangencia_original": "",
+    "pagina_fonte": 3,
+    "observacoes": "Abrangência não informada na folha."
+  },
+  {
+    "nome": "Rodo Naves",
+    "telefones": [
+      "2192-3102"
+    ],
+    "telefone_original": "2192-3102",
+    "estados": [
+      "AC",
+      "ES",
+      "GO",
+      "MT",
+      "MS",
+      "PR",
+      "RJ",
+      "RS",
+      "RO",
+      "MG",
+      "SC",
+      "SP",
+      "DF"
+    ],
+    "abrangencia_original": "AC-ES-GO-MT-MS-PR-RJ-RS-RO-MG-SC-SP-DF",
+    "pagina_fonte": 3,
+    "observacoes": ""
+  },
+  {
+    "nome": "Rodo Cargas",
+    "telefones": [
+      "2482-0942"
+    ],
+    "telefone_original": "2482-0942",
+    "estados": [
+      "PI",
+      "MA"
+    ],
+    "abrangencia_original": "PI - MA",
+    "pagina_fonte": 3,
+    "observacoes": ""
+  },
+  {
+    "nome": "Rodo Lev",
+    "telefones": [
+      "2528-9620"
+    ],
+    "telefone_original": "2528-9620",
+    "estados": [
+      "SP"
+    ],
+    "abrangencia_original": "SP",
+    "pagina_fonte": 3,
+    "observacoes": ""
+  },
+  {
+    "nome": "Rodo Viva",
+    "telefones": [
+      "3488-9111"
+    ],
+    "telefone_original": "3488-9111",
+    "estados": [
+      "AC",
+      "RO"
+    ],
+    "abrangencia_original": "AC - RO",
+    "pagina_fonte": 3,
+    "observacoes": ""
+  },
+  {
+    "nome": "Rodovia Sul",
+    "telefones": [
+      "2412-7259",
+      "6572"
+    ],
+    "telefone_original": "2412-7259/6572",
+    "estados": [
+      "RS",
+      "SC",
+      "PR"
+    ],
+    "abrangencia_original": "RS - SC - PR",
+    "pagina_fonte": 3,
+    "observacoes": ""
+  },
+  {
+    "nome": "Rodoviário Garra",
+    "telefones": [
+      "2482-0493"
+    ],
+    "telefone_original": "2482-0493",
+    "estados": [
+      "PE",
+      "PI",
+      "CE",
+      "MA"
+    ],
+    "abrangencia_original": "PE - PI - CE - MA",
+    "pagina_fonte": 3,
+    "observacoes": ""
+  },
+  {
+    "nome": "Rodov Camilo dos Santos",
+    "telefones": [
+      "2633-8000"
+    ],
+    "telefone_original": "2633-8000",
+    "estados": [
+      "SP",
+      "RJ",
+      "ES",
+      "MG"
+    ],
+    "abrangencia_original": "SP - RJ - ES - MG",
+    "pagina_fonte": 3,
+    "observacoes": ""
+  },
+  {
+    "nome": "RRC",
+    "telefones": [
+      "2631-2465",
+      "1134"
+    ],
+    "telefone_original": "2631-2465/1134",
+    "estados": [
+      "PR"
+    ],
+    "abrangencia_original": "PR",
+    "pagina_fonte": 3,
+    "observacoes": ""
+  },
+  {
+    "nome": "Schreiber Log",
+    "telefones": [
+      "2408-1073"
+    ],
+    "telefone_original": "2408-1073",
+    "estados": [
+      "SC"
+    ],
+    "abrangencia_original": "SC",
+    "pagina_fonte": 3,
+    "observacoes": ""
+  },
+  {
+    "nome": "Serrana",
+    "telefones": [
+      "2905-0444",
+      "2412-1758"
+    ],
+    "telefone_original": "2905-0444/2412-1758",
+    "estados": [],
+    "abrangencia_original": "",
+    "pagina_fonte": 3,
+    "observacoes": "Abrangência não informada na folha."
+  },
+  {
+    "nome": "Sete Lagos",
+    "telefones": [
+      "2279-3574"
+    ],
+    "telefone_original": "2279-3574",
+    "estados": [
+      "MG",
+      "RJ"
+    ],
+    "abrangencia_original": "MG - RJ",
+    "pagina_fonte": 3,
+    "observacoes": ""
+  },
+  {
+    "nome": "Sical",
+    "telefones": [
+      "3858-5811"
+    ],
+    "telefone_original": "3858-5811",
+    "estados": [
+      "MT",
+      "MS",
+      "GO",
+      "DF"
+    ],
+    "abrangencia_original": "MT - MS - GO - DF",
+    "pagina_fonte": 3,
+    "observacoes": ""
+  },
+  {
+    "nome": "Sigma Voo Transp",
+    "telefones": [
+      "2481-4854",
+      "2446-4276"
+    ],
+    "telefone_original": "2481-4854/2446-4276",
+    "estados": [
+      "RO",
+      "AC"
+    ],
+    "abrangencia_original": "RO - AC",
+    "pagina_fonte": 3,
+    "observacoes": ""
+  },
+  {
+    "nome": "Solidez",
+    "telefones": [
+      "2982-9848"
+    ],
+    "telefone_original": "2982-9848",
+    "estados": [
+      "MT",
+      "GO"
+    ],
+    "abrangencia_original": "MT - GO",
+    "pagina_fonte": 3,
+    "observacoes": ""
+  },
+  {
+    "nome": "Sol Nordeste",
+    "telefones": [
+      "2413-2080",
+      "4574-0313"
+    ],
+    "telefone_original": "2413-2080/4574-0313",
+    "estados": [
+      "AL",
+      "SE",
+      "PB",
+      "PE"
+    ],
+    "abrangencia_original": "AL - SE - PB - PE",
+    "pagina_fonte": 3,
+    "observacoes": ""
+  },
+  {
+    "nome": "Sonic",
+    "telefones": [
+      "2412-1808",
+      "2528-5677"
+    ],
+    "telefone_original": "2412-1808/2528-5677",
+    "estados": [
+      "DF"
+    ],
+    "abrangencia_original": "DF",
+    "pagina_fonte": 3,
+    "observacoes": ""
+  },
+  {
+    "nome": "Souza",
+    "telefones": [
+      "3644-4396",
+      "(19)3478-8950"
+    ],
+    "telefone_original": "3644-4396/(19)3478-8950",
+    "estados": [
+      "SP",
+      "MT"
+    ],
+    "abrangencia_original": "SP - MT",
+    "pagina_fonte": 3,
+    "observacoes": ""
+  },
+  {
+    "nome": "SPC",
+    "telefones": [
+      "2412-4595"
+    ],
+    "telefone_original": "2412-4595",
+    "estados": [
+      "PA"
+    ],
+    "abrangencia_original": "PA",
+    "pagina_fonte": 3,
+    "observacoes": ""
+  },
+  {
+    "nome": "STC",
+    "telefones": [
+      "2484-4900",
+      "(85)3459-4400"
+    ],
+    "telefone_original": "2484-4900/(85)3459-4400",
+    "estados": [
+      "CE"
+    ],
+    "abrangencia_original": "CE",
+    "pagina_fonte": 3,
+    "observacoes": ""
+  },
+  {
+    "nome": "SETEX",
+    "telefones": [
+      "(11)2218-8999"
+    ],
+    "telefone_original": "(11)2218-8999",
+    "estados": [
+      "SP"
+    ],
+    "abrangencia_original": "SP",
+    "pagina_fonte": 3,
+    "observacoes": ""
+  },
+  {
+    "nome": "Star Ex",
+    "telefones": [
+      "3382-0908",
+      "0909",
+      "0907"
+    ],
+    "telefone_original": "3382-0908/0909/0907",
+    "estados": [
+      "SP",
+      "MS",
+      "RJ"
+    ],
+    "abrangencia_original": "SP - MS - RJ",
+    "pagina_fonte": 3,
+    "observacoes": ""
+  },
+  {
+    "nome": "Starlog",
+    "telefones": [
+      "2142-2800"
+    ],
+    "telefone_original": "2142-2800",
+    "estados": [],
+    "abrangencia_original": "",
+    "pagina_fonte": 3,
+    "observacoes": "Abrangência não informada na folha."
+  },
+  {
+    "nome": "Sua Majestade",
+    "telefones": [
+      "3322-6244"
+    ],
+    "telefone_original": "3322-6244",
+    "estados": [
+      "MA",
+      "CE",
+      "RN",
+      "PB",
+      "PE",
+      "PI",
+      "AL",
+      "SE",
+      "BA"
+    ],
+    "abrangencia_original": "MA-CE-RN-PB-PE-PI-AL-SE-BA",
+    "pagina_fonte": 4,
+    "observacoes": ""
+  },
+  {
+    "nome": "Sul Matrogrossense",
+    "telefones": [
+      "2905-4488"
+    ],
+    "telefone_original": "2905-4488",
+    "estados": [
+      "MS",
+      "GO",
+      "MG",
+      "SP"
+    ],
+    "abrangencia_original": "MS - GO - MG - SP",
+    "pagina_fonte": 4,
+    "observacoes": ""
+  },
+  {
+    "nome": "TA Transp Americana",
+    "telefones": [
+      "2131-9200",
+      "9241"
+    ],
+    "telefone_original": "2131-9200/9241",
+    "estados": [
+      "RS",
+      "SC",
+      "PR",
+      "SP",
+      "RJ",
+      "MG",
+      "ES"
+    ],
+    "abrangencia_original": "RS - SC - PR - SP - RJ - MG - ES",
+    "pagina_fonte": 4,
+    "observacoes": ""
+  },
+  {
+    "nome": "TDB",
+    "telefones": [
+      "2127-4900"
+    ],
+    "telefone_original": "2127-4900",
+    "estados": [
+      "SP"
+    ],
+    "abrangencia_original": "SP",
+    "pagina_fonte": 4,
+    "observacoes": ""
+  },
+  {
+    "nome": "TCA",
+    "telefones": [
+      "2692-8351"
+    ],
+    "telefone_original": "2692-8351",
+    "estados": [
+      "MG",
+      "RJ"
+    ],
+    "abrangencia_original": "MG - RJ",
+    "pagina_fonte": 4,
+    "observacoes": ""
+  },
+  {
+    "nome": "Termarco",
+    "telefones": [
+      "(85) 3388-5659",
+      "2588-8100"
+    ],
+    "telefone_original": "(85) 3388-5659/2588-8100",
+    "estados": [
+      "MA",
+      "CE",
+      "RN",
+      "PB",
+      "PE",
+      "PI",
+      "AL",
+      "SE",
+      "BA"
+    ],
+    "abrangencia_original": "MA-CE-RN-PB-PE-PI-AL-SE-BA",
+    "pagina_fonte": 4,
+    "observacoes": ""
+  },
+  {
+    "nome": "TEX",
+    "telefones": [
+      "2089-0298",
+      "3775-3888"
+    ],
+    "telefone_original": "2089-0298/3775-3888",
+    "estados": [
+      "SP",
+      "RS",
+      "SC",
+      "MS",
+      "BA",
+      "PE",
+      "PB",
+      "CE"
+    ],
+    "abrangencia_original": "SP-RS-SC-MS-BA-PE-PB-CE",
+    "pagina_fonte": 4,
+    "observacoes": ""
+  },
+  {
+    "nome": "Time Express",
+    "telefones": [
+      "4966-7444",
+      "(21)2584-1003"
+    ],
+    "telefone_original": "4966-7444/(21)2584-1003",
+    "estados": [
+      "RJ",
+      "SC",
+      "PR"
+    ],
+    "abrangencia_original": "RJ - SC - PR",
+    "pagina_fonte": 4,
+    "observacoes": ""
+  },
+  {
+    "nome": "Tocantins Trans Log",
+    "telefones": [
+      "2412-1750",
+      "0982"
+    ],
+    "telefone_original": "2412-1750/0982",
+    "estados": [
+      "TO"
+    ],
+    "abrangencia_original": "TO",
+    "pagina_fonte": 4,
+    "observacoes": ""
+  },
+  {
+    "nome": "TM Transmarinho",
+    "telefones": [
+      "2432-4214"
+    ],
+    "telefone_original": "2432-4214",
+    "estados": [
+      "BA"
+    ],
+    "abrangencia_original": "BA",
+    "pagina_fonte": 4,
+    "observacoes": ""
+  },
+  {
+    "nome": "TNT Mercúrio",
+    "telefones": [
+      "3622-3204"
+    ],
+    "telefone_original": "3622-3204",
+    "estados": [
+      "AC",
+      "AL",
+      "AP",
+      "AM",
+      "BA",
+      "CE",
+      "DF",
+      "ES",
+      "GO",
+      "MA",
+      "MT",
+      "MS",
+      "MG",
+      "PA",
+      "PB",
+      "PR",
+      "PE",
+      "PI",
+      "RJ",
+      "RN",
+      "RS",
+      "RO",
+      "RR",
+      "SC",
+      "SP",
+      "SE",
+      "TO"
+    ],
+    "abrangencia_original": "TODOS OS ESTADOS",
+    "pagina_fonte": 4,
+    "observacoes": ""
+  },
+  {
+    "nome": "Trans Apucarana",
+    "telefones": [
+      "(44) 3266-6361",
+      "2954-7466",
+      "4800-7466"
+    ],
+    "telefone_original": "(44) 3266-6361/2954-7466/4800-7466",
+    "estados": [
+      "PR"
+    ],
+    "abrangencia_original": "PR",
+    "pagina_fonte": 4,
+    "observacoes": ""
+  },
+  {
+    "nome": "Trans Barbara",
+    "telefones": [
+      "3315-0612"
+    ],
+    "telefone_original": "3315-0612",
+    "estados": [],
+    "abrangencia_original": "",
+    "pagina_fonte": 4,
+    "observacoes": "Abrangência não informada na folha."
+  },
+  {
+    "nome": "Trans Bernardes",
+    "telefones": [
+      "3687-5175"
+    ],
+    "telefone_original": "3687-5175",
+    "estados": [
+      "SP"
+    ],
+    "abrangencia_original": "SP",
+    "pagina_fonte": 4,
+    "observacoes": ""
+  },
+  {
+    "nome": "Trans Carpal",
+    "telefones": [
+      "3641-1705",
+      "4441-5100"
+    ],
+    "telefone_original": "3641-1705/4441-5100",
+    "estados": [
+      "GO",
+      "DF"
+    ],
+    "abrangencia_original": "GO - DF",
+    "pagina_fonte": 4,
+    "observacoes": ""
+  },
+  {
+    "nome": "Trans Compras",
+    "telefones": [
+      "3927-2050"
+    ],
+    "telefone_original": "3927-2050",
+    "estados": [
+      "AL",
+      "SE",
+      "PE",
+      "BA"
+    ],
+    "abrangencia_original": "AL - SE - PE - BA",
+    "pagina_fonte": 4,
+    "observacoes": ""
+  },
+  {
+    "nome": "Tarns Figueiredo",
+    "telefones": [
+      "2635-8151"
+    ],
+    "telefone_original": "2635-8151",
+    "estados": [
+      "AM",
+      "AP",
+      "PA",
+      "RO",
+      "RR",
+      "TO",
+      "MA",
+      "CE",
+      "RN",
+      "PE",
+      "PB",
+      "PI",
+      "AL",
+      "SE"
+    ],
+    "abrangencia_original": "AM-AP-PA-RO-RR-TO-MA-CE-RN-PE-PB-PI-AL-SE",
+    "pagina_fonte": 4,
+    "observacoes": ""
+  },
+  {
+    "nome": "Trans Gabi",
+    "telefones": [
+      "2721-3468"
+    ],
+    "telefone_original": "2721-3468",
+    "estados": [
+      "GO",
+      "DF"
+    ],
+    "abrangencia_original": "GO - DF",
+    "pagina_fonte": 4,
+    "observacoes": ""
+  },
+  {
+    "nome": "Trans Generoso",
+    "telefones": [
+      "4020-3567",
+      "3563-3167"
+    ],
+    "telefone_original": "4020-3567/3563-3167",
+    "estados": [
+      "MS",
+      "RS",
+      "SC",
+      "PR",
+      "GO",
+      "MT",
+      "AC",
+      "SP",
+      "MG",
+      "RJ"
+    ],
+    "abrangencia_original": "MS-RS-SC-PR-GO-MT-AC-SP-MG-RJ",
+    "pagina_fonte": 4,
+    "observacoes": ""
+  },
+  {
+    "nome": "Trans Geo",
+    "telefones": [
+      "2967-1745",
+      "2303-9306",
+      "(82)99922-7811"
+    ],
+    "telefone_original": "2967-1745/2303-9306/(82)99922-7811",
+    "estados": [
+      "SE",
+      "AL"
+    ],
+    "abrangencia_original": "SE - AL",
+    "pagina_fonte": 4,
+    "observacoes": ""
+  },
+  {
+    "nome": "Trans Guapo",
+    "telefones": [
+      "2954-3210",
+      "2967-2158"
+    ],
+    "telefone_original": "2954-3210/2967-2158",
+    "estados": [
+      "SP"
+    ],
+    "abrangencia_original": "SP",
+    "pagina_fonte": 4,
+    "observacoes": ""
+  },
+  {
+    "nome": "Trans Hizza",
+    "telefones": [
+      "2967-1377"
+    ],
+    "telefone_original": "2967-1377",
+    "estados": [
+      "PR",
+      "SP"
+    ],
+    "abrangencia_original": "PR - SP",
+    "pagina_fonte": 4,
+    "observacoes": ""
+  },
+  {
+    "nome": "Transito Brasil",
+    "telefones": [
+      "2138-7731",
+      "7701"
+    ],
+    "telefone_original": "2138-7731/7701",
+    "estados": [
+      "RS",
+      "SC",
+      "BA",
+      "GO",
+      "ES",
+      "RJ",
+      "MG"
+    ],
+    "abrangencia_original": "RS - SC - BA - GO - ES - RJ - MG",
+    "pagina_fonte": 4,
+    "observacoes": ""
+  },
+  {
+    "nome": "Trans Joy",
+    "telefones": [
+      "2109-5600"
+    ],
+    "telefone_original": "2109-5600",
+    "estados": [
+      "RS",
+      "SC",
+      "PR",
+      "SP"
+    ],
+    "abrangencia_original": "RS - SC - PR - SP",
+    "pagina_fonte": 4,
+    "observacoes": ""
+  },
+  {
+    "nome": "Trans Line",
+    "telefones": [
+      "2088-2665",
+      "(71)3391-6875"
+    ],
+    "telefone_original": "2088-2665/(71)3391-6875",
+    "estados": [],
+    "abrangencia_original": "",
+    "pagina_fonte": 4,
+    "observacoes": "Abrangência não informada na folha."
+  },
+  {
+    "nome": "Trans Norte",
+    "telefones": [
+      "2402-8880"
+    ],
+    "telefone_original": "2402-8880",
+    "estados": [
+      "SP",
+      "RJ",
+      "ES",
+      "MG"
+    ],
+    "abrangencia_original": "SP - RJ - ES - MG",
+    "pagina_fonte": 4,
+    "observacoes": ""
+  },
+  {
+    "nome": "Trans Pacífico",
+    "telefones": [
+      "2303-4022"
+    ],
+    "telefone_original": "2303-4022",
+    "estados": [
+      "AM",
+      "AP",
+      "PA",
+      "RO",
+      "RR",
+      "TO",
+      "MA",
+      "CE",
+      "RN",
+      "PE",
+      "PB",
+      "PI",
+      "AL",
+      "SE"
+    ],
+    "abrangencia_original": "AM-AP-PA-RO-RR-TO-MA-CE-RN-PE-PB-PI-AL-SE",
+    "pagina_fonte": 4,
+    "observacoes": ""
+  },
+  {
+    "nome": "Trans Pen",
+    "telefones": [
+      "3392-1616"
+    ],
+    "telefone_original": "3392-1616",
+    "estados": [
+      "SP",
+      "PR"
+    ],
+    "abrangencia_original": "SP - PR",
+    "pagina_fonte": 4,
+    "observacoes": ""
+  },
+  {
+    "nome": "Trans Pérola",
+    "telefones": [
+      "2431-5651"
+    ],
+    "telefone_original": "2431-5651",
+    "estados": [
+      "PR",
+      "AC",
+      "RO"
+    ],
+    "abrangencia_original": "PR - AC - RO",
+    "pagina_fonte": 4,
+    "observacoes": ""
+  },
+  {
+    "nome": "Trans Press",
+    "telefones": [
+      "2482-1145"
+    ],
+    "telefone_original": "2482-1145",
+    "estados": [
+      "PA"
+    ],
+    "abrangencia_original": "PA",
+    "pagina_fonte": 4,
+    "observacoes": ""
+  },
+  {
+    "nome": "Trans Pioneira",
+    "telefones": [
+      "2482-0556",
+      "2411-1605"
+    ],
+    "telefone_original": "2482-0556/2411-1605",
+    "estados": [],
+    "abrangencia_original": "",
+    "pagina_fonte": 4,
+    "observacoes": "Abrangência não informada na folha."
+  },
+  {
+    "nome": "Trans Rapal",
+    "telefones": [
+      "3687-5755"
+    ],
+    "telefone_original": "3687-5755",
+    "estados": [
+      "SP"
+    ],
+    "abrangencia_original": "SP",
+    "pagina_fonte": 4,
+    "observacoes": ""
+  },
+  {
+    "nome": "Trans Real",
+    "telefones": [
+      "3205-8200"
+    ],
+    "telefone_original": "3205-8200",
+    "estados": [
+      "MT",
+      "RO",
+      "AC",
+      "SP"
+    ],
+    "abrangencia_original": "MT - RO - AC - SP",
+    "pagina_fonte": 4,
+    "observacoes": ""
+  },
+  {
+    "nome": "Trans Ruas",
+    "telefones": [
+      "2698-6532",
+      "2597-3919"
+    ],
+    "telefone_original": "2698-6532 / 2597-3919",
+    "estados": [
+      "SP"
+    ],
+    "abrangencia_original": "SP",
+    "pagina_fonte": 4,
+    "observacoes": ""
+  },
+  {
+    "nome": "Trans Seis",
+    "telefones": [
+      "2411-1363"
+    ],
+    "telefone_original": "2411-1363",
+    "estados": [
+      "PA"
+    ],
+    "abrangencia_original": "PA",
+    "pagina_fonte": 4,
+    "observacoes": ""
+  },
+  {
+    "nome": "Aérea",
+    "telefones": [
+      "3837-0449",
+      "3644-4395"
+    ],
+    "telefone_original": "3837-0449/3644-4395",
+    "estados": [],
+    "abrangencia_original": "",
+    "pagina_fonte": 4,
+    "observacoes": "Abrangência não informada na folha."
+  },
+  {
+    "nome": "Trans Tilog",
+    "telefones": [
+      "2488-8281"
+    ],
+    "telefone_original": "2488-8281",
+    "estados": [
+      "PA"
+    ],
+    "abrangencia_original": "PA",
+    "pagina_fonte": 4,
+    "observacoes": ""
+  },
+  {
+    "nome": "Trans Winter",
+    "telefones": [
+      "2901-9111"
+    ],
+    "telefone_original": "2901-9111",
+    "estados": [
+      "PE",
+      "BA"
+    ],
+    "abrangencia_original": "PE - BA",
+    "pagina_fonte": 4,
+    "observacoes": ""
+  },
+  {
+    "nome": "Trisul",
+    "telefones": [
+      "2631-2888"
+    ],
+    "telefone_original": "2631-2888",
+    "estados": [
+      "SP",
+      "MG"
+    ],
+    "abrangencia_original": "SP - MG",
+    "pagina_fonte": 4,
+    "observacoes": ""
+  },
+  {
+    "nome": "TSV",
+    "telefones": [
+      "2954-7778"
+    ],
+    "telefone_original": "2954-7778",
+    "estados": [
+      "RS",
+      "SC",
+      "PR",
+      "SP",
+      "RJ",
+      "ES",
+      "MG",
+      "MT",
+      "MS",
+      "GO",
+      "DF"
+    ],
+    "abrangencia_original": "RS-SC-PR-SP-RJ-ES-MG-MT-MS-GO-DF",
+    "pagina_fonte": 4,
+    "observacoes": ""
+  },
+  {
+    "nome": "Tutto Trans",
+    "telefones": [
+      "(81) 3724-2701",
+      "2488-8598",
+      "(82)3036-1814"
+    ],
+    "telefone_original": "(81) 3724-2701/2488-8598/(82)3036-1814",
+    "estados": [
+      "MA",
+      "CE",
+      "RN",
+      "PB",
+      "PE",
+      "PI",
+      "AL",
+      "SE",
+      "BA"
+    ],
+    "abrangencia_original": "MA-CE-RN-PB-PE-PI-AL-SE-BA",
+    "pagina_fonte": 4,
+    "observacoes": ""
+  },
+  {
+    "nome": "TW",
+    "telefones": [
+      "4873-9100"
+    ],
+    "telefone_original": "4873-9100",
+    "estados": [
+      "PR",
+      "RS",
+      "SC"
+    ],
+    "abrangencia_original": "PR - RS - SC",
+    "pagina_fonte": 4,
+    "observacoes": ""
+  },
+  {
+    "nome": "TWR",
+    "telefones": [
+      "2207-4626"
+    ],
+    "telefone_original": "2207-4626",
+    "estados": [
+      "PR"
+    ],
+    "abrangencia_original": "PR",
+    "pagina_fonte": 4,
+    "observacoes": ""
+  },
+  {
+    "nome": "Vale do Ribeira",
+    "telefones": [
+      "2097-4252"
+    ],
+    "telefone_original": "2097-4252",
+    "estados": [
+      "SP"
+    ],
+    "abrangencia_original": "SP",
+    "pagina_fonte": 4,
+    "observacoes": ""
+  },
+  {
+    "nome": "Van Sul",
+    "telefones": [
+      "2412-5431",
+      "9070"
+    ],
+    "telefone_original": "2412-5431/9070",
+    "estados": [
+      "RS"
+    ],
+    "abrangencia_original": "RS",
+    "pagina_fonte": 4,
+    "observacoes": ""
+  },
+  {
+    "nome": "VCRM",
+    "telefones": [
+      "2682-0822"
+    ],
+    "telefone_original": "2682-0822",
+    "estados": [
+      "SP",
+      "RJ"
+    ],
+    "abrangencia_original": "SP - RJ",
+    "pagina_fonte": 4,
+    "observacoes": ""
+  },
+  {
+    "nome": "Via Aérea",
+    "telefones": [
+      "2607-5220"
+    ],
+    "telefone_original": "2607-5220",
+    "estados": [],
+    "abrangencia_original": "",
+    "pagina_fonte": 4,
+    "observacoes": "Abrangência não informada na folha."
+  },
+  {
+    "nome": "Via Pajuçara",
+    "telefones": [
+      "3585-6900",
+      "6917",
+      "6940"
+    ],
+    "telefone_original": "3585-6900/6917/6940",
+    "estados": [
+      "SP",
+      "RJ",
+      "MG",
+      "ES"
+    ],
+    "abrangencia_original": "SP - RJ - MG - ES",
+    "pagina_fonte": 5,
+    "observacoes": ""
+  },
+  {
+    "nome": "Viação Garcia",
+    "telefones": [
+      "2106-3650"
+    ],
+    "telefone_original": "2106-3650",
+    "estados": [],
+    "abrangencia_original": "",
+    "pagina_fonte": 5,
+    "observacoes": "Abrangência não informada na folha."
+  },
+  {
+    "nome": "Viação Motta",
+    "telefones": [
+      "3616-2544"
+    ],
+    "telefone_original": "3616-2544",
+    "estados": [
+      "SP",
+      "MT",
+      "PR",
+      "DF",
+      "MG"
+    ],
+    "abrangencia_original": "SP - MT - PR - DF - MG",
+    "pagina_fonte": 5,
+    "observacoes": ""
+  },
+  {
+    "nome": "Viação Piracicabana",
+    "telefones": [
+      "3333-7900"
+    ],
+    "telefone_original": "3333-7900",
+    "estados": [
+      "RS",
+      "SC",
+      "PR",
+      "SP",
+      "ES",
+      "RJ",
+      "MG",
+      "GO",
+      "DF",
+      "TO"
+    ],
+    "abrangencia_original": "RS-SC-PR-SP-ES-RJ-MG-GO-DF-TO",
+    "pagina_fonte": 5,
+    "observacoes": ""
+  },
+  {
+    "nome": "Viação São Cristóvão",
+    "telefones": [
+      "3393-1881"
+    ],
+    "telefone_original": "3393-1881",
+    "estados": [
+      "MG",
+      "RJ"
+    ],
+    "abrangencia_original": "MG - RJ",
+    "pagina_fonte": 5,
+    "observacoes": ""
+  },
+  {
+    "nome": "Viktória Cargas",
+    "telefones": [
+      "2423-2323"
+    ],
+    "telefone_original": "2423-2323",
+    "estados": [
+      "AM"
+    ],
+    "abrangencia_original": "AM E TODAS AS CAPITAIS",
+    "pagina_fonte": 5,
+    "observacoes": "Cobertura por capitais conforme folha; não foram inferidas UFs além das explicitamente citadas."
+  },
+  {
+    "nome": "Voo Transportes",
+    "telefones": [
+      "2446-4276"
+    ],
+    "telefone_original": "2446-4276",
+    "estados": [
+      "RO",
+      "AC"
+    ],
+    "abrangencia_original": "RO - AC",
+    "pagina_fonte": 5,
+    "observacoes": ""
+  },
+  {
+    "nome": "Zé Agostinho",
+    "telefones": [
+      "2488-7057"
+    ],
+    "telefone_original": "2488-7057",
+    "estados": [
+      "RN",
+      "CE",
+      "PB",
+      "BA"
+    ],
+    "abrangencia_original": "RN - CE - PB - BA",
+    "pagina_fonte": 5,
+    "observacoes": ""
+  },
+  {
+    "nome": "Zero Grau",
+    "telefones": [
+      "3687-6200"
+    ],
+    "telefone_original": "3687-6200",
+    "estados": [
+      "MT",
+      "MS",
+      "GO",
+      "DF"
+    ],
+    "abrangencia_original": "MT - MS - GO - DF",
+    "pagina_fonte": 5,
+    "observacoes": ""
+  },
+  {
+    "nome": "Zero Hora",
+    "telefones": [
+      "2209-7999"
+    ],
+    "telefone_original": "2209-7999",
+    "estados": [],
+    "abrangencia_original": "",
+    "pagina_fonte": 5,
+    "observacoes": "Abrangência não informada na folha."
+  },
+  {
+    "nome": "Januaria",
+    "telefones": [
+      "2193-4711",
+      "12"
+    ],
+    "telefone_original": "2193-4711/12",
+    "estados": [],
+    "abrangencia_original": "",
+    "pagina_fonte": 5,
+    "observacoes": "Abrangência não informada na folha."
+  },
+  {
+    "nome": "Jortek",
+    "telefones": [
+      "2412-1343",
+      "6378"
+    ],
+    "telefone_original": "2412-1343/6378",
+    "estados": [],
+    "abrangencia_original": "",
+    "pagina_fonte": 5,
+    "observacoes": "Abrangência não informada na folha."
+  },
+  {
+    "nome": "Cidade Express",
+    "telefones": [
+      "2307-3075",
+      "3078"
+    ],
+    "telefone_original": "2307-3075/3078",
+    "estados": [],
+    "abrangencia_original": "",
+    "pagina_fonte": 5,
+    "observacoes": "Abrangência não informada na folha."
+  },
+  {
+    "nome": "Rodonasa",
+    "telefones": [
+      "2909-4603"
+    ],
+    "telefone_original": "2909-4603",
+    "estados": [],
+    "abrangencia_original": "",
+    "pagina_fonte": 5,
+    "observacoes": "Abrangência não informada na folha."
+  },
+  {
+    "nome": "Reunidas SC",
+    "telefones": [
+      "3933-4400"
+    ],
+    "telefone_original": "3933-4400",
+    "estados": [],
+    "abrangencia_original": "",
+    "pagina_fonte": 5,
+    "observacoes": "Abrangência não informada na folha."
+  },
+  {
+    "nome": "Exata Cargo",
+    "telefones": [
+      "2085-5771"
+    ],
+    "telefone_original": "2085-5771",
+    "estados": [],
+    "abrangencia_original": "",
+    "pagina_fonte": 5,
+    "observacoes": "Abrangência não informada na folha."
+  },
+  {
+    "nome": "Claudio Transportes",
+    "telefones": [
+      "2412-2900",
+      "(84) 2020-2611"
+    ],
+    "telefone_original": "2412-2900/(84) 2020-2611",
+    "estados": [],
+    "abrangencia_original": "",
+    "pagina_fonte": 5,
+    "observacoes": "Abrangência não informada na folha."
+  },
+  {
+    "nome": "KGR",
+    "telefones": [
+      "2412-7299",
+      "2481-9089",
+      "(81) 3338-7858"
+    ],
+    "telefone_original": "2412-7299/2481-9089/(81) 3338-7858",
+    "estados": [],
+    "abrangencia_original": "",
+    "pagina_fonte": 5,
+    "observacoes": "Abrangência não informada na folha."
+  },
+  {
+    "nome": "Expresso Teresopolis",
+    "telefones": [
+      "2188-2832",
+      "2863"
+    ],
+    "telefone_original": "2188-2832/2863",
+    "estados": [],
+    "abrangencia_original": "",
+    "pagina_fonte": 5,
+    "observacoes": "Abrangência não informada na folha."
+  },
+  {
+    "nome": "Latan",
+    "telefones": [
+      "3001159999"
+    ],
+    "telefone_original": "3001159999",
+    "estados": [],
+    "abrangencia_original": "",
+    "pagina_fonte": 5,
+    "observacoes": "Abrangência não informada na folha."
+  },
+  {
+    "nome": "Trans Ibitinga",
+    "telefones": [
+      "2085-2426"
+    ],
+    "telefone_original": "2085-2426",
+    "estados": [],
+    "abrangencia_original": "",
+    "pagina_fonte": 5,
+    "observacoes": "Abrangência não informada na folha."
+  },
+  {
+    "nome": "Certa Transportes",
+    "telefones": [
+      "4969-3611"
+    ],
+    "telefone_original": "4969-3611",
+    "estados": [],
+    "abrangencia_original": "",
+    "pagina_fonte": 5,
+    "observacoes": "Abrangência não informada na folha."
+  },
+  {
+    "nome": "Chapecó (Nelci)",
+    "telefones": [
+      "(49) 3442-5287"
+    ],
+    "telefone_original": "(49) 3442-5287",
+    "estados": [],
+    "abrangencia_original": "",
+    "pagina_fonte": 5,
+    "observacoes": "Abrangência não informada na folha."
+  },
+  {
+    "nome": "Viação Garcia",
+    "telefones": [
+      "2106-3650",
+      "3671"
+    ],
+    "telefone_original": "2106-3650/3671",
+    "estados": [],
+    "abrangencia_original": "",
+    "pagina_fonte": 5,
+    "observacoes": "Abrangência não informada na folha."
+  },
+  {
+    "nome": "2001-Wartha",
+    "telefones": [
+      "2243-2001",
+      "(51) 3561-1196"
+    ],
+    "telefone_original": "2243-2001/(51) 3561-1196",
+    "estados": [],
+    "abrangencia_original": "",
+    "pagina_fonte": 5,
+    "observacoes": "Abrangência não informada na folha."
+  },
+  {
+    "nome": "Rapido Itaquá",
+    "telefones": [
+      "2482-4710"
+    ],
+    "telefone_original": "2482-4710",
+    "estados": [],
+    "abrangencia_original": "",
+    "pagina_fonte": 5,
+    "observacoes": "Abrangência não informada na folha."
+  },
+  {
+    "nome": "Rebecchi",
+    "telefones": [
+      "3832-7166"
+    ],
+    "telefone_original": "3832-7166",
+    "estados": [],
+    "abrangencia_original": "",
+    "pagina_fonte": 5,
+    "observacoes": "Abrangência não informada na folha."
+  },
+  {
+    "nome": "Guapo",
+    "telefones": [
+      "2967-2158"
+    ],
+    "telefone_original": "2967-2158",
+    "estados": [],
+    "abrangencia_original": "",
+    "pagina_fonte": 5,
+    "observacoes": "Abrangência não informada na folha."
+  },
+  {
+    "nome": "Rapido Monte Claro",
+    "telefones": [
+      "(11) 2411-1887",
+      "2085-6022"
+    ],
+    "telefone_original": "(11) 2411-1887 / 2085-6022",
+    "estados": [],
+    "abrangencia_original": "",
+    "pagina_fonte": 5,
+    "observacoes": "Abrangência não informada na folha."
+  },
+  {
+    "nome": "SDS",
+    "telefones": [
+      "(11) 2209-9810"
+    ],
+    "telefone_original": "(11) 2209-9810",
+    "estados": [],
+    "abrangencia_original": "",
+    "pagina_fonte": 5,
+    "observacoes": "Abrangência não informada na folha."
+  }
+]
