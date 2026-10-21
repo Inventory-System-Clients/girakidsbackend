@@ -92,7 +92,12 @@ export const catalogo = async (req, res) => {
     const pagina = Math.max(Number(req.query.pagina) || 1, 1);
     const { rows, count } = await Produto.findAndCountAll({
       where,
-      order: [["destaque", "DESC"], ["nome", "ASC"]],
+      // Esgotados sempre no fim (por encomenda conta como disponível).
+      order: [
+        [sequelize.literal(`CASE WHEN "estoque" > 0 OR "modoVenda" = 'ENCOMENDA' THEN 0 ELSE 1 END`), "ASC"],
+        ["destaque", "DESC"],
+        ["nome", "ASC"],
+      ],
       limit: limite,
       offset: (pagina - 1) * limite,
     });
