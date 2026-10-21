@@ -265,6 +265,8 @@ export const gerarPedidoDoOrcamento = async (req, res) => {
         precoUnitario: item.precoUnitario,
       })),
       metodoEnvio: orcamento.metodoEnvio,
+      transportadora: orcamento.transportadoraId ? { id: orcamento.transportadoraId, nome: orcamento.transportadoraNome } : null,
+      transportadoraObs: orcamento.transportadoraObs,
       desconto: orcamento.desconto,
       freteAdicional: orcamento.freteAdicional,
       formaPagamento: orcamento.formaPagamento,

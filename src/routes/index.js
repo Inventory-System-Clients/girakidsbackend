@@ -21,6 +21,7 @@ import * as correios from "../controllers/correiosController.js";
 import * as banners from "../controllers/bannerController.js";
 import * as custosExtras from "../controllers/custoExtraController.js";
 import * as giraldo from "../controllers/giraldoController.js";
+import * as transportadoras from "../controllers/transportadoraController.js";
 import transportadoraRoutes from "./transportadora.routes.js";
 import calculoPedidoRoutes from "./calculoPedido.routes.js";
 import pedidoNotaFiscalRoutes from "./pedidoNotaFiscal.routes.js";
@@ -58,6 +59,10 @@ router.get("/catalogo/produtos/:id", produtos.obterPublico);
 
 // Checkout e pedidos do cliente
 router.get("/checkout/opcoes", autenticar, pedidos.opcoesCheckout);
+// Equipe tirando pedido com entrega por transportadora
+const tiraPedido = [autenticar, exigirPermissao("CHECKOUT", "VENDAS", "ORCAMENTOS", "COMERCIAL")];
+router.get("/checkout/transportadoras", ...tiraPedido, transportadoras.sugestoesCheckout);
+router.post("/checkout/transportadoras/ia", ...tiraPedido, registrarLog("BUSCAR_TRANSPORTADORAS", "Transportadora"), transportadoras.buscarTransportadoras);
 router.post("/checkout/frete", autenticar, pedidos.cotar);
 router.post("/pedidos", autenticar, (req, res, next) =>
   req.usuario.role === "CLIENTE" ? next() : exigirPermissao("CHECKOUT", "VENDAS")(req, res, next),

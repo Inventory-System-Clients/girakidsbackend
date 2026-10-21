@@ -5,6 +5,7 @@ import {
   PedidoItem,
   PedidoParcela,
   PedidoCustoExtra,
+  Parceiro,
   Produto,
   Usuario,
   Categoria,
@@ -177,6 +178,31 @@ const dadosCliente = async (corpo, usuario) => {
   return { dados, cliente };
 };
 
+// Transportadora escolhida no checkout da equipe: cadastrada (id) ou vinda da
+// planilha/busca na web (nome) — nesse caso é cadastrada em Parceiros.
+const resolverTransportadora = async (escolha, usuario, transaction) => {
+  if (!escolha || (!escolha.id && !String(escolha.nome || "").trim())) return null;
+  if (escolha.id) {
+    const existente = await Parceiro.findByPk(escolha.id, { transaction });
+    if (existente) return existente;
+  }
+  const nome = String(escolha.nome).trim().slice(0, 200);
+  const mesmoNome = await Parceiro.findOne({ where: { tipo: "TRANSPORTADORA", nome: { [Op.iLike]: nome } }, transaction });
+  if (mesmoNome) return mesmoNome;
+  return Parceiro.create(
+    {
+      tipo: "TRANSPORTADORA",
+      nome,
+      telefone: escolha.telefone || null,
+      documento: escolha.documento || null,
+      cidade: escolha.cidade || null,
+      observacoes: escolha.observacao ? String(escolha.observacao).slice(0, 500) : "Cadastrada ao tirar um pedido",
+      criadoPor: usuario.nome,
+    },
+    { transaction },
+  );
+};
+
 // Cria pedido ou orçamento a partir do checkout / geração de orçamentos.
 export const criarPedido = async (corpo, usuario, tipo = "PEDIDO") => {
   const interno = ehInterno(usuario);
@@ -222,10 +248,15 @@ export const criarPedido = async (corpo, usuario, tipo = "PEDIDO") => {
       parcelasCartao,
     });
 
+    const transportadora = interno && metodoEnvio === "TRANSPORTADORA" ? await resolverTransportadora(corpo.transportadora, usuario, transaction) : null;
+
     const pedido = await Pedido.create(
       {
         tipo,
         numero: await proximoNumero(tipo, transaction),
+        transportadoraId: transportadora?.id || null,
+        transportadoraNome: transportadora?.nome || null,
+        transportadoraObs: transportadora ? corpo.transportadoraObs || null : null,
         ...cliente,
         origemCliente: interno ? "ADMIN" : "CLIENTE",
         alertaComercial: !interno && tipo === "PEDIDO",

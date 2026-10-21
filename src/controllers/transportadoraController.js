@@ -1,4 +1,6 @@
 import fs from "fs";
+import { Op, fn, col } from "sequelize";
+import { Parceiro, Pedido } from "../models/index.js";
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -208,5 +210,99 @@ export const buscarTransportadoras = async (req, res) => {
     return res
       .status(error.status || 500)
       .json({ error: error.message || "Erro ao buscar transportadoras" });
+  }
+};
+
+// ---------------------------------------------------------------------------
+// Sugestões para o checkout da equipe (entrega por transportadora)
+// ---------------------------------------------------------------------------
+
+const normalizarNome = (nome) =>
+  String(nome || "")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/\b(ltda|me|eireli|s\.?a|transportes?|transportadora|logistica|cargas|e|de|do|da)\b/g, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+
+// Telefones da planilha sem DDD são de São Paulo.
+const comDdd = (telefone) => {
+  const d = String(telefone || "").replace(/\D/g, "");
+  if (d.length === 8 || d.length === 9) return `(11) ${d.slice(0, d.length - 4)}-${d.slice(-4)}`;
+  if (d.length === 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+  if (d.length === 11) return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+  return telefone || null;
+};
+
+// Transportadoras que atendem a UF do cliente: planilha interna + Parceiros
+// cadastrados + as já usadas em pedidos para esse estado (primeiro).
+export const sugestoesCheckout = async (req, res) => {
+  try {
+    const uf = String(req.query.uf || "").toUpperCase().slice(0, 2);
+    const parceiros = await Parceiro.findAll({ where: { tipo: "TRANSPORTADORA", ativo: true }, order: [["nome", "ASC"]] });
+    const usadas = uf
+      ? await Pedido.findAll({
+          attributes: ["transportadoraId", [fn("COUNT", col("id")), "vezes"]],
+          where: { tipo: "PEDIDO", estado: uf, transportadoraId: { [Op.ne]: null } },
+          group: ["transportadoraId"],
+          raw: true,
+        })
+      : [];
+    const vezesPorId = new Map(usadas.map((u) => [u.transportadoraId, Number(u.vezes)]));
+
+    const porNome = new Map();
+    const chave = (nome) => normalizarNome(nome) || String(nome).toLowerCase();
+
+    for (const p of parceiros) {
+      porNome.set(chave(p.nome), {
+        id: p.id,
+        nome: p.nome.trim(),
+        telefone: p.telefone || null,
+        documento: p.documento || null,
+        cidade: p.cidade,
+        estados: p.estado ? [p.estado] : [],
+        cadastrada: true,
+        atende: p.estado ? p.estado === uf : null,
+        vezesNoEstado: vezesPorId.get(p.id) || 0,
+        origem: "cadastro",
+      });
+    }
+    for (const t of transportadorasReferencia) {
+      const atende = (t.estados || []).includes(uf);
+      const existente = porNome.get(chave(t.nome));
+      if (existente) {
+        existente.estados = [...new Set([...existente.estados, ...(t.estados || [])])];
+        existente.atende = existente.atende || atende;
+        existente.telefone = existente.telefone || comDdd(t.telefones?.[0]);
+        existente.abrangencia = t.abrangencia_original;
+        existente.origem = "cadastro+planilha";
+      } else if (atende) {
+        porNome.set(chave(t.nome), {
+          id: null,
+          nome: t.nome.trim(),
+          telefone: comDdd(t.telefones?.[0]),
+          telefones: (t.telefones || []).map(comDdd),
+          estados: t.estados,
+          abrangencia: t.abrangencia_original,
+          cadastrada: false,
+          atende: true,
+          vezesNoEstado: 0,
+          origem: "planilha",
+        });
+      }
+    }
+
+    const lista = [...porNome.values()];
+    const peso = (t) => (t.vezesNoEstado > 0 ? 0 : t.atende === true ? 1 : t.atende === null ? 2 : 3);
+    lista.sort((a, b) => peso(a) - peso(b) || b.vezesNoEstado - a.vezesNoEstado || a.nome.localeCompare(b.nome, "pt-BR"));
+    res.json({
+      uf,
+      atendem: lista.filter((t) => t.atende === true || t.vezesNoEstado > 0),
+      outras: lista.filter((t) => !(t.atende === true || t.vezesNoEstado > 0)),
+    });
+  } catch (error) {
+    console.error("Erro ao sugerir transportadoras:", error);
+    res.status(500).json({ error: "Erro ao sugerir transportadoras" });
   }
 };
