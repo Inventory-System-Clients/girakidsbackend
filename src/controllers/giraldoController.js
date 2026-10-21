@@ -188,14 +188,17 @@ const INSTRUCOES = `Você é o Giraldo, o assistente de compras da Gira Kids (lo
 
 COMO AJUDAR
 1. Entenda o que a pessoa quer comprar. SEMPRE use a ferramenta buscar_produtos antes de recomendar; nunca invente produto, preço ou estoque.
-2. Recomende no máximo 4 produtos (mande os ids em "produtos" para aparecerem como cartões com foto). Diga o preço por unidade e quantas unidades vêm na embalagem.
-3. Quantidade é sempre em EMBALAGENS (pacotes). Se a pessoa pedir em unidades (ex.: 500 bolinhas e a embalagem tem 100), converta arredondando para cima e explique. Se ela disse a quantidade, já adicione ao carrinho (ação adicionar_carrinho). Se não disse, pergunte quantas embalagens quer.
-4. Depois de adicionar, confirme rapidamente e pergunte se quer mais alguma coisa.
+2. Recomende no máximo 4 produtos (mande os ids em "produtos" para aparecerem como cartões com foto). Diga o preço por unidade e quantas unidades vêm na embalagem. Escreva valores sempre como R$ 0,00 (ex.: "R$ 79,00 a embalagem").
+3. Quantidade é sempre em EMBALAGENS (pacotes). Se a pessoa pedir em unidades (ex.: 500 bolinhas e a embalagem tem 100), converta arredondando para cima e explique. Se ela disse a quantidade, adicione ao carrinho (ação adicionar_carrinho) e diga que JÁ ADICIONOU — não pergunte se pode adicionar. Se não disse, pergunte quantas embalagens quer.
+4. Depois de adicionar, confirme rapidamente ("Coloquei X embalagens no carrinho 🛒") e pergunte se quer mais alguma coisa.
 5. Quando a pessoa disser que é só isso (ou pedir para fechar), pergunte como quer receber, explicando as 3 opções:
    - Correios (PAC ou SEDEX): o pagamento é feito ali mesmo no site. Precisa do CEP; use cotar_frete e informe valor e prazo de PAC e SEDEX.
    - Transportadora: o frete é combinado com o comercial pelo WhatsApp {WHATSAPP} (use a ação whatsapp_comercial). O pedido pode ser registrado com pagamento "Combinar com o comercial".
    - Retirar na loja: endereço {ENDERECO}. Sem custo de frete.
-   Registre a escolha com a ação definir_entrega.
+   Só use a ação definir_entrega DEPOIS que a pessoa escolher, sempre com metodoEnvio preenchido.
+   Quando escolher retirar na loja, SEMPRE informe o endereço {ENDERECO} na resposta.
+   Quando escolher Correios, lembre que o pagamento é feito ali mesmo, online.
+   Quando escolher transportadora, mande o WhatsApp do comercial {WHATSAPP} (ação whatsapp_comercial).
 6. Em seguida pergunte a forma de pagamento, oferecendo SOMENTE as formas listadas em formasDePagamento do contexto (respeite as observações). Registre com definir_pagamento.
 7. Mostre um resumo curto (itens, entrega, pagamento, total aproximado) e pergunte se pode finalizar. Com o "sim", use a ação finalizar_pedido.
    - Se o usuário não estiver logado, explique que precisa entrar ou criar a conta (ação pedir_login) antes de finalizar; o carrinho fica guardado.
@@ -301,6 +304,7 @@ const validarResposta = (args, { porId, pagamentos }) => {
     .filter((a) => {
       if (["adicionar_carrinho", "definir_quantidade", "remover_carrinho"].includes(a.tipo)) return porId.has(a.produtoId);
       if (a.tipo === "definir_pagamento") return formas.has(a.formaPagamento);
+      if (a.tipo === "definir_entrega") return ["RETIRAR_LOCAL", "TRANSPORTADORA", "PAC", "SEDEX"].includes(a.metodoEnvio);
       if (a.tipo === "definir_cep") return somenteDigitos(a.cep).length === 8;
       return true;
     });
@@ -350,7 +354,7 @@ export const conversar = async (req, res) => {
 
     const ctx = await montarContexto({ usuario: req.usuario, carrinho, estado });
     const conversa = [
-      { role: "system", content: INSTRUCOES.replace("{WHATSAPP}", ctx.contexto.whatsappComercial).replace("{ENDERECO}", ctx.contexto.enderecoLoja) },
+      { role: "system", content: INSTRUCOES.replaceAll("{WHATSAPP}", ctx.contexto.whatsappComercial).replaceAll("{ENDERECO}", ctx.contexto.enderecoLoja) },
       { role: "system", content: `CONTEXTO ATUAL (JSON): ${JSON.stringify(ctx.contexto)}` },
       ...historico,
     ];
