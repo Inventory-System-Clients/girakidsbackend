@@ -176,6 +176,11 @@ export const Pedido = sequelize.define(
     criadoPorNome: { type: DataTypes.STRING(150), allowNull: true },
     criadoPorRole: { type: DataTypes.STRING(20), allowNull: true },
     legadoId: { type: DataTypes.STRING(100), allowNull: true },
+    // Pedido feito pelo próprio cliente no site: alerta o comercial até alguém
+    // marcar como visto.
+    alertaComercial: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    alertaVistoEm: { type: DataTypes.DATE, allowNull: true },
+    alertaVistoPor: { type: DataTypes.STRING(150), allowNull: true },
     // Código antigo não numérico (ex.: GK-110326-006), exibido no lugar do número.
     codigoLegado: { type: DataTypes.STRING(30), allowNull: true },
   },

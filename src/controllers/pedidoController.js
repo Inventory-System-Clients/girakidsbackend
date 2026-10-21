@@ -34,6 +34,9 @@ import {
   responderErro,
 } from "../utils/helpers.js";
 
+// Etiquetas e observação comercial do cliente cadastrado.
+const INCLUDE_CLIENTE = { model: Usuario, as: "cliente", attributes: ["id", "etiquetas", "observacaoComercial", "telefone"] };
+
 const carregar = async (id, transaction) => {
   const pedido = await Pedido.findByPk(id, {
     include: INCLUDE_COMPLETO,
@@ -77,7 +80,7 @@ export const listar = async (req, res) => {
 
     const { rows, count } = await Pedido.findAndCountAll({
       where,
-      include: INCLUDE_COMPLETO,
+      include: [...INCLUDE_COMPLETO, INCLUDE_CLIENTE],
       distinct: true,
       order: [["numero", "DESC"]],
       limit: limite,
@@ -112,11 +115,13 @@ export const meusPedidos = async (req, res) => {
 
 export const obter = async (req, res) => {
   try {
-    const pedido = await carregar(req.params.id);
+    const pedido = await Pedido.findByPk(req.params.id, { include: [...INCLUDE_COMPLETO, INCLUDE_CLIENTE] });
+    if (!pedido) throw erroHttp(404, "Pedido não encontrado.");
     if (!ehInterno(req.usuario) && pedido.clienteId !== req.usuario.id) {
       return res.status(403).json({ error: "Este pedido não pertence à sua conta." });
     }
     const dados = serializarPedido(pedido);
+    if (!ehInterno(req.usuario)) delete dados.cliente;
     if (pedido.transportadoraId) {
       const transportadora = await Parceiro.findByPk(pedido.transportadoraId);
       dados.transportadora = transportadora?.toJSON() || null;

@@ -96,6 +96,17 @@ const Usuario = sequelize.define(
       allowNull: false,
       defaultValue: true,
     },
+    // Etiquetas rápidas do comercial (ex.: "VIP", "Paga atrasado") e
+    // observação interna sobre o cliente.
+    etiquetas: {
+      type: DataTypes.JSONB,
+      allowNull: false,
+      defaultValue: [],
+    },
+    observacaoComercial: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
     // Identificador no sistema antigo (Firebase), usado só na importação.
     legadoId: {
       type: DataTypes.STRING(150),

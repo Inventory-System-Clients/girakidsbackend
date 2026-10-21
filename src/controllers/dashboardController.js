@@ -3,6 +3,7 @@ import {
   Pedido,
   PedidoItem,
   PedidoParcela,
+  PedidoCustoExtra,
   Produto,
   MovimentacaoEstoque,
   Parceiro,
@@ -45,13 +46,16 @@ const analisarPedido = (pedido) => {
     custoItens += Number(item.custoUnitario || 0) * unidades;
   }
   const total = Number(pedido.total);
+  // Custos pós-venda (reenvio, avaria...) também saem da receita líquida.
+  const custoExtra = (pedido.custosExtras || []).reduce((s, c) => s + Number(c.valor), 0);
   const liquida =
-    total - Number(pedido.taxas) - Number(pedido.frete) - Number(pedido.freteAdicional) - custoItens;
+    total - Number(pedido.taxas) - Number(pedido.frete) - Number(pedido.freteAdicional) - custoItens - custoExtra;
   return {
     total,
     vendaItens,
     custoItens,
     custoCompleto,
+    custoExtra,
     liquida,
     margemBruta: vendaItens - Number(pedido.desconto) - custoItens,
   };
@@ -74,6 +78,7 @@ const expedidosNoPeriodo = ({ de, ate }, extra = {}) =>
     include: [
       { model: PedidoItem, as: "itens" },
       { model: PedidoParcela, as: "parcelas" },
+      { model: PedidoCustoExtra, as: "custosExtras" },
     ],
     order: [["numero", "DESC"]],
   });
@@ -91,7 +96,7 @@ export const resumo = async (req, res) => {
     const cards = { total: card(), recebida: card(), aberto: card(), antigos: card() };
     const semana = DIAS.map((dia) => ({ dia, pedidos: 0, bruta: 0, liquida: 0, vendaItens: 0, margem: 0 }));
     const produtos = new Map();
-    const extras = { taxas: 0, frete: 0, desconto: 0, custoItens: 0 };
+    const extras = { taxas: 0, frete: 0, desconto: 0, custoItens: 0, custosPosVenda: 0 };
 
     for (const pedido of pedidos) {
       const a = analisarPedido(pedido);
@@ -109,6 +114,7 @@ export const resumo = async (req, res) => {
       extras.frete += Number(pedido.frete) + Number(pedido.freteAdicional);
       extras.desconto += Number(pedido.desconto);
       extras.custoItens += a.custoItens;
+      extras.custosPosVenda += a.custoExtra;
 
       const referencia = pedido.expedidoEm || pedido.createdAt;
       const dia = semana[diaDaSemana(referencia)];

@@ -11,6 +11,8 @@ import CorreiosPostagem from "./CorreiosPostagem.js";
 import PedidoNotaFiscal from "./PedidoNotaFiscal.js";
 import LogAtividade from "./LogAtividade.js";
 import Arquivo from "./Arquivo.js";
+import Banner from "./Banner.js";
+import PedidoCustoExtra from "./PedidoCustoExtra.js";
 
 Produto.belongsTo(Parceiro, {
   foreignKey: "fornecedorPreferencialId",
@@ -26,6 +28,8 @@ Pedido.hasMany(PedidoParcela, { foreignKey: "pedidoId", as: "parcelas", onDelete
 PedidoParcela.belongsTo(Pedido, { foreignKey: "pedidoId", as: "pedido" });
 PedidoItem.belongsTo(Produto, { foreignKey: "produtoId", as: "produto", constraints: false });
 Pedido.belongsTo(Usuario, { foreignKey: "clienteId", as: "cliente", constraints: false });
+Pedido.hasMany(PedidoCustoExtra, { foreignKey: "pedidoId", as: "custosExtras", onDelete: "CASCADE" });
+PedidoCustoExtra.belongsTo(Pedido, { foreignKey: "pedidoId", as: "pedido" });
 Pedido.belongsTo(Parceiro, { foreignKey: "transportadoraId", as: "transportadora", constraints: false });
 
 Recebimento.hasMany(RecebimentoItem, { foreignKey: "recebimentoId", as: "itens", onDelete: "CASCADE" });
@@ -55,4 +59,6 @@ export {
   PedidoNotaFiscal,
   LogAtividade,
   Arquivo,
+  Banner,
+  PedidoCustoExtra,
 };

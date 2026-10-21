@@ -1,5 +1,6 @@
 import { Op } from "sequelize";
-import { Usuario, Pedido } from "../models/index.js";
+import { sequelize } from "../database/connection.js";
+import { Usuario, Pedido, LogAtividade } from "../models/index.js";
 import { PERMISSOES } from "../models/Usuario.js";
 import { erroHttp, numero, responderErro, somenteDigitos, documentoValido } from "../utils/helpers.js";
 
@@ -34,25 +35,86 @@ export const listar = async (req, res) => {
   }
 };
 
-// Busca para "Preencher com dados de outro usuário" no checkout.
+// Busca rápida de clientes (checkout, orçamento): nome, e-mail, telefone ou
+// CPF/CNPJ, com quem começa pelo termo primeiro. Usa índices trigram
+// (criados em database/migrate.js) e devolve só o necessário.
+const ATRIBUTOS_BUSCA = [
+  "id", "nome", "email", "telefone", "documento", "documentoTipo", "cep", "rua", "numero",
+  "complemento", "bairro", "cidade", "estado", "etiquetas", "observacaoComercial", "credito", "role",
+];
+
 export const buscarClientes = async (req, res) => {
   try {
     const busca = String(req.query.busca || "").trim();
     if (busca.length < 2) return res.json([]);
+    const digitos = somenteDigitos(busca);
+    const ou = [
+      { nome: { [Op.iLike]: `%${busca}%` } },
+      { email: { [Op.iLike]: `%${busca}%` } },
+    ];
+    if (digitos.length >= 3) {
+      ou.push({ documento: { [Op.like]: `%${digitos}%` } });
+      ou.push(sequelize.where(sequelize.fn("regexp_replace", sequelize.col("telefone"), "\\D", "", "g"), { [Op.like]: `%${digitos}%` }));
+    }
     const usuarios = await Usuario.findAll({
-      where: {
-        ativo: true,
-        [Op.or]: [
-          { nome: { [Op.iLike]: `%${busca}%` } },
-          { email: { [Op.iLike]: `%${busca}%` } },
-        ],
-      },
-      order: [["nome", "ASC"]],
-      limit: 20,
+      attributes: ATRIBUTOS_BUSCA,
+      where: { ativo: true, [Op.or]: ou },
+      order: [
+        [sequelize.literal(`CASE WHEN "nome" ILIKE ${sequelize.escape(`${busca}%`)} THEN 0 WHEN "email" ILIKE ${sequelize.escape(`${busca}%`)} THEN 1 ELSE 2 END`), "ASC"],
+        ["nome", "ASC"],
+      ],
+      limit: 15,
     });
-    res.json(usuarios);
+
+    // Último pedido de cada cliente encontrado (para "copiar último pedido").
+    const ultimos = usuarios.length
+      ? await Pedido.findAll({
+          attributes: ["clienteId", [sequelize.fn("MAX", sequelize.col("createdAt")), "ultimoEm"], [sequelize.fn("COUNT", sequelize.col("id")), "pedidos"]],
+          where: { clienteId: usuarios.map((u) => u.id), tipo: "PEDIDO", statusVendas: { [Op.ne]: "CANCELADO" } },
+          group: ["clienteId"],
+          raw: true,
+        })
+      : [];
+    const porCliente = new Map(ultimos.map((u) => [u.clienteId, u]));
+    res.json(
+      usuarios.map((u) => ({
+        ...u.toJSON(),
+        ultimoPedidoEm: porCliente.get(u.id)?.ultimoEm || null,
+        totalPedidos: Number(porCliente.get(u.id)?.pedidos || 0),
+      })),
+    );
   } catch (error) {
     responderErro(res, error, "Erro ao buscar clientes");
+  }
+};
+
+// Etiquetas rápidas + observação comercial do cliente.
+export const atualizarEtiquetas = async (req, res) => {
+  try {
+    const usuario = await Usuario.findByPk(req.params.id);
+    if (!usuario) throw erroHttp(404, "Cliente não encontrado.");
+    const etiquetas = Array.isArray(req.body?.etiquetas)
+      ? [...new Set(req.body.etiquetas.map((e) => String(e).trim().slice(0, 30)).filter(Boolean))].slice(0, 10)
+      : usuario.etiquetas;
+    await usuario.update({
+      etiquetas,
+      ...(req.body?.observacaoComercial !== undefined ? { observacaoComercial: String(req.body.observacaoComercial || "").trim() || null } : {}),
+    });
+    res.json({ id: usuario.id, etiquetas: usuario.etiquetas, observacaoComercial: usuario.observacaoComercial });
+  } catch (error) {
+    responderErro(res, error, "Erro ao salvar etiquetas");
+  }
+};
+
+// Etiquetas já usadas (sugestões no editor).
+export const etiquetasUsadas = async (req, res) => {
+  try {
+    const [linhas] = await sequelize.query(
+      `SELECT e AS etiqueta, COUNT(*) AS total FROM usuarios, jsonb_array_elements_text(etiquetas) e GROUP BY e ORDER BY total DESC LIMIT 30`,
+    );
+    res.json(linhas.map((l) => l.etiqueta));
+  } catch (error) {
+    responderErro(res, error, "Erro ao listar etiquetas");
   }
 };
 
@@ -151,6 +213,8 @@ export const excluir = async (req, res) => {
       await usuario.update({ ativo: false });
       return res.json({ message: "Usuário desativado (possui pedidos no histórico)." });
     }
+    // Os logs de atividade continuam, só sem o vínculo com o usuário excluído.
+    await LogAtividade.update({ usuarioId: null }, { where: { usuarioId: usuario.id } });
     await usuario.destroy();
     res.json({ message: "Usuário excluído." });
   } catch (error) {

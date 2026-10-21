@@ -4,6 +4,7 @@ import {
   Pedido,
   PedidoItem,
   PedidoParcela,
+  PedidoCustoExtra,
   Produto,
   Usuario,
   Categoria,
@@ -33,6 +34,7 @@ export const INCLUDE_COMPLETO = [
     include: [{ model: Produto, as: "produto", attributes: ["imagemUrl", "imagens"] }],
   },
   { model: PedidoParcela, as: "parcelas" },
+  { model: PedidoCustoExtra, as: "custosExtras" },
 ];
 
 export const ehInterno = (usuario) => ["ADMIN", "FUNCIONARIO"].includes(usuario?.role);
@@ -220,6 +222,7 @@ export const criarPedido = async (corpo, usuario, tipo = "PEDIDO") => {
         numero: await proximoNumero(tipo, transaction),
         ...cliente,
         origemCliente: interno ? "ADMIN" : "CLIENTE",
+        alertaComercial: !interno && tipo === "PEDIDO",
         metodoEnvio: metodoEnvio || null,
         frete,
         freteAdicional,
@@ -351,6 +354,10 @@ export const serializarPedido = (pedido, { completo = true } = {}) => {
     totalRecebido: totalRecebido(pedido),
     quantidadeItens: itens.length,
     checklist: { conferidos, total: itens.length, completo: itens.length > 0 && conferidos === itens.length },
+    custosExtras: (json.custosExtras || [])
+      .map((c) => ({ ...c, valor: Number(c.valor) }))
+      .sort((a, b) => String(b.data).localeCompare(String(a.data))),
+    custoExtraTotal: arredondar((json.custosExtras || []).reduce((s, c) => s + Number(c.valor), 0)),
     parcelas: (json.parcelas || [])
       .map((p) => ({ ...p, valor: Number(p.valor) }))
       .sort((a, b) => a.numero - b.numero),

@@ -18,6 +18,8 @@ import * as arquivos from "../controllers/arquivoController.js";
 import * as pagamentos from "../controllers/pagamentoController.js";
 import * as comercial from "../controllers/comercialController.js";
 import * as correios from "../controllers/correiosController.js";
+import * as banners from "../controllers/bannerController.js";
+import * as custosExtras from "../controllers/custoExtraController.js";
 import transportadoraRoutes from "./transportadora.routes.js";
 import calculoPedidoRoutes from "./calculoPedido.routes.js";
 import pedidoNotaFiscalRoutes from "./pedidoNotaFiscal.routes.js";
@@ -33,6 +35,16 @@ router.post("/auth/registrar", auth.registrar);
 router.get("/auth/perfil", autenticar, auth.perfil);
 router.put("/auth/perfil", autenticar, auth.atualizarPerfil);
 router.put("/auth/senha", autenticar, auth.alterarSenha);
+
+// Configuração pública (WhatsApp do comercial) e banners do catálogo
+router.get("/config/publica", comercial.configPublica);
+router.put("/config/whatsapp", autenticar, exigirPermissao("COMERCIAL", "USUARIOS"), registrarLog("WHATSAPP_COMERCIAL", "Configuracao"), comercial.salvarWhatsapp);
+router.get("/banners", banners.listarAtivos);
+router.get("/banners/todos", autenticar, exigirPermissao("PRODUTOS", "COMERCIAL"), banners.listarTodos);
+router.post("/banners", autenticar, exigirPermissao("PRODUTOS", "COMERCIAL"), registrarLog("CRIAR_BANNER", "Banner"), banners.criar);
+router.put("/banners/ordem", autenticar, exigirPermissao("PRODUTOS", "COMERCIAL"), banners.reordenar);
+router.put("/banners/:id", autenticar, exigirPermissao("PRODUTOS", "COMERCIAL"), registrarLog("ATUALIZAR_BANNER", "Banner"), banners.atualizar);
+router.delete("/banners/:id", autenticar, exigirPermissao("PRODUTOS", "COMERCIAL"), registrarLog("EXCLUIR_BANNER", "Banner"), banners.excluir);
 
 // Catálogo público
 router.get("/catalogo", autenticarOpcional, produtos.catalogo);
@@ -109,6 +121,9 @@ router.post("/entradas/recebimentos/:id/estornar", ...ent, registrarLog("ESTORNA
 // Gerenciar Usuários
 const usr = [autenticar, exigirPermissao("USUARIOS")];
 router.get("/usuarios/clientes", autenticar, exigirPermissao("CHECKOUT", "ORCAMENTOS", "VENDAS", "USUARIOS"), usuarios.buscarClientes);
+router.get("/usuarios/etiquetas", autenticar, exigirInterno, usuarios.etiquetasUsadas);
+router.put("/usuarios/:id/etiquetas", autenticar, exigirPermissao("VENDAS", "COMERCIAL", "USUARIOS", "ORCAMENTOS"), registrarLog("ETIQUETAS_CLIENTE", "Usuario"), usuarios.atualizarEtiquetas);
+router.get("/usuarios/:id/historico", autenticar, exigirPermissao("CHECKOUT", "ORCAMENTOS", "VENDAS", "COMERCIAL"), comercial.historicoCliente);
 router.get("/usuarios", ...usr, usuarios.listar);
 router.post("/usuarios", ...usr, registrarLog("CRIAR_USUARIO", "Usuario"), usuarios.criar);
 router.put("/usuarios/:id", ...usr, registrarLog("ATUALIZAR_USUARIO", "Usuario"), usuarios.atualizar);
@@ -137,6 +152,14 @@ router.post("/pagamentos/pedidos/:id/consultar", autenticar, pagamentos.consulta
 // Comercial (herdado do AgarraMais, agora consultando os pedidos da loja)
 const com = [autenticar, exigirPermissao("COMERCIAL")];
 router.get("/comercial/pedidos/:numero", ...com, comercial.dadosDoPedido);
+router.get("/comercial/alertas-clientes", autenticar, exigirPermissao("VENDAS", "COMERCIAL"), comercial.alertasClientes);
+router.post("/comercial/alertas-clientes/:id/visto", autenticar, exigirPermissao("VENDAS", "COMERCIAL"), comercial.marcarAlertaVisto);
+router.post("/orcamentos/ia/interpretar", autenticar, exigirPermissao("ORCAMENTOS", "CHECKOUT", "VENDAS"), registrarLog("IA_ORCAMENTO", "Pedido"), comercial.interpretarPedidoIA);
+const custo = [autenticar, exigirPermissao("COMERCIAL", "FINANCEIRO", "VENDAS")];
+router.get("/custos-extras/categorias", ...custo, custosExtras.categorias);
+router.get("/custos-extras", ...custo, custosExtras.listar);
+router.post("/custos-extras", ...custo, registrarLog("CRIAR_CUSTO_EXTRA", "PedidoCustoExtra"), custosExtras.criar);
+router.delete("/custos-extras/:id", ...custo, registrarLog("EXCLUIR_CUSTO_EXTRA", "PedidoCustoExtra"), custosExtras.excluir);
 router.get("/correios/pedidos", ...com, correios.buscarPedidos);
 router.get("/correios/pedidos/:id", ...com, correios.detalharPedido);
 router.post("/correios/cotacao", ...com, correios.cotar);

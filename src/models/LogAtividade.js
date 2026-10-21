@@ -12,7 +12,7 @@ const LogAtividade = sequelize.define(
     },
     usuarioId: {
       type: DataTypes.UUID,
-      allowNull: false,
+      allowNull: true,
       references: {
         model: "usuarios",
         key: "id",
