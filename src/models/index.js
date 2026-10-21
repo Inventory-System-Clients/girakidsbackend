@@ -13,6 +13,7 @@ import LogAtividade from "./LogAtividade.js";
 import Arquivo from "./Arquivo.js";
 import Banner from "./Banner.js";
 import PedidoCustoExtra from "./PedidoCustoExtra.js";
+import { PreRecebimento, PreRecebimentoItem, OrdemMontagem } from "./PreRecebimento.js";
 
 Produto.belongsTo(Parceiro, {
   foreignKey: "fornecedorPreferencialId",
@@ -36,6 +37,11 @@ Recebimento.hasMany(RecebimentoItem, { foreignKey: "recebimentoId", as: "itens",
 RecebimentoItem.belongsTo(Recebimento, { foreignKey: "recebimentoId", as: "recebimento" });
 Recebimento.belongsTo(Parceiro, { foreignKey: "fornecedorId", as: "fornecedor" });
 RecebimentoItem.belongsTo(Produto, { foreignKey: "produtoId", as: "produto", constraints: false });
+
+PreRecebimento.hasMany(PreRecebimentoItem, { foreignKey: "preRecebimentoId", as: "itens", onDelete: "CASCADE" });
+PreRecebimentoItem.belongsTo(PreRecebimento, { foreignKey: "preRecebimentoId", as: "preRecebimento" });
+PreRecebimento.belongsTo(Parceiro, { foreignKey: "fornecedorId", as: "fornecedor", constraints: false });
+OrdemMontagem.belongsTo(Produto, { foreignKey: "produtoId", as: "produto", constraints: false });
 
 CorreiosPostagem.belongsTo(Usuario, { foreignKey: "usuarioId", as: "usuario", constraints: false });
 PedidoNotaFiscal.belongsTo(Usuario, { foreignKey: "usuarioId", as: "usuario", constraints: false });
@@ -61,4 +67,7 @@ export {
   Arquivo,
   Banner,
   PedidoCustoExtra,
+  PreRecebimento,
+  PreRecebimentoItem,
+  OrdemMontagem,
 };

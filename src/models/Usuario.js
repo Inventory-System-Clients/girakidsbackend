@@ -14,6 +14,7 @@ export const PERMISSOES = [
   "ORCAMENTOS",
   "USUARIOS",
   "COMERCIAL",
+  "RECEBIMENTOS",
 ];
 
 const Usuario = sequelize.define(

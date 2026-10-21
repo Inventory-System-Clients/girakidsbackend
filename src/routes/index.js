@@ -22,6 +22,8 @@ import * as banners from "../controllers/bannerController.js";
 import * as custosExtras from "../controllers/custoExtraController.js";
 import * as giraldo from "../controllers/giraldoController.js";
 import * as transportadoras from "../controllers/transportadoraController.js";
+import * as recebimentos from "../controllers/recebimentoController.js";
+import { limitarTaxa } from "../utils/linkSeguro.js";
 import transportadoraRoutes from "./transportadora.routes.js";
 import calculoPedidoRoutes from "./calculoPedido.routes.js";
 import pedidoNotaFiscalRoutes from "./pedidoNotaFiscal.routes.js";
@@ -122,13 +124,44 @@ router.get("/produtos/:id/historico-precos", ...prod, produtos.historicoPrecos);
 // Entradas e parceiros
 const ent = [autenticar, exigirPermissao("ENTRADAS")];
 router.get("/parceiros", autenticar, exigirInterno, entradas.listarParceiros);
-router.post("/parceiros", ...ent, registrarLog("CRIAR_PARCEIRO", "Parceiro"), entradas.criarParceiro);
-router.put("/parceiros/:id", ...ent, registrarLog("ATUALIZAR_PARCEIRO", "Parceiro"), entradas.atualizarParceiro);
+// Fornecedores também são cadastrados pela aba Recebimentos.
+const parc = [autenticar, exigirPermissao("ENTRADAS", "RECEBIMENTOS")];
+router.post("/parceiros", ...parc, registrarLog("CRIAR_PARCEIRO", "Parceiro"), entradas.criarParceiro);
+router.put("/parceiros/:id", ...parc, registrarLog("ATUALIZAR_PARCEIRO", "Parceiro"), entradas.atualizarParceiro);
 router.get("/entradas/resumo", ...ent, entradas.resumo);
 router.get("/entradas/custos", ...ent, entradas.ultimosCustos);
 router.get("/entradas/recebimentos", ...ent, entradas.listarRecebimentos);
 router.post("/entradas/recebimentos", ...ent, registrarLog("CRIAR_RECEBIMENTO", "Recebimento"), entradas.criarRecebimento);
 router.post("/entradas/recebimentos/:id/estornar", ...ent, registrarLog("ESTORNAR_RECEBIMENTO", "Recebimento"), entradas.estornarRecebimento);
+
+// Recebimentos (pré-recebimento com link do fornecedor, montagem em cápsula)
+const rec = [autenticar, exigirPermissao("RECEBIMENTOS")];
+router.get("/recebimentos/alertas", ...rec, recebimentos.alertas);
+router.get("/recebimentos/produtos", ...rec, recebimentos.buscarProdutos);
+router.get("/recebimentos/historico", ...rec, recebimentos.historico);
+router.get("/recebimentos/montagem", ...rec, recebimentos.montagem);
+router.put("/recebimentos/montagem/produtos/:id", ...rec, registrarLog("CONFIGURAR_MONTAGEM", "Produto"), recebimentos.configurarProduto);
+router.post("/recebimentos/montagem/produtos/:id/enviar", ...rec, registrarLog("ENVIAR_MONTAGEM", "Produto"), recebimentos.enviarParaMontagem);
+router.post("/recebimentos/montagem/produtos/:id/ajustar", ...rec, registrarLog("AJUSTAR_SALDO_MONTAGEM", "Produto"), recebimentos.ajustarSaldo);
+router.post("/recebimentos/montagem/ordens/:id/concluir", ...rec, registrarLog("CONCLUIR_MONTAGEM", "OrdemMontagem"), recebimentos.concluirOrdem);
+router.post("/recebimentos/montagem/ordens/:id/cancelar", ...rec, registrarLog("CANCELAR_MONTAGEM", "OrdemMontagem"), recebimentos.cancelarOrdem);
+router.post("/recebimentos/capsulas", ...rec, registrarLog("CRIAR_CAPSULA", "Produto"), recebimentos.criarCapsula);
+router.put("/recebimentos/capsulas/:id", ...rec, registrarLog("MARCAR_CAPSULA", "Produto"), recebimentos.marcarCapsula);
+router.get("/recebimentos", ...rec, recebimentos.listar);
+router.post("/recebimentos", ...rec, registrarLog("CRIAR_PRE_RECEBIMENTO", "PreRecebimento"), recebimentos.criar);
+router.get("/recebimentos/:id", ...rec, recebimentos.obter);
+router.put("/recebimentos/:id", ...rec, registrarLog("ATUALIZAR_PRE_RECEBIMENTO", "PreRecebimento"), recebimentos.atualizar);
+router.post("/recebimentos/:id/link", ...rec, registrarLog("NOVO_LINK_FORNECEDOR", "PreRecebimento"), recebimentos.gerarNovoLink);
+router.post("/recebimentos/:id/receber", ...rec, registrarLog("CONFERIR_RECEBIMENTO", "PreRecebimento"), recebimentos.receber);
+router.post("/recebimentos/:id/divergencia/resolver", ...rec, registrarLog("RESOLVER_DIVERGENCIA", "PreRecebimento"), recebimentos.resolverDivergencia);
+router.post("/recebimentos/:id/cancelar", ...rec, registrarLog("CANCELAR_PRE_RECEBIMENTO", "PreRecebimento"), recebimentos.cancelar);
+router.post("/recebimentos/:id/estornar", ...rec, registrarLog("ESTORNAR_PRE_RECEBIMENTO", "PreRecebimento"), recebimentos.estornar);
+
+// Link público do fornecedor (sem login; token no cabeçalho, nunca na URL
+// do servidor, e limite de tentativas por IP).
+const publicoFornecedor = limitarTaxa({ janelaMs: 60_000, maximo: 30 });
+router.get("/publico/pre-recebimento", publicoFornecedor, recebimentos.publicoObter);
+router.put("/publico/pre-recebimento", publicoFornecedor, recebimentos.publicoResponder);
 
 // Gerenciar Usuários
 const usr = [autenticar, exigirPermissao("USUARIOS")];

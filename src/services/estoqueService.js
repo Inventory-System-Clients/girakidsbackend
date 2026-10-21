@@ -1,7 +1,10 @@
 import { Produto, MovimentacaoEstoque } from "../models/index.js";
 import { erroHttp } from "../utils/helpers.js";
+import { afetaMontagem, aplicarNosSaldos, recalcularMontagem } from "./montagemService.js";
 
 // Registra a mudança de estoque de um produto (em unidades) e a auditoria.
+// Produtos com montagem em cápsula também atualizam os saldos de montagem, e
+// mexer em cápsula/brinquedo solto recalcula o estoque dos produtos montados.
 export const movimentar = async ({
   produto,
   delta,
@@ -10,9 +13,14 @@ export const movimentar = async ({
   pedido = null,
   usuario = null,
   transaction,
+  origem = null,
 }) => {
+  // Outro movimento da mesma operação pode ter mexido neste produto (ex.:
+  // cápsula consumida na montagem de um item anterior do pedido).
+  await produto.reload({ transaction });
   const anterior = Number(produto.estoque || 0);
   const nova = anterior + delta;
+  if (produto.controlaMontagem) await aplicarNosSaldos(produto, delta, { motivo, usuario, pedido, transaction });
   await produto.update({ estoque: nova }, { transaction });
   await MovimentacaoEstoque.create(
     {
@@ -30,9 +38,15 @@ export const movimentar = async ({
       clienteEmail: pedido?.clienteEmail || null,
       usuarioNome: usuario?.nome || null,
       usuarioEmail: usuario?.email || null,
+      origem,
     },
     { transaction },
   );
+  if (await afetaMontagem(produto, transaction)) {
+    await recalcularMontagem({ transaction, usuario });
+    await produto.reload({ transaction });
+    return Number(produto.estoque);
+  }
   return nova;
 };
 

@@ -93,6 +93,23 @@ const Produto = sequelize.define(
       type: DataTypes.INTEGER,
       allowNull: true,
     },
+    // Montagem em cápsula (aba Recebimentos). Com controlaMontagem, o
+    // "estoque" do catálogo é calculado: montado + em montagem + o que dá para
+    // montar com os brinquedos sem cápsula e as cápsulas disponíveis.
+    controlaMontagem: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    estoqueMontado: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+    estoqueEmMontagem: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+    // Brinquedos recebidos fora da cápsula (quando não há produtoSoltoId).
+    estoqueSemCapsula: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+    // Opcional: os brinquedos soltos são o estoque de outro produto (ex.:
+    // "Pokemon sem Caps"), que continua podendo ser vendido.
+    produtoSoltoId: { type: DataTypes.UUID, allowNull: true },
+    // Cápsulas usadas por unidade: [{ produtoId, quantidade }].
+    capsulas: { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },
+    // Quem recebe as cápsulas primeiro quando não dá para todos (maior primeiro).
+    prioridadeMontagem: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+    // Produto usado como cápsula na montagem de outros.
+    ehCapsula: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     fornecedorPreferencialId: {
       type: DataTypes.UUID,
       allowNull: true,

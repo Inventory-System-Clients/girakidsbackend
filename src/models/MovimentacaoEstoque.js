@@ -27,6 +27,11 @@ const MovimentacaoEstoque = sequelize.define(
     clienteNome: { type: DataTypes.STRING(150), allowNull: true },
     clienteEmail: { type: DataTypes.STRING(150), allowNull: true },
     usuarioNome: { type: DataTypes.STRING(150), allowNull: true },
+    // Saldo alterado quando não é o estoque do catálogo: MONTADO, EM_MONTAGEM
+    // ou SEM_CAPSULA (produtos com montagem em cápsula).
+    saldo: { type: DataTypes.STRING(20), allowNull: true },
+    // Tela que gerou o movimento (ex.: RECEBIMENTOS).
+    origem: { type: DataTypes.STRING(30), allowNull: true },
     usuarioEmail: { type: DataTypes.STRING(150), allowNull: true },
   },
   {
