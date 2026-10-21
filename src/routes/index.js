@@ -41,6 +41,7 @@ router.put("/auth/senha", autenticar, auth.alterarSenha);
 // Configuração pública (WhatsApp do comercial) e banners do catálogo
 router.get("/config/publica", comercial.configPublica);
 router.put("/config/whatsapp", autenticar, exigirPermissao("COMERCIAL", "USUARIOS"), registrarLog("WHATSAPP_COMERCIAL", "Configuracao"), comercial.salvarWhatsapp);
+router.put("/config/banner-layout", autenticar, exigirPermissao("PRODUTOS", "COMERCIAL"), registrarLog("LAYOUT_BANNER", "Configuracao"), comercial.salvarBannerLayout);
 router.get("/banners", banners.listarAtivos);
 router.get("/banners/todos", autenticar, exigirPermissao("PRODUTOS", "COMERCIAL"), banners.listarTodos);
 router.post("/banners", autenticar, exigirPermissao("PRODUTOS", "COMERCIAL"), registrarLog("CRIAR_BANNER", "Banner"), banners.criar);

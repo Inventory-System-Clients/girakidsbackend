@@ -111,6 +111,7 @@ export const configPublica = async (req, res) => {
     res.json({
       whatsappComercial: String(whatsapp).replace(/\D/g, ""),
       enderecoLoja: (await lerConfiguracao("enderecoLoja")) || ENDERECO_LOJA_PADRAO,
+      bannerLayout: (await lerConfiguracao("bannerLayout")) || "FAIXA",
     });
   } catch (error) {
     responderErro(res, error, "Erro ao carregar configuração");
@@ -125,6 +126,18 @@ export const salvarWhatsapp = async (req, res) => {
     res.json({ ok: true });
   } catch (error) {
     responderErro(res, error, "Erro ao salvar WhatsApp");
+  }
+};
+
+// Onde os banners aparecem no catálogo: FAIXA (largura toda, no lugar do
+// título) ou CLASSICO (cartão acima dos produtos).
+export const salvarBannerLayout = async (req, res) => {
+  try {
+    const layout = req.body?.bannerLayout === "CLASSICO" ? "CLASSICO" : "FAIXA";
+    await salvarConfiguracao("bannerLayout", layout);
+    res.json({ bannerLayout: layout });
+  } catch (error) {
+    responderErro(res, error, "Erro ao salvar layout dos banners");
   }
 };
 
