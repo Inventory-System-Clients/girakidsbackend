@@ -138,6 +138,13 @@ export const Pedido = sequelize.define(
     expedidoPor: { type: DataTypes.STRING(150), allowNull: true },
     observacoesExpedicao: { type: DataTypes.TEXT, allowNull: true },
     imagemExpedicaoUrl: { type: DataTypes.TEXT, allowNull: true },
+    // Montagem: concluída quando todos os itens foram conferidos e a pessoa
+    // confirmou "Concluir montagem".
+    montagemConcluidaEm: { type: DataTypes.DATE, allowNull: true },
+    montagemConcluidaPor: { type: DataTypes.STRING(150), allowNull: true },
+    // Fotos do pedido embalado e da entrega/coleta na transportadora.
+    imagensExpedicao: { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },
+    imagensTransportadora: { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },
 
     // Transportadora e nota fiscal
     transportadoraId: { type: DataTypes.UUID, allowNull: true },

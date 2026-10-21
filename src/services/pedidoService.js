@@ -24,8 +24,14 @@ import {
   somenteDigitos,
 } from "../utils/helpers.js";
 
+// Itens trazem a capa atual do produto para quem não tem imagem própria
+// (itens antigos da loja anterior).
 export const INCLUDE_COMPLETO = [
-  { model: PedidoItem, as: "itens" },
+  {
+    model: PedidoItem,
+    as: "itens",
+    include: [{ model: Produto, as: "produto", attributes: ["imagemUrl", "imagens"] }],
+  },
   { model: PedidoParcela, as: "parcelas" },
 ];
 
@@ -321,8 +327,10 @@ export const totalRecebido = (pedido) =>
 
 export const serializarPedido = (pedido, { completo = true } = {}) => {
   const json = pedido.toJSON();
-  const itens = (json.itens || []).map((item) => ({
+  const itens = (json.itens || []).map(({ produto, ...item }) => ({
     ...item,
+    imagemUrl: item.imagemUrl || produto?.imagemUrl || null,
+    imagens: produto?.imagens?.length ? produto.imagens : [item.imagemUrl || produto?.imagemUrl].filter(Boolean),
     precoUnitario: Number(item.precoUnitario),
     custoUnitario: item.custoUnitario != null ? Number(item.custoUnitario) : null,
     total: Number(item.total),

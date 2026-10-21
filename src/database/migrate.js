@@ -8,6 +8,16 @@ import { Usuario } from "../models/index.js";
 export const sincronizarBanco = async () => {
   await sequelize.sync({ alter: process.env.DB_SYNC_ALTER !== "false" });
 
+  // Pedidos de antes das várias fotos da expedição.
+  await sequelize.query(
+    `UPDATE pedidos SET "imagensExpedicao" = jsonb_build_array("imagemExpedicaoUrl") WHERE "imagensExpedicao" = '[]'::jsonb AND "imagemExpedicaoUrl" IS NOT NULL`,
+  );
+
+  // Pedidos já expedidos têm a montagem concluída.
+  await sequelize.query(
+    `UPDATE pedidos SET "montagemConcluidaEm" = "expedidoEm", "montagemConcluidaPor" = "expedidoPor" WHERE "statusExpedicao" = 'EXPEDIDO' AND "montagemConcluidaEm" IS NULL`,
+  );
+
   // Produtos de antes do carrossel: a imagem única vira a primeira do carrossel.
   await sequelize.query(
     `UPDATE produtos SET imagens = jsonb_build_array("imagemUrl") WHERE imagens = '[]'::jsonb AND "imagemUrl" IS NOT NULL`,

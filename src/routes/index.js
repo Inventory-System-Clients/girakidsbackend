@@ -74,6 +74,8 @@ const exp = [autenticar, exigirPermissao("EXPEDICAO")];
 router.get("/expedicao", ...exp, expedicao.listar);
 router.put("/expedicao/:id/itens/:itemId", ...exp, expedicao.marcarItem);
 router.put("/expedicao/:id/observacoes", ...exp, expedicao.salvarObservacoes);
+router.put("/expedicao/:id/fotos", ...exp, registrarLog("FOTOS_EXPEDICAO", "Pedido"), expedicao.salvarFotos);
+router.post("/expedicao/:id/concluir-montagem", ...exp, registrarLog("CONCLUIR_MONTAGEM", "Pedido"), expedicao.concluirMontagem);
 router.post("/expedicao/:id/desfazer", ...exp, registrarLog("DESFAZER_CHECKLIST", "Pedido"), expedicao.desfazerChecklist);
 router.post("/expedicao/:id/expedir", ...exp, registrarLog("EXPEDIR_PEDIDO", "Pedido"), expedicao.expedir);
 
