@@ -220,7 +220,7 @@ export const criar = async (req, res) => {
   try {
     const pedido = await criarPedido(req.body || {}, req.usuario, "PEDIDO");
     res.locals.entityId = pedido.id;
-    res.status(201).json(serializarPedido(pedido));
+    res.status(201).json({ ...serializarPedido(pedido), clienteCadastro: pedido.clienteCadastro || null });
   } catch (error) {
     responderErro(res, error, "Erro ao criar pedido");
   }
@@ -230,7 +230,7 @@ export const criarOrcamento = async (req, res) => {
   try {
     const pedido = await criarPedido(req.body || {}, req.usuario, "ORCAMENTO");
     res.locals.entityId = pedido.id;
-    res.status(201).json(serializarPedido(pedido));
+    res.status(201).json({ ...serializarPedido(pedido), clienteCadastro: pedido.clienteCadastro || null });
   } catch (error) {
     responderErro(res, error, "Erro ao criar orçamento");
   }

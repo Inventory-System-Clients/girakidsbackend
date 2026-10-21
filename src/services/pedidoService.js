@@ -203,6 +203,58 @@ const resolverTransportadora = async (escolha, usuario, transaction) => {
   );
 };
 
+// Senha inicial das contas criadas pela equipe ao tirar pedido.
+export const SENHA_PADRAO_CLIENTE = () => process.env.SENHA_PADRAO_CLIENTE || "12345678";
+
+const CAMPOS_ENDERECO = {
+  telefone: "clienteTelefone",
+  documento: "documento",
+  documentoTipo: "documentoTipo",
+  cep: "cep",
+  rua: "rua",
+  numero: "numeroEndereco",
+  complemento: "complemento",
+  bairro: "bairro",
+  cidade: "cidade",
+  estado: "estado",
+};
+
+// Equipe tirando pedido para cliente sem cadastro: vincula ao cliente que já
+// existe (mesmo e-mail ou CPF/CNPJ), completando o que estiver vazio, ou cria
+// a conta com os dados do pedido e a senha padrão. Assim, da próxima vez o
+// cliente aparece na busca e os dados são preenchidos sozinhos.
+const garantirClienteCadastrado = async (dados, transaction) => {
+  const emailInformado = /^\S+@\S+\.\S+$/.test(dados.clienteEmail || "") ? dados.clienteEmail : null;
+  const identificador = dados.documento || somenteDigitos(dados.clienteTelefone);
+  if (!emailInformado && !identificador) return null;
+
+  const ou = [];
+  if (emailInformado) ou.push({ email: emailInformado });
+  if (dados.documento) ou.push({ documento: dados.documento });
+  const existente = await Usuario.findOne({ where: { [Op.or]: ou }, transaction });
+  if (existente) {
+    const faltando = {};
+    for (const [campoUsuario, campoPedido] of Object.entries(CAMPOS_ENDERECO)) {
+      if (!existente[campoUsuario] && dados[campoPedido]) faltando[campoUsuario] = dados[campoPedido];
+    }
+    if (Object.keys(faltando).length) await existente.update(faltando, { transaction });
+    return { usuario: existente, criado: false };
+  }
+
+  const novo = await Usuario.create(
+    {
+      nome: dados.clienteNome,
+      // Sem e-mail informado, gera um interno só para guardar o cadastro.
+      email: emailInformado || `cliente.${identificador}@sememail.girakids.com.br`,
+      senha: SENHA_PADRAO_CLIENTE(),
+      role: "CLIENTE",
+      ...Object.fromEntries(Object.entries(CAMPOS_ENDERECO).map(([campoUsuario, campoPedido]) => [campoUsuario, dados[campoPedido] || null])),
+    },
+    { transaction },
+  );
+  return { usuario: novo, criado: true, emailGerado: !emailInformado };
+};
+
 // Cria pedido ou orçamento a partir do checkout / geração de orçamentos.
 export const criarPedido = async (corpo, usuario, tipo = "PEDIDO") => {
   const interno = ehInterno(usuario);
@@ -216,7 +268,12 @@ export const criarPedido = async (corpo, usuario, tipo = "PEDIDO") => {
     throw erroHttp(400, "Informe o CPF/CNPJ.");
   }
 
+  let clienteCadastro = null;
   const pedidoCriado = await sequelize.transaction(async (transaction) => {
+    if (interno && !cliente.clienteId) {
+      clienteCadastro = await garantirClienteCadastrado(cliente, transaction);
+      if (clienteCadastro) cliente.clienteId = clienteCadastro.usuario.id;
+    }
     const itens = await montarItens(corpo.itens, usuario, transaction);
     const subtotal = arredondar(itens.reduce((soma, item) => soma + item.total, 0));
     const pesoTotalGramas = itens.reduce((soma, item) => soma + item.pesoGramas, 0);
@@ -342,6 +399,14 @@ export const criarPedido = async (corpo, usuario, tipo = "PEDIDO") => {
     pedido = await Pedido.findByPk(pedido.id, { include: INCLUDE_COMPLETO });
   }
 
+  if (clienteCadastro) {
+    pedido.clienteCadastro = {
+      criado: clienteCadastro.criado,
+      email: clienteCadastro.usuario.email,
+      emailGerado: Boolean(clienteCadastro.emailGerado),
+      senhaPadrao: clienteCadastro.criado ? SENHA_PADRAO_CLIENTE() : null,
+    };
+  }
   return pedido;
 };
 
