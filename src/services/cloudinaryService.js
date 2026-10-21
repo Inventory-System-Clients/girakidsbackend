@@ -7,7 +7,8 @@ import crypto from "crypto";
 
 const credenciais = () => {
   if (process.env.CLOUDINARY_URL) {
-    const url = new URL(process.env.CLOUDINARY_URL);
+    // Tolera os "<" ">" do modelo da documentação colados por engano.
+    const url = new URL(process.env.CLOUDINARY_URL.trim().replace(/^CLOUDINARY_URL=/, "").replace(/[<>]/g, ""));
     return {
       nuvem: url.hostname,
       chave: decodeURIComponent(url.username),
@@ -30,7 +31,9 @@ const PASTA_PADRAO = () => process.env.CLOUDINARY_PASTA || "girakids";
 
 // Envia um Buffer (ou uma URL pública, que o Cloudinary baixa sozinho) e
 // devolve a URL https da imagem.
-export const enviarImagemCloudinary = async ({ buffer, mime, url, pasta = "produtos" }) => {
+// publicId fixo + overwrite=false evita duplicar a mesma imagem ao rodar a
+// migração mais de uma vez (o Cloudinary devolve a que já existe).
+export const enviarImagemCloudinary = async ({ buffer, mime, url, pasta = "produtos", publicId }) => {
   const { nuvem, chave, segredo } = credenciais();
   if (!nuvem || !chave || !segredo) {
     throw new Error("Configure CLOUDINARY_URL no ambiente do backend");
@@ -39,6 +42,7 @@ export const enviarImagemCloudinary = async ({ buffer, mime, url, pasta = "produ
   const parametros = {
     folder: `${PASTA_PADRAO()}/${pasta}`,
     timestamp: Math.floor(Date.now() / 1000),
+    ...(publicId ? { public_id: publicId, overwrite: "false" } : {}),
   };
   const assinatura = crypto
     .createHash("sha1")

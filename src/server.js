@@ -18,19 +18,27 @@ const PORT = process.env.PORT || 3001;
 app.set("trust proxy", 1);
 app.use(helmet({ contentSecurityPolicy: false, crossOriginResourcePolicy: { policy: "cross-origin" } }));
 
+// Origens sem barra no fim e em minúsculas ("https://x.vercel.app/" no
+// FRONTEND_URL também vale).
+const normalizarOrigem = (o) => String(o || "").trim().replace(/\/+$/, "").toLowerCase();
 const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:4173",
-  ...String(process.env.FRONTEND_URL || "").split(",").map((o) => o.trim()),
-].filter(Boolean);
+  "https://girakidsfrontend.vercel.app",
+  ...String(process.env.FRONTEND_URL || "").split(","),
+]
+  .map(normalizarOrigem)
+  .filter(Boolean);
+// Deploys de preview da Vercel (girakidsfrontend-<hash>-<time>.vercel.app).
+const PREVIEW_VERCEL = /^https:\/\/girakidsfrontend(-[a-z0-9-]+)?\.vercel\.app$/;
 
 app.use(
   cors({
     origin(origin, callback) {
-      if (!origin || allowedOrigins.includes(origin) || allowedOrigins.includes("*")) {
-        return callback(null, true);
-      }
-      callback(new Error("Not allowed by CORS"));
+      const o = normalizarOrigem(origin);
+      const permitido = !origin || allowedOrigins.includes(o) || allowedOrigins.includes("*") || PREVIEW_VERCEL.test(o);
+      if (!permitido) console.warn(`[CORS] Origem recusada: ${origin}. Inclua em FRONTEND_URL.`);
+      callback(null, permitido);
     },
     credentials: true,
   }),

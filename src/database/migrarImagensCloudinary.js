@@ -4,6 +4,7 @@
 //
 // Uso: npm run imagens:cloudinary   (precisa de CLOUDINARY_URL no .env)
 // Pode rodar de novo: imagens já no Cloudinary são ignoradas.
+import crypto from "crypto";
 import { sequelize } from "./connection.js";
 import { sincronizarBanco } from "./migrate.js";
 import { Produto, PedidoItem } from "../models/index.js";
@@ -24,7 +25,8 @@ const migrar = async () => {
     if (!url || ehUrlCloudinary(url)) return url;
     if (trocadas.has(url)) return trocadas.get(url);
     try {
-      const nova = await enviarImagemCloudinary({ url, pasta: "produtos" });
+      const publicId = `legado-${crypto.createHash("sha1").update(url).digest("hex").slice(0, 24)}`;
+      const nova = await enviarImagemCloudinary({ url, pasta: "produtos", publicId });
       trocadas.set(url, nova);
       return nova;
     } catch (erro) {
