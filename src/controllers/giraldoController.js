@@ -299,7 +299,14 @@ const chamarModelo = async (mensagens) => {
 // Garante que as ações só usem produtos, quantidades e formas válidas.
 const validarResposta = (args, { porId, pagamentos }) => {
   const formas = new Set(pagamentos.formas.map((f) => f.codigo));
+  // Duas entregas (ou dois pagamentos) diferentes na mesma resposta = a pessoa
+  // ainda não escolheu: não aplica nenhuma.
+  const indecisos = ["definir_entrega", "definir_pagamento"].filter((tipo) => {
+    const valores = new Set((args.acoes || []).filter((a) => a.tipo === tipo).map((a) => a.metodoEnvio || a.formaPagamento));
+    return valores.size > 1;
+  });
   const acoes = (args.acoes || [])
+    .filter((a) => !indecisos.includes(a.tipo))
     .map((a) => ({ ...a, quantidade: a.quantidade != null ? Math.min(9999, Math.max(1, Math.round(a.quantidade))) : undefined }))
     .filter((a) => {
       if (["adicionar_carrinho", "definir_quantidade", "remover_carrinho"].includes(a.tipo)) return porId.has(a.produtoId);
