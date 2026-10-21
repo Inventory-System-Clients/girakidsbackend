@@ -44,5 +44,8 @@ export const METODOS_ENVIO = {
   SEDEX: "SEDEX - Correios",
 };
 
+// Endereço de retirada (pode ser trocado em Configurações: "enderecoLoja").
+export const ENDERECO_LOJA_PADRAO = "Avenida Cachoeira Paulista, 17";
+
 export const nomeFormaPagamento = (codigo) =>
   FORMAS_PAGAMENTO[codigo]?.nome || codigo || "-";

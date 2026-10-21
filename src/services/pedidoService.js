@@ -81,10 +81,16 @@ export const calcularTotais = async ({
   return { taxas, total: arredondar(base + taxas), percentualTaxa: percentual };
 };
 
-const validarFormaPagamento = (forma, usuario, cliente) => {
+// Cliente pode "combinar com o comercial" (A_DEFINIR) quando a entrega é por
+// transportadora ou retirada, ou quando não há pagamento online configurado.
+export const clientePodeCombinar = (metodoEnvio) =>
+  !["PAC", "SEDEX"].includes(metodoEnvio) || !provedorAtivo();
+
+const validarFormaPagamento = (forma, usuario, cliente, metodoEnvio) => {
   const config = FORMAS_PAGAMENTO[forma];
   if (!config) throw erroHttp(400, "Forma de pagamento inválida.");
   if (ehInterno(usuario)) return;
+  if (forma === "A_DEFINIR" && clientePodeCombinar(metodoEnvio)) return;
   if (config.admin) throw erroHttp(403, "Forma de pagamento disponível só para a equipe.");
   if (config.outros && !cliente?.outrosPagamentos) {
     throw erroHttp(403, "Esta forma de pagamento não está liberada para sua conta.");
@@ -176,7 +182,7 @@ export const criarPedido = async (corpo, usuario, tipo = "PEDIDO") => {
   const interno = ehInterno(usuario);
   const formaPagamento = corpo.formaPagamento || "A_DEFINIR";
   const { dados: cliente, cliente: cadastroCliente } = await dadosCliente(corpo, usuario);
-  validarFormaPagamento(formaPagamento, usuario, cadastroCliente);
+  validarFormaPagamento(formaPagamento, usuario, cadastroCliente, corpo.metodoEnvio);
 
   const metodoEnvio = corpo.metodoEnvio || (interno ? null : "");
   if (!interno && !metodoEnvio) throw erroHttp(400, "Selecione uma opção de entrega.");

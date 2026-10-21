@@ -2,6 +2,7 @@ import { Op } from "sequelize";
 import { Pedido, PedidoItem, Produto, Usuario } from "../models/index.js";
 import { lerConfiguracao, salvarConfiguracao } from "../models/Configuracao.js";
 import { CAMPO_CALCULADORA_POR_EMBALAGEM } from "../services/freteService.js";
+import { ENDERECO_LOJA_PADRAO } from "../utils/formasPagamento.js";
 import { responderErro, erroHttp, dataISO } from "../utils/helpers.js";
 
 // Dados de um pedido da própria loja para as ferramentas do Comercial:
@@ -107,7 +108,10 @@ export const marcarAlertaVisto = async (req, res) => {
 export const configPublica = async (req, res) => {
   try {
     const whatsapp = (await lerConfiguracao("whatsappComercial")) || process.env.WHATSAPP_COMERCIAL || "5511942058445";
-    res.json({ whatsappComercial: String(whatsapp).replace(/\D/g, "") });
+    res.json({
+      whatsappComercial: String(whatsapp).replace(/\D/g, ""),
+      enderecoLoja: (await lerConfiguracao("enderecoLoja")) || ENDERECO_LOJA_PADRAO,
+    });
   } catch (error) {
     responderErro(res, error, "Erro ao carregar configuração");
   }

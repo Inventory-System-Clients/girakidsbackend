@@ -25,7 +25,7 @@ import {
 import { cotarFrete } from "../services/freteService.js";
 import { statusPagamentos } from "../services/pagamentos/index.js";
 import { lerConfiguracao, salvarConfiguracao } from "../models/Configuracao.js";
-import { FORMAS_PAGAMENTO } from "../utils/formasPagamento.js";
+import { ENDERECO_LOJA_PADRAO, FORMAS_PAGAMENTO } from "../utils/formasPagamento.js";
 import {
   arredondar,
   erroHttp,
@@ -184,8 +184,21 @@ export const opcoesCheckout = async (req, res) => {
             pagamentos.metodos.includes(codigo) &&
             (codigo === "PIX_ONLINE" || cartoesHabilitados)),
       }));
+    // Cliente: "Combinar com o comercial" (transportadora, retirada ou sem
+    // pagamento online configurado).
+    if (!interno) {
+      formas.push({
+        codigo: "A_DEFINIR",
+        nome: "Combinar com o comercial",
+        taxa: 0,
+        combinar: true,
+        disponivel: true,
+        somenteEnvios: pagamentos.habilitado ? ["RETIRAR_LOCAL", "TRANSPORTADORA"] : null,
+      });
+    }
     res.json({
       formas,
+      enderecoLoja: await lerConfiguracao("enderecoLoja", ENDERECO_LOJA_PADRAO),
       pagamentosOnline: pagamentos,
       cartoesOnlineHabilitados: cartoesHabilitados,
       taxasCartao: await lerConfiguracao("taxasCartao", null),

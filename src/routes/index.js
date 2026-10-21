@@ -20,6 +20,7 @@ import * as comercial from "../controllers/comercialController.js";
 import * as correios from "../controllers/correiosController.js";
 import * as banners from "../controllers/bannerController.js";
 import * as custosExtras from "../controllers/custoExtraController.js";
+import * as giraldo from "../controllers/giraldoController.js";
 import transportadoraRoutes from "./transportadora.routes.js";
 import calculoPedidoRoutes from "./calculoPedido.routes.js";
 import pedidoNotaFiscalRoutes from "./pedidoNotaFiscal.routes.js";
@@ -45,6 +46,11 @@ router.post("/banners", autenticar, exigirPermissao("PRODUTOS", "COMERCIAL"), re
 router.put("/banners/ordem", autenticar, exigirPermissao("PRODUTOS", "COMERCIAL"), banners.reordenar);
 router.put("/banners/:id", autenticar, exigirPermissao("PRODUTOS", "COMERCIAL"), registrarLog("ATUALIZAR_BANNER", "Banner"), banners.atualizar);
 router.delete("/banners/:id", autenticar, exigirPermissao("PRODUTOS", "COMERCIAL"), registrarLog("EXCLUIR_BANNER", "Banner"), banners.excluir);
+
+// Giraldo (assistente de compras com IA) — público; usa o login se houver.
+const uploadAudio = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+router.post("/assistente/mensagem", autenticarOpcional, giraldo.conversar);
+router.post("/assistente/transcrever", autenticarOpcional, uploadAudio.single("audio"), giraldo.transcrever);
 
 // Catálogo público
 router.get("/catalogo", autenticarOpcional, produtos.catalogo);

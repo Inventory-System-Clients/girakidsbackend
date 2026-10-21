@@ -3,6 +3,7 @@ import { lerConfiguracao } from "../models/Configuracao.js";
 import { calcularPedido } from "./pedidoCalculoEngine.js";
 import { cotarServicosVipp } from "./vippService.js";
 import { arredondar, somenteDigitos } from "../utils/helpers.js";
+import { ENDERECO_LOJA_PADRAO } from "../utils/formasPagamento.js";
 
 // Tipo de embalagem do produto → campo da calculadora de caixas (mesma usada
 // na aba Comercial → Calculadora de Pedidos).
@@ -87,7 +88,7 @@ const vippConfigurado = () => Boolean(process.env.VIPP_USUARIO && process.env.VI
 export const cotarFrete = async ({ cep, uf, itens }) => {
   const carga = await resumirCarga(itens || []);
   const opcoes = [
-    { metodo: "RETIRAR_LOCAL", nome: "Retirar no local", descricao: "Retire em nossa loja", valor: 0, prazoDias: 0, disponivel: true },
+    { metodo: "RETIRAR_LOCAL", nome: "Retirar no local", descricao: `Retire em nossa loja: ${(await lerConfiguracao("enderecoLoja")) || ENDERECO_LOJA_PADRAO}`, valor: 0, prazoDias: 0, disponivel: true },
     { metodo: "TRANSPORTADORA", nome: "Transportadora", descricao: "O time de vendas entrará em contato", valor: 0, prazoDias: null, disponivel: true },
   ];
 
