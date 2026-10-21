@@ -69,6 +69,9 @@ try {
   await sequelize.authenticate();
   await sincronizarBanco();
   app.listen(PORT, () => console.log(`🎡 Gira Kids backend rodando na porta ${PORT}`));
+  // Em segundo plano: confere se as imagens de esgotado são cópias das de estoque.
+  const { verificarPendentes } = await import("./services/imagemEsgotadoService.js");
+  verificarPendentes().catch((erro) => console.warn("[imagens]", erro.message));
 } catch (error) {
   console.error("Não foi possível iniciar o servidor:", error);
   process.exit(1);

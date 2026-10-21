@@ -8,6 +8,7 @@ import {
 } from "../models/index.js";
 import { TIPOS_EMBALAGEM } from "../models/Produto.js";
 import { movimentar } from "../services/estoqueService.js";
+import { verificarImagemEsgotado } from "../services/imagemEsgotadoService.js";
 import { ehInterno } from "../services/pedidoService.js";
 import { arredondar, erroHttp, numero, responderErro } from "../utils/helpers.js";
 
@@ -50,6 +51,9 @@ const serializarCatalogo = (produto) => {
     destaque: p.destaque,
     disponivel,
     imagemUrl: !disponivel && p.imagemSemEstoqueUrl ? p.imagemSemEstoqueUrl : p.imagemUrl,
+    // Esgotado sem arte própria de esgotado (ou com a mesma do estoque): o
+    // site mostra a foto em preto e branco.
+    temImagemEsgotado: Boolean(p.imagemSemEstoqueUrl && p.imagemSemEstoqueUrl !== p.imagemUrl && !p.imagemEsgotadoIgual),
     imagens: p.imagens?.length ? p.imagens : p.imagemUrl ? [p.imagemUrl] : [],
   };
 };
@@ -305,7 +309,9 @@ export const criar = async (req, res) => {
       return novo;
     });
     res.locals.entityId = produto.id;
-    res.status(201).json(serializarAdmin(await Produto.findByPk(produto.id)));
+    const criado = await Produto.findByPk(produto.id);
+    await verificarImagemEsgotado(criado).catch(() => {});
+    res.status(201).json(serializarAdmin(criado));
   } catch (error) {
     responderErro(res, error, "Erro ao criar produto");
   }
@@ -334,7 +340,9 @@ export const atualizar = async (req, res) => {
         );
       }
     });
-    res.json(serializarAdmin(await Produto.findByPk(req.params.id)));
+    const atualizado = await Produto.findByPk(req.params.id);
+    await verificarImagemEsgotado(atualizado).catch(() => {});
+    res.json(serializarAdmin(atualizado));
   } catch (error) {
     responderErro(res, error, "Erro ao atualizar produto");
   }

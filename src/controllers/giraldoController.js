@@ -61,6 +61,8 @@ const catalogo = async () => {
       estoque: p.estoque,
       modoVenda: p.modoVenda,
       imagemUrl: p.imagemUrl,
+      imagemSemEstoqueUrl: p.imagemSemEstoqueUrl,
+      imagemEsgotadoIgual: p.imagemEsgotadoIgual,
       destaque: p.destaque,
       busca: normalizar(`${p.nome} ${p.categoria} ${p.descricao || ""}`),
       nomeNorm: normalizar(p.nome),
@@ -296,6 +298,15 @@ const chamarModelo = async (mensagens) => {
   return dados.choices?.[0]?.message;
 };
 
+// Mesma regra de imagem do catálogo: esgotado mostra a arte de esgotado, se houver.
+const imagemCartao = (p) => {
+  const esgotado = !(p.estoque > 0 || p.modoVenda === "ENCOMENDA");
+  return {
+    imagemUrl: esgotado && p.imagemSemEstoqueUrl ? p.imagemSemEstoqueUrl : p.imagemUrl,
+    temImagemEsgotado: Boolean(p.imagemSemEstoqueUrl && p.imagemSemEstoqueUrl !== p.imagemUrl && !p.imagemEsgotadoIgual),
+  };
+};
+
 // Garante que as ações só usem produtos, quantidades e formas válidas.
 const validarResposta = (args, { porId, pagamentos }) => {
   const formas = new Set(pagamentos.formas.map((f) => f.codigo));
@@ -327,7 +338,7 @@ const validarResposta = (args, { porId, pagamentos }) => {
         categoria: p.categoria,
         precoVenda: p.precoVenda,
         unidadesPacote: p.unidadesPacote,
-        imagemUrl: p.imagemUrl,
+        ...imagemCartao(p),
         estoque: p.estoque,
         modoVenda: p.modoVenda,
         disponivel: p.estoque > 0 || p.modoVenda === "ENCOMENDA",
@@ -337,7 +348,7 @@ const validarResposta = (args, { porId, pagamentos }) => {
   for (const a of acoes) {
     if (a.produtoId && porId.has(a.produtoId)) {
       const p = porId.get(a.produtoId);
-      a.produto = { id: p.id, nome: p.nome, sku: p.sku, categoria: p.categoria, precoVenda: p.precoVenda, unidadesPacote: p.unidadesPacote, imagemUrl: p.imagemUrl, estoque: p.estoque, modoVenda: p.modoVenda, disponivel: p.estoque > 0 || p.modoVenda === "ENCOMENDA" };
+      a.produto = { id: p.id, nome: p.nome, sku: p.sku, categoria: p.categoria, precoVenda: p.precoVenda, unidadesPacote: p.unidadesPacote, ...imagemCartao(p), estoque: p.estoque, modoVenda: p.modoVenda, disponivel: p.estoque > 0 || p.modoVenda === "ENCOMENDA" };
     }
   }
   return {

@@ -116,6 +116,18 @@ const Produto = sequelize.define(
       type: DataTypes.TEXT,
       allowNull: true,
     },
+    // A imagem de esgotado é cópia da de estoque (mesmo arquivo em outro
+    // endereço)? Calculado em services/imagemEsgotadoService.js para o par
+    // guardado em imagemEsgotadoVerificada.
+    imagemEsgotadoIgual: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
+    imagemEsgotadoVerificada: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
     // Selo "Mais vendido" no catálogo (aparece primeiro).
     destaque: {
       type: DataTypes.BOOLEAN,
