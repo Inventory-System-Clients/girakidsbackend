@@ -7,6 +7,7 @@ import {
   Produto,
   MovimentacaoEstoque,
   Parceiro,
+  Categoria,
 } from "../models/index.js";
 import { lerConfiguracao, salvarConfiguracao } from "../models/Configuracao.js";
 import { serializarPedido } from "../services/pedidoService.js";
@@ -87,6 +88,38 @@ const expedidosNoPeriodo = ({ de, ate }, extra = {}) =>
 // Resumo
 // ---------------------------------------------------------------------------
 
+// Vendas por produto (pacotes, unidades, receita, custo, lucro e margem) de
+// uma lista de pedidos. Item sem custo cadastrado conta custo 0 e marca
+// custoCompleto = false.
+const agregarProdutos = (pedidos) => {
+  const produtos = new Map();
+  for (const pedido of pedidos) {
+    for (const item of pedido.itens) {
+      const chave = item.produtoId || item.nome;
+      const atual = produtos.get(chave) || {
+        produtoId: item.produtoId, nome: item.nome, categoria: item.categoria, pacotes: 0, unidades: 0,
+        receita: 0, custo: 0, custoCompleto: true, pedidos: new Set(),
+      };
+      const unidades = item.quantidade * item.unidadesPacote;
+      atual.pacotes += item.quantidade;
+      atual.unidades += unidades;
+      atual.receita += Number(item.total);
+      atual.custo += Number(item.custoUnitario || 0) * unidades;
+      if (item.custoUnitario == null) atual.custoCompleto = false;
+      atual.pedidos.add(pedido.id);
+      produtos.set(chave, atual);
+    }
+  }
+  return [...produtos.values()].map(({ pedidos: ids, ...x }) => ({
+    ...x,
+    pedidos: ids.size,
+    receita: arredondar(x.receita),
+    custo: arredondar(x.custo),
+    lucro: arredondar(x.receita - x.custo),
+    margemPercentual: x.receita > 0 ? arredondar(((x.receita - x.custo) / x.receita) * 100) : 0,
+  }));
+};
+
 export const resumo = async (req, res) => {
   try {
     const p = periodo(req.query);
@@ -95,7 +128,6 @@ export const resumo = async (req, res) => {
     const card = () => ({ pedidos: 0, bruta: 0, liquida: 0 });
     const cards = { total: card(), recebida: card(), aberto: card(), antigos: card() };
     const semana = DIAS.map((dia) => ({ dia, pedidos: 0, bruta: 0, liquida: 0, vendaItens: 0, margem: 0 }));
-    const produtos = new Map();
     const extras = { taxas: 0, frete: 0, desconto: 0, custoItens: 0, custosPosVenda: 0 };
 
     for (const pedido of pedidos) {
@@ -124,28 +156,10 @@ export const resumo = async (req, res) => {
       dia.vendaItens += a.vendaItens;
       dia.margem += a.vendaItens - a.custoItens;
 
-      for (const item of pedido.itens) {
-        const chave = item.produtoId || item.nome;
-        const atual = produtos.get(chave) || {
-          produtoId: item.produtoId, nome: item.nome, pacotes: 0, unidades: 0, receita: 0, custo: 0, custoCompleto: true,
-        };
-        const unidades = item.quantidade * item.unidadesPacote;
-        atual.pacotes += item.quantidade;
-        atual.unidades += unidades;
-        atual.receita += Number(item.total);
-        atual.custo += Number(item.custoUnitario || 0) * unidades;
-        if (item.custoUnitario == null) atual.custoCompleto = false;
-        produtos.set(chave, atual);
-      }
     }
 
     const arredondarCard = (c) => ({ pedidos: c.pedidos, bruta: arredondar(c.bruta), liquida: arredondar(c.liquida) });
-    const listaProdutos = [...produtos.values()].map((x) => ({
-      ...x,
-      receita: arredondar(x.receita),
-      lucro: arredondar(x.receita - x.custo),
-      margemPercentual: x.receita > 0 ? arredondar(((x.receita - x.custo) / x.receita) * 100) : 0,
-    }));
+    const listaProdutos = agregarProdutos(pedidos);
     const ordemSemana = [1, 2, 3, 4, 5, 6, 0];
 
     res.json({
@@ -167,11 +181,11 @@ export const resumo = async (req, res) => {
           margemPercentual: d.vendaItens > 0 ? arredondar((d.margem / d.vendaItens) * 100) : null,
         };
       }),
-      topQuantidade: [...listaProdutos].sort((a, b) => b.pacotes - a.pacotes).slice(0, 10),
+      // Listas completas; o frontend filtra Todos / Top 10 / Top 3 / O mais.
+      topQuantidade: [...listaProdutos].sort((a, b) => b.pacotes - a.pacotes || b.receita - a.receita),
       topMargem: listaProdutos
         .filter((x) => x.custoCompleto && x.receita > 0)
-        .sort((a, b) => b.margemPercentual - a.margemPercentual || b.lucro - a.lucro)
-        .slice(0, 10),
+        .sort((a, b) => b.margemPercentual - a.margemPercentual || b.lucro - a.lucro),
     });
   } catch (error) {
     responderErro(res, error, "Erro ao carregar resumo");
@@ -484,5 +498,129 @@ export const filaSobDemanda = async (req, res) => {
     res.json(fila.sort((a, b) => b.faltando - a.faltando));
   } catch (error) {
     responderErro(res, error, "Erro ao carregar fila sob demanda");
+  }
+};
+
+// ---------------------------------------------------------------------------
+// Análise de produtos (aba "Análise" do Time Financeiro)
+// ---------------------------------------------------------------------------
+
+const MARGEM_ATENCAO = 10;
+
+const dadosAtuais = (produto) =>
+  produto && {
+    imagemUrl: produto.imagemUrl,
+    sku: produto.sku,
+    categoria: produto.categoria,
+    estoque: produto.estoque,
+    unidadesPacote: produto.unidadesPacote,
+    precoVenda: Number(produto.precoVenda),
+    custoAtual: produto.custo != null ? Number(produto.custo) : null,
+    arquivado: produto.arquivado,
+  };
+
+// Vendas do período por produto + destaques + produtos fechando no vermelho.
+export const analise = async (req, res) => {
+  try {
+    const p = periodo(req.query);
+    const [pedidos, cadastro] = await Promise.all([expedidosNoPeriodo(p), Produto.findAll()]);
+    const porId = new Map(cadastro.map((x) => [x.id, x]));
+
+    const vendas = agregarProdutos(pedidos).map((v) => ({ ...v, ...dadosAtuais(porId.get(v.produtoId)), nome: v.nome }));
+    const comCusto = vendas.filter((v) => v.custoCompleto && v.receita > 0);
+    const maior = (lista, campo) => lista.reduce((m, x) => (!m || x[campo] > m[campo] ? x : m), null);
+
+    // Cadastro com preço de venda abaixo do custo (vende no prejuízo).
+    const precoAbaixoDoCusto = cadastro
+      .filter((x) => !x.arquivado && x.custo != null && Number(x.custo) > 0 && Number(x.precoVenda) < Number(x.custo))
+      .map((x) => ({
+        produtoId: x.id,
+        nome: x.nome,
+        ...dadosAtuais(x),
+        prejuizoPorUnidade: arredondar(Number(x.custo) - Number(x.precoVenda), 4),
+        margemPercentual: Number(x.precoVenda) > 0 ? arredondar(((Number(x.precoVenda) - Number(x.custo)) / Number(x.precoVenda)) * 100) : -100,
+      }))
+      .sort((a, b) => a.margemPercentual - b.margemPercentual);
+
+    res.json({
+      periodo: { inicio: p.inicio, fim: p.fim },
+      pedidos: pedidos.length,
+      totais: {
+        receita: arredondar(vendas.reduce((s, v) => s + v.receita, 0)),
+        lucro: arredondar(vendas.reduce((s, v) => s + v.lucro, 0)),
+        produtosVendidos: vendas.length,
+        semCusto: vendas.filter((v) => !v.custoCompleto).length,
+      },
+      destaques: {
+        maisVendido: maior(vendas, "pacotes"),
+        maiorReceita: maior(vendas, "receita"),
+        maiorMargem: maior(comCusto, "margemPercentual"),
+        maiorLucro: maior(comCusto, "lucro"),
+      },
+      vendas: vendas.sort((a, b) => b.pacotes - a.pacotes || b.receita - a.receita),
+      vermelho: {
+        vendidosComPrejuizo: vendas.filter((v) => v.lucro < 0).sort((a, b) => a.lucro - b.lucro),
+        margemBaixa: comCusto
+          .filter((v) => v.margemPercentual >= 0 && v.margemPercentual < MARGEM_ATENCAO)
+          .sort((a, b) => a.margemPercentual - b.margemPercentual),
+        precoAbaixoDoCusto,
+        limiteMargemAtencao: MARGEM_ATENCAO,
+      },
+    });
+  } catch (error) {
+    responderErro(res, error, "Erro ao carregar análise");
+  }
+};
+
+// Produtos ativos (não arquivados) por categoria, com o estoque de cada um.
+export const produtosAtivos = async (req, res) => {
+  try {
+    const [produtos, categorias] = await Promise.all([
+      Produto.findAll({ where: { arquivado: false }, order: [["nome", "ASC"]] }),
+      Categoria.findAll(),
+    ]);
+    const visivel = new Map(categorias.map((c) => [c.nome, c.visivel]));
+    const lista = produtos.map((x) => {
+      const unidadesPacote = Number(x.unidadesPacote || 1);
+      const estoque = Number(x.estoque || 0);
+      return {
+        id: x.id,
+        nome: x.nome,
+        sku: x.sku,
+        categoria: x.categoria || "Sem categoria",
+        imagemUrl: x.imagemUrl,
+        estoque,
+        unidadesPacote,
+        pacotes: Math.floor(Math.max(0, estoque) / unidadesPacote),
+        estoqueMinimo: x.estoqueMinimo,
+        precoVenda: Number(x.precoVenda),
+        custo: x.custo != null ? Number(x.custo) : null,
+        valorEmEstoque: arredondar(Math.max(0, estoque) * Number(x.custo || 0)),
+        modoVenda: x.modoVenda,
+        status: estoque <= 0 ? "SEM_ESTOQUE" : x.estoqueMinimo != null && estoque <= x.estoqueMinimo ? "ESTOQUE_BAIXO" : "EM_ESTOQUE",
+      };
+    });
+
+    const porCategoria = new Map();
+    for (const prod of lista) {
+      const c = porCategoria.get(prod.categoria) || {
+        nome: prod.categoria, visivel: visivel.get(prod.categoria) ?? true, produtos: 0, estoqueUnidades: 0, semEstoque: 0, valorEmEstoque: 0,
+      };
+      c.produtos += 1;
+      c.estoqueUnidades += Math.max(0, prod.estoque);
+      c.valorEmEstoque += prod.valorEmEstoque;
+      if (prod.estoque <= 0) c.semEstoque += 1;
+      porCategoria.set(prod.categoria, c);
+    }
+
+    res.json({
+      totalProdutos: lista.length,
+      categorias: [...porCategoria.values()]
+        .map((c) => ({ ...c, valorEmEstoque: arredondar(c.valorEmEstoque) }))
+        .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR")),
+      produtos: lista,
+    });
+  } catch (error) {
+    responderErro(res, error, "Erro ao carregar produtos ativos");
   }
 };

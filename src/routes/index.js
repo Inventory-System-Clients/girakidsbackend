@@ -136,6 +136,8 @@ router.get("/dashboard/resumo", ...fin, dashboard.resumo);
 router.get("/dashboard/meta", ...fin, dashboard.meta);
 router.put("/dashboard/metas", ...fin, registrarLog("SALVAR_METAS", "Configuracao"), dashboard.salvarMetas);
 router.get("/dashboard/expedidos", ...fin, dashboard.expedidos);
+router.get("/dashboard/analise", ...fin, dashboard.analise);
+router.get("/dashboard/produtos-ativos", autenticar, exigirPermissao("FINANCEIRO", "PRODUTOS"), dashboard.produtosAtivos);
 router.get("/dashboard/estoque", autenticar, exigirPermissao("FINANCEIRO", "PRODUTOS"), dashboard.estoqueResumo);
 router.get("/dashboard/movimentacoes", autenticar, exigirPermissao("FINANCEIRO", "PRODUTOS"), dashboard.movimentacoes);
 router.get("/dashboard/fila-sob-demanda", autenticar, exigirPermissao("FINANCEIRO", "PRODUTOS", "ENTRADAS"), dashboard.filaSobDemanda);
