@@ -150,6 +150,9 @@ export const Pedido = sequelize.define(
     transportadoraId: { type: DataTypes.UUID, allowNull: true },
     transportadoraNome: { type: DataTypes.STRING(200), allowNull: true },
     transportadoraObs: { type: DataTypes.TEXT, allowNull: true },
+    // Cotação do frete com a transportadora (opcionais).
+    transportadoraCotacao: { type: DataTypes.STRING(60), allowNull: true },
+    transportadoraCotacaoCom: { type: DataTypes.STRING(150), allowNull: true },
     notaFiscalNumero: { type: DataTypes.STRING(50), allowNull: true },
     notaFiscalUrl: { type: DataTypes.TEXT, allowNull: true },
     // Etiqueta dos Correios (preenchida ao postar pela aba Comercial → Correios).

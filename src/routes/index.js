@@ -63,7 +63,8 @@ router.get("/catalogo/produtos/:id", produtos.obterPublico);
 // Checkout e pedidos do cliente
 router.get("/checkout/opcoes", autenticar, pedidos.opcoesCheckout);
 // Equipe tirando pedido com entrega por transportadora
-const tiraPedido = [autenticar, exigirPermissao("CHECKOUT", "VENDAS", "ORCAMENTOS", "COMERCIAL")];
+// Também a expedição, que pode trocar a transportadora de um pedido.
+const tiraPedido = [autenticar, exigirPermissao("CHECKOUT", "VENDAS", "ORCAMENTOS", "COMERCIAL", "EXPEDICAO")];
 router.get("/checkout/transportadoras", ...tiraPedido, transportadoras.sugestoesCheckout);
 router.post("/checkout/transportadoras/ia", ...tiraPedido, registrarLog("BUSCAR_TRANSPORTADORAS", "Transportadora"), transportadoras.buscarTransportadoras);
 router.post("/checkout/frete", autenticar, pedidos.cotar);

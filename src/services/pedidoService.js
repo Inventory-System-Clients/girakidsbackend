@@ -180,7 +180,9 @@ const dadosCliente = async (corpo, usuario) => {
 
 // Transportadora escolhida no checkout da equipe: cadastrada (id) ou vinda da
 // planilha/busca na web (nome) — nesse caso é cadastrada em Parceiros.
-const resolverTransportadora = async (escolha, usuario, transaction) => {
+export const textoCurto = (valor, max) => String(valor ?? "").trim().slice(0, max) || null;
+
+export const resolverTransportadora = async (escolha, usuario, transaction) => {
   if (!escolha || (!escolha.id && !String(escolha.nome || "").trim())) return null;
   if (escolha.id) {
     const existente = await Parceiro.findByPk(escolha.id, { transaction });
@@ -314,6 +316,8 @@ export const criarPedido = async (corpo, usuario, tipo = "PEDIDO") => {
         transportadoraId: transportadora?.id || null,
         transportadoraNome: transportadora?.nome || null,
         transportadoraObs: transportadora ? corpo.transportadoraObs || null : null,
+        transportadoraCotacao: transportadora ? textoCurto(corpo.transportadoraCotacao, 60) : null,
+        transportadoraCotacaoCom: transportadora ? textoCurto(corpo.transportadoraCotacaoCom, 150) : null,
         ...cliente,
         origemCliente: interno ? "ADMIN" : "CLIENTE",
         alertaComercial: !interno && tipo === "PEDIDO",

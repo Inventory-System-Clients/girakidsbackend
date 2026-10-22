@@ -15,7 +15,9 @@ import {
   ehInterno,
   montarFiltroPedidos,
   montarItens,
+  resolverTransportadora,
   serializarPedido,
+  textoCurto,
   totalRecebido,
 } from "../services/pedidoService.js";
 import {
@@ -267,6 +269,8 @@ export const gerarPedidoDoOrcamento = async (req, res) => {
       metodoEnvio: orcamento.metodoEnvio,
       transportadora: orcamento.transportadoraId ? { id: orcamento.transportadoraId, nome: orcamento.transportadoraNome } : null,
       transportadoraObs: orcamento.transportadoraObs,
+      transportadoraCotacao: orcamento.transportadoraCotacao,
+      transportadoraCotacaoCom: orcamento.transportadoraCotacaoCom,
       desconto: orcamento.desconto,
       freteAdicional: orcamento.freteAdicional,
       formaPagamento: orcamento.formaPagamento,
@@ -502,17 +506,21 @@ export const alterarFormaPagamento = async (req, res) => {
 export const alterarTransportadora = async (req, res) => {
   try {
     const pedido = await carregar(req.params.id);
-    const { transportadoraId, observacoes } = req.body || {};
-    let nome = null;
-    if (transportadoraId) {
-      const transportadora = await Parceiro.findByPk(transportadoraId);
+    const { transportadoraId, transportadora: escolha, observacoes, cotacao, cotacaoCom } = req.body || {};
+    // Aceita o id de um parceiro ou a escolha do seletor (planilha/web), que
+    // é cadastrada em Parceiros se ainda não existir.
+    let transportadora = null;
+    if (escolha) transportadora = await resolverTransportadora(escolha, req.usuario);
+    else if (transportadoraId) {
+      transportadora = await Parceiro.findByPk(transportadoraId);
       if (!transportadora) throw erroHttp(404, "Transportadora não encontrada.");
-      nome = transportadora.nome;
     }
     await pedido.update({
-      transportadoraId: transportadoraId || null,
-      transportadoraNome: nome,
-      transportadoraObs: observacoes || null,
+      transportadoraId: transportadora?.id || null,
+      transportadoraNome: transportadora?.nome || null,
+      transportadoraObs: transportadora ? observacoes || null : null,
+      transportadoraCotacao: transportadora ? textoCurto(cotacao, 60) : null,
+      transportadoraCotacaoCom: transportadora ? textoCurto(cotacaoCom, 150) : null,
     });
     await responderPedido(res, pedido.id);
   } catch (error) {
