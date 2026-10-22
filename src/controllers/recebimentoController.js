@@ -12,6 +12,7 @@ import {
 } from "../services/montagemService.js";
 import { cifrar, decifrar, FORMATO_TOKEN, gerarToken, hashToken } from "../utils/linkSeguro.js";
 import { erroHttp, hojeISO, numero, responderErro } from "../utils/helpers.js";
+import { contem } from "../utils/busca.js";
 
 // Aba Recebimentos: pré-recebimentos com link para o fornecedor, recebimento
 // de brinquedos sem cápsula / cápsulas / produtos prontos, montagem em
@@ -166,13 +167,13 @@ export const listar = async (req, res) => {
     const busca = String(req.query.busca || "").trim();
     if (busca) {
       const ids = await PreRecebimentoItem.findAll({
-        where: { [Op.or]: [{ produtoNome: { [Op.iLike]: `%${busca}%` } }, { produtoSku: { [Op.iLike]: `%${busca}%` } }] },
+        where: { [Op.or]: [contem("produtoNome", busca), { produtoSku: { [Op.iLike]: `%${busca}%` } }] },
         attributes: ["preRecebimentoId"],
         raw: true,
       });
       where[Op.or] = [
-        { fornecedorNome: { [Op.iLike]: `%${busca}%` } },
-        { observacao: { [Op.iLike]: `%${busca}%` } },
+        contem("PreRecebimento.fornecedorNome", busca),
+        contem("PreRecebimento.observacao", busca),
         { id: ids.map((i) => i.preRecebimentoId) },
         ...(/^\d+$/.test(busca) ? [{ numero: Number(busca) }] : []),
       ];
@@ -740,7 +741,7 @@ export const buscarProdutos = async (req, res) => {
   try {
     const busca = String(req.query.busca || "").trim();
     const where = {};
-    if (busca) where[Op.or] = [{ nome: { [Op.iLike]: `%${busca}%` } }, { sku: { [Op.iLike]: `%${busca}%` } }, { categoria: { [Op.iLike]: `%${busca}%` } }];
+    if (busca) where[Op.or] = [contem("nome", busca), { sku: { [Op.iLike]: `%${busca}%` } }, contem("categoria", busca)];
     if (req.query.capsulas === "true") where.ehCapsula = true;
     const produtos = await Produto.findAll({
       where,
@@ -760,7 +761,7 @@ export const historico = async (req, res) => {
     const where = { origem: ORIGEM };
     if (req.query.produtoId) where.produtoId = req.query.produtoId;
     const busca = String(req.query.busca || "").trim();
-    if (busca) where[Op.or] = [{ produtoNome: { [Op.iLike]: `%${busca}%` } }, { motivo: { [Op.iLike]: `%${busca}%` } }];
+    if (busca) where[Op.or] = [contem("produtoNome", busca), contem("motivo", busca)];
     res.json(await MovimentacaoEstoque.findAll({ where, order: [["createdAt", "DESC"]], limit: 300 }));
   } catch (error) {
     responderErro(res, error, "Erro ao carregar histórico");

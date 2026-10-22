@@ -3,6 +3,7 @@ import { sequelize } from "../database/connection.js";
 import { Pedido, PedidoItem } from "../models/index.js";
 import { INCLUDE_COMPLETO, serializarPedido } from "../services/pedidoService.js";
 import { erroHttp, responderErro } from "../utils/helpers.js";
+import { contem } from "../utils/busca.js";
 
 // Abas da expedição:
 //   INICIAR   liberado, montagem não iniciada
@@ -29,7 +30,7 @@ export const listar = async (req, res) => {
     const busca = String(req.query.busca || "").trim();
     if (busca.length >= 2) {
       where[Op.or] = [
-        { clienteNome: { [Op.iLike]: `%${busca}%` } },
+        contem("Pedido.clienteNome", busca),
         { codigoLegado: { [Op.iLike]: `%${busca}%` } },
         ...(/^\d+$/.test(busca) ? [{ numero: Number(busca) }] : []),
       ];

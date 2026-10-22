@@ -49,13 +49,25 @@ export const sincronizarBanco = async () => {
       AND (u.telefone IS NULL OR u.documento IS NULL OR u.cep IS NULL)
   `);
 
-  // Busca rápida de clientes/pedidos por trecho do nome/e-mail (pg_trgm).
+  // Busca sem acento e sem diferenciar maiúsculas: f_unaccent (sem depender
+  // da extensão unaccent).
+  await sequelize.query(`
+    CREATE OR REPLACE FUNCTION f_unaccent(texto text) RETURNS text
+    LANGUAGE sql IMMUTABLE PARALLEL SAFE AS $$
+      SELECT translate(lower(texto), 'áàâãäåéèêëíìîïóòôõöúùûüçñýÿÁÀÂÃÄÅÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇÑÝ', 'aaaaaaeeeeiiiiooooouuuucnyyaaaaaaeeeeiiiiooooouuuucny')
+    $$
+  `);
+
+  // Busca rápida de clientes/pedidos/produtos por trecho do nome (pg_trgm).
   // Se a extensão não puder ser criada, a busca continua funcionando sem índice.
   try {
     await sequelize.query("CREATE EXTENSION IF NOT EXISTS pg_trgm");
     await sequelize.query(`CREATE INDEX IF NOT EXISTS usuarios_nome_trgm ON usuarios USING gin (nome gin_trgm_ops)`);
     await sequelize.query(`CREATE INDEX IF NOT EXISTS usuarios_email_trgm ON usuarios USING gin (email gin_trgm_ops)`);
     await sequelize.query(`CREATE INDEX IF NOT EXISTS pedidos_cliente_nome_trgm ON pedidos USING gin ("clienteNome" gin_trgm_ops)`);
+    await sequelize.query(`CREATE INDEX IF NOT EXISTS usuarios_nome_sem_acento_trgm ON usuarios USING gin (f_unaccent(nome) gin_trgm_ops)`);
+    await sequelize.query(`CREATE INDEX IF NOT EXISTS pedidos_cliente_nome_sem_acento_trgm ON pedidos USING gin (f_unaccent("clienteNome") gin_trgm_ops)`);
+    await sequelize.query(`CREATE INDEX IF NOT EXISTS produtos_nome_sem_acento_trgm ON produtos USING gin (f_unaccent(nome) gin_trgm_ops)`);
   } catch (error) {
     console.warn("[migrate] Índices de busca não criados:", error.message);
   }

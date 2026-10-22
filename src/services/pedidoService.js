@@ -25,6 +25,7 @@ import {
   numero,
   somenteDigitos,
 } from "../utils/helpers.js";
+import { contem } from "../utils/busca.js";
 
 // Itens trazem a capa atual do produto para quem não tem imagem própria
 // (itens antigos da loja anterior).
@@ -507,7 +508,7 @@ export const montarFiltroPedidos = (query) => {
   if (busca.length >= 2) {
     const termo = `%${busca}%`;
     const ou = [
-      { clienteNome: { [Op.iLike]: termo } },
+      contem("Pedido.clienteNome", busca),
       { clienteEmail: { [Op.iLike]: termo } },
       { documento: { [Op.iLike]: `%${somenteDigitos(busca) || busca}%` } },
       { codigoLegado: { [Op.iLike]: `%${busca}%` } },

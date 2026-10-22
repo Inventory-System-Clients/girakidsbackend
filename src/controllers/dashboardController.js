@@ -21,6 +21,7 @@ import {
   numero,
   responderErro,
 } from "../utils/helpers.js";
+import { contem } from "../utils/busca.js";
 
 const DIAS = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
 
@@ -430,9 +431,10 @@ export const movimentacoes = async (req, res) => {
     if (req.query.produtoId) where.produtoId = req.query.produtoId;
     const busca = String(req.query.busca || "").trim();
     if (busca.length >= 2) {
-      where[Op.or] = ["produtoNome", "produtoSku", "clienteNome", "clienteEmail", "motivo", "usuarioNome", "pedidoNumero"].map(
-        (campo) => ({ [campo]: { [Op.iLike]: `%${busca}%` } }),
-      );
+      where[Op.or] = [
+        ...["produtoNome", "clienteNome", "motivo", "usuarioNome"].map((campo) => contem(campo, busca)),
+        ...["produtoSku", "clienteEmail", "pedidoNumero"].map((campo) => ({ [campo]: { [Op.iLike]: `%${busca}%` } })),
+      ];
     }
     const limite = Math.min(Number(req.query.limite) || 50, 5000);
     const pagina = Math.max(Number(req.query.pagina) || 1, 1);

@@ -2,6 +2,7 @@ import { Op } from "sequelize";
 import { Pedido, PedidoCustoExtra } from "../models/index.js";
 import { CATEGORIAS_CUSTO } from "../models/PedidoCustoExtra.js";
 import { arredondar, erroHttp, hojeISO, numero, responderErro } from "../utils/helpers.js";
+import { contem } from "../utils/busca.js";
 
 export const categorias = (req, res) => res.json(CATEGORIAS_CUSTO);
 
@@ -20,7 +21,7 @@ export const listar = async (req, res) => {
     const wherePedido = {};
     if (busca) {
       wherePedido[Op.or] = [
-        { clienteNome: { [Op.iLike]: `%${busca}%` } },
+        contem("pedido.clienteNome", busca),
         ...(/^\d+$/.test(busca) ? [{ numero: Number(busca) }] : []),
       ];
     }

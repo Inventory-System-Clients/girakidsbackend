@@ -5,6 +5,7 @@ import {
   buscarNotasEmitidas,
   buscarFreteETransportadoraPorChave,
 } from "../services/nfemailService.js";
+import { contem } from "../utils/busca.js";
 
 const camposEditaveis = [
   "clienteNome",
@@ -63,7 +64,7 @@ const pedidoNotaFiscalController = {
         req.query;
 
       const where = {};
-      if (clienteNome) where.clienteNome = { [Op.iLike]: `%${clienteNome}%` };
+      if (clienteNome) where[Op.and] = [contem("clienteNome", clienteNome)];
       if (numeroPedido) where.numeroPedido = { [Op.iLike]: `%${numeroPedido}%` };
       if (teveCotacao !== undefined) where.teveCotacao = teveCotacao === "true";
 

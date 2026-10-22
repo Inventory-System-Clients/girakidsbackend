@@ -11,6 +11,7 @@ import { movimentar } from "../services/estoqueService.js";
 import { verificarImagemEsgotado } from "../services/imagemEsgotadoService.js";
 import { ehInterno } from "../services/pedidoService.js";
 import { arredondar, erroHttp, numero, responderErro } from "../utils/helpers.js";
+import { contem } from "../utils/busca.js";
 
 const statusEstoque = (p) => {
   const estoque = Number(p.estoque || 0);
@@ -86,9 +87,9 @@ export const catalogo = async (req, res) => {
     const busca = String(req.query.busca || "").trim();
     if (busca) {
       where[Op.or] = [
-        { nome: { [Op.iLike]: `%${busca}%` } },
-        { descricao: { [Op.iLike]: `%${busca}%` } },
-        { categoria: { [Op.iLike]: `%${busca}%` } },
+        contem("nome", busca),
+        contem("descricao", busca),
+        contem("categoria", busca),
         { sku: { [Op.iLike]: `%${busca}%` } },
       ];
     }
@@ -129,7 +130,7 @@ export const buscar = async (req, res) => {
     if (!req.query.incluirArquivados) where.arquivado = false;
     if (busca) {
       where[Op.or] = [
-        { nome: { [Op.iLike]: `%${busca}%` } },
+        contem("nome", busca),
         { sku: { [Op.iLike]: `%${busca}%` } },
       ];
     }
@@ -169,9 +170,9 @@ export const listar = async (req, res) => {
     const busca = String(req.query.busca || "").trim();
     if (busca) {
       where[Op.or] = [
-        { nome: { [Op.iLike]: `%${busca}%` } },
+        contem("nome", busca),
         { sku: { [Op.iLike]: `%${busca}%` } },
-        { categoria: { [Op.iLike]: `%${busca}%` } },
+        contem("categoria", busca),
       ];
     }
     const status = lista(req.query.status);

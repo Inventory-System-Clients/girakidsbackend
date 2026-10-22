@@ -9,6 +9,7 @@ import {
 } from "../models/index.js";
 import { movimentar } from "../services/estoqueService.js";
 import { arredondar, erroHttp, hojeISO, numero, responderErro, somenteDigitos } from "../utils/helpers.js";
+import { contem } from "../utils/busca.js";
 
 // ---------------------------------------------------------------------------
 // Parceiros (fornecedores e transportadoras)
@@ -22,9 +23,9 @@ export const listarParceiros = async (req, res) => {
     const busca = String(req.query.busca || "").trim();
     if (busca) {
       where[Op.or] = [
-        { nome: { [Op.iLike]: `%${busca}%` } },
+        contem("nome", busca),
         { documento: { [Op.iLike]: `%${busca}%` } },
-        { contato: { [Op.iLike]: `%${busca}%` } },
+        contem("contato", busca),
       ];
     }
     res.json(await Parceiro.findAll({ where, order: [["tipo", "DESC"], ["nome", "ASC"]] }));

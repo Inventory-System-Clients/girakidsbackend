@@ -7,6 +7,7 @@ import {
 } from "../services/vippService.js";
 import { METODOS_ENVIO } from "../utils/formasPagamento.js";
 import { fimDoDia, inicioDoDia } from "../utils/helpers.js";
+import { contem } from "../utils/busca.js";
 
 // Aba Comercial → Correios. No AgarraMais os pedidos vinham da loja antiga
 // (girakids-loja.krionoficial.com.br); aqui vêm direto do banco da própria
@@ -130,7 +131,7 @@ export const buscarPedidos = async (req, res) => {
     };
     if (nome) {
       where[Op.or] = [
-        { clienteNome: { [Op.iLike]: `%${nome}%` } },
+        contem("Pedido.clienteNome", nome),
         ...(/^\d+$/.test(nome) ? [{ numero: Number(nome) }] : []),
       ];
     }

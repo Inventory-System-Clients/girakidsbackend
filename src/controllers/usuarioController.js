@@ -3,6 +3,7 @@ import { sequelize } from "../database/connection.js";
 import { Usuario, Pedido, LogAtividade } from "../models/index.js";
 import { PERMISSOES } from "../models/Usuario.js";
 import { erroHttp, numero, responderErro, somenteDigitos, documentoValido } from "../utils/helpers.js";
+import { contem, comecaComSql } from "../utils/busca.js";
 
 const ROLES = ["ADMIN", "FUNCIONARIO", "CLIENTE"];
 
@@ -13,7 +14,7 @@ export const listar = async (req, res) => {
     const busca = String(req.query.busca || "").trim();
     if (busca) {
       where[Op.or] = [
-        { nome: { [Op.iLike]: `%${busca}%` } },
+        contem("nome", busca),
         { email: { [Op.iLike]: `%${busca}%` } },
         { documento: { [Op.iLike]: `%${somenteDigitos(busca) || busca}%` } },
       ];
@@ -49,7 +50,7 @@ export const buscarClientes = async (req, res) => {
     if (busca.length < 2) return res.json([]);
     const digitos = somenteDigitos(busca);
     const ou = [
-      { nome: { [Op.iLike]: `%${busca}%` } },
+      contem("nome", busca),
       { email: { [Op.iLike]: `%${busca}%` } },
     ];
     if (digitos.length >= 3) {
@@ -60,7 +61,7 @@ export const buscarClientes = async (req, res) => {
       attributes: ATRIBUTOS_BUSCA,
       where: { ativo: true, [Op.or]: ou },
       order: [
-        [sequelize.literal(`CASE WHEN "nome" ILIKE ${sequelize.escape(`${busca}%`)} THEN 0 WHEN "email" ILIKE ${sequelize.escape(`${busca}%`)} THEN 1 ELSE 2 END`), "ASC"],
+        [sequelize.literal(`CASE WHEN ${comecaComSql("nome", busca)} THEN 0 WHEN "email" ILIKE ${sequelize.escape(`${busca}%`)} THEN 1 ELSE 2 END`), "ASC"],
         ["nome", "ASC"],
       ],
       limit: 15,
