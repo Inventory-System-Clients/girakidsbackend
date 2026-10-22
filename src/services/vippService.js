@@ -136,7 +136,17 @@ const abrirSessaoVipp = async () => {
   });
   const destino = respostaLogin.headers.get("location") || "";
   if (!/login\/index\.php/i.test(destino)) {
-    throw new Error("Login no VIPP recusado. Confira usuário e senha.");
+    // Mostra o motivo que o próprio VIPP escreveu na tela de login.
+    const pagina = (await sessao.texto(respostaLogin)).replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
+    const motivo = pagina
+      .match(/(?:Usu[aá]rio\/E-mail|Usu[aá]rio|Senha|Captcha|Texto da imagem|Acesso|Conta)[^.!:]{0,30}?(?:inv[aá]lid[oa]|incorret[oa]|bloquead[oa]|expirad[oa]|n[aã]o confere)(?: - Tente Novamente)?/i)?.[0]
+      ?.trim();
+    throw new Error(
+      `Login no VIPP recusado${motivo ? ` (VIPP: "${motivo}")` : ""}. ` +
+        (/captcha/i.test(motivo || "")
+          ? "O VIPP passou a exigir captcha no login; a integração automática precisa do WebService do VIPP."
+          : "Confira VIPP_USUARIO e VIPP_SENHA no ambiente do backend (Render)."),
+    );
   }
   await sessao.requisitar(new URL(destino, `${BASE_URL}/inicio/`).toString());
 
