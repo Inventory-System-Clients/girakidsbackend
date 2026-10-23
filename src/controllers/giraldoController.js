@@ -12,7 +12,8 @@ import { arredondar, erroHttp, responderErro, somenteDigitos } from "../utils/he
 // chamando "responder_usuario" com a mensagem e as ações que o site executa
 // (adicionar ao carrinho, escolher entrega/pagamento, finalizar pedido...).
 
-const OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions";
+// Endereço trocável só para testes locais com uma IA simulada.
+const OPENAI_CHAT_URL = process.env.OPENAI_CHAT_URL || "https://api.openai.com/v1/chat/completions";
 const MODELO = () => process.env.OPENAI_MODEL_ASSISTENTE || process.env.OPENAI_MODEL || "gpt-4.1-mini";
 const MAX_RODADAS = 5;
 const MAX_HISTORICO = 24;
@@ -143,7 +144,55 @@ const formasPermitidas = (usuario) => {
   return { formas, pagamentoOnlineAtivo: online.habilitado };
 };
 
-const montarContexto = async ({ usuario, carrinho, estado }) => {
+// Telas que o Giraldo pode abrir: só as que a pessoa tem acesso.
+const TELAS_EQUIPE = {
+  FINANCEIRO: ["/dashboard", "Time Financeiro"],
+  VENDAS: ["/historico-pedidos", "Time de Vendas (pedidos)"],
+  EXPEDICAO: ["/expedicao", "Time Expedição"],
+  PRODUTOS: ["/produtos", "Gerenciar Produtos"],
+  ORCAMENTOS: ["/orcamentos", "Orçamentos"],
+  USUARIOS: ["/usuarios", "Gerenciar Usuários"],
+  COMERCIAL: ["/comercial/correios", "Comercial"],
+  RECEBIMENTOS: ["/recebimentos", "Recebimentos"],
+};
+const telasPermitidas = (usuario) => {
+  const telas = { "/": "Catálogo de produtos", "/checkout": "Carrinho / finalizar pedido" };
+  if (!usuario) return { ...telas, "/login": "Entrar na conta", "/registrar": "Criar conta" };
+  telas["/perfil"] = "Meu perfil (dados e endereço)";
+  if (usuario.role === "CLIENTE") telas["/meus-pedidos"] = "Meus pedidos";
+  for (const [permissao, [rota, nome]] of Object.entries(TELAS_EQUIPE)) {
+    if (usuario.temPermissao?.(permissao)) telas[rota] = nome;
+  }
+  return telas;
+};
+
+const NOMES_PAGINA = { "/": "Catálogo", "/catalogo": "Catálogo", "/checkout": "Carrinho / finalizar pedido", "/meus-pedidos": "Meus pedidos", "/perfil": "Meu perfil", "/login": "Entrar", "/registrar": "Criar conta" };
+const nomePagina = (rota) => {
+  const r = String(rota || "/").split("?")[0];
+  if (r.startsWith("/produto/")) return "Detalhes de um produto (catálogo)";
+  if (r.startsWith("/pagamento/")) return "Pedido finalizado (tela de pagamento)";
+  return NOMES_PAGINA[r] || r;
+};
+
+// O que está na tela do carrinho (enviado pelo site), só com campos conhecidos.
+const resumirCheckout = (c) => {
+  if (!c || typeof c !== "object") return null;
+  const lista = (v) => (Array.isArray(v) ? v.slice(0, 20) : []);
+  return {
+    entrega: c.metodoEnvio || null,
+    pagamento: c.formaPagamento || null,
+    parcelas: c.parcelas || null,
+    cep: c.cep || null,
+    opcoesDeEntrega: lista(c.opcoesEntrega).map((o) => ({ metodo: o.metodo, disponivel: Boolean(o.disponivel), valor: Number(o.valor) || 0, prazoDias: o.prazoDias ?? null })),
+    formasDisponiveisNaTela: lista(c.formasDisponiveis).map((f) => ({ codigo: f.codigo, nome: f.nome, somenteEnvios: f.somenteEnvios || null })),
+    subtotal: Number(c.subtotal) || 0,
+    frete: Number(c.frete) || 0,
+    total: Number(c.total) || 0,
+    dadosFaltando: lista(c.dadosFaltando).map(String),
+  };
+};
+
+const montarContexto = async ({ usuario, carrinho, estado, pagina, checkout }) => {
   const { produtos } = await catalogo();
   const porId = new Map(produtos.map((p) => [p.id, p]));
   const itens = (carrinho || [])
@@ -175,6 +224,9 @@ const montarContexto = async ({ usuario, carrinho, estado }) => {
       carrinho: itens,
       subtotalCarrinho: arredondar(itens.reduce((s, i) => s + i.subtotal, 0)),
       escolhas: { entrega: estado?.metodoEnvio || null, pagamento: estado?.formaPagamento || null, cep: estado?.cep || null },
+      paginaAtual: nomePagina(pagina),
+      telaDoCarrinho: String(pagina || "").startsWith("/checkout") ? resumirCheckout(checkout) : null,
+      telasQuePodeAbrir: telasPermitidas(usuario),
       formasDePagamento: pagamentos.formas,
       pagamentoOnlineAtivo: pagamentos.pagamentoOnlineAtivo,
       whatsappComercial: `(${whatsapp.slice(2, 4)}) ${whatsapp.slice(4, 9)}-${whatsapp.slice(9)}`,
@@ -183,6 +235,7 @@ const montarContexto = async ({ usuario, carrinho, estado }) => {
     whatsapp,
     pagamentos,
     porId,
+    telas: telasPermitidas(usuario),
   };
 };
 
@@ -208,6 +261,16 @@ COMO AJUDAR
 8. Se a pessoa quiser ver o carrinho, use abrir_carrinho. Para remover ou mudar quantidade, use remover_carrinho ou definir_quantidade.
 9. Se a pessoa estiver perdida ou pedir humano, ofereça o WhatsApp do comercial (whatsapp_comercial).
 10. Se já estiver ajudando desde o início e a pessoa adicionou o que queria, conduza os passos de entrega → pagamento → finalizar sem esperar ela pedir.
+
+SEJA INTERATIVO (você controla o site para a pessoa)
+- Veja "paginaAtual" no contexto. Você pode levar a pessoa a outra tela com a ação navegar, usando SÓ rotas de "telasQuePodeAbrir" (ex.: "Me leva pro carrinho" → navegar "/checkout"; "meus pedidos" → navegar "/meus-pedidos").
+- Para mostrar produtos no catálogo, use mostrar_catalogo com categoria (nome exato) ou busca. Para mostrar um produto ampliado, use abrir_produto com o produtoId.
+- Quando a pessoa disser o produto e a quantidade, adicione na hora (adicionar_carrinho) e diga que já adicionou.
+- Quando a pessoa disser que é só isso ou quiser fechar a compra, leve ao carrinho (navegar "/checkout") e continue ajudando lá.
+- Na tela do carrinho ("telaDoCarrinho" no contexto) você vê entrega, pagamento, frete, total e os dados que faltam. Suas escolhas aparecem NA HORA na tela: definir_entrega, definir_pagamento, definir_parcelas (crédito: 1 a 12), definir_cep, definir_observacao e preencher_dados (nome, telefone, documento = CPF/CNPJ, numero, complemento). Diga o que você marcou ("Marquei Retirar na loja e PIX para você ✅").
+- Use os valores de frete de telaDoCarrinho.opcoesDeEntrega quando existirem. Ofereça só formas que estejam em formasDisponiveisNaTela (ou formasDePagamento) e respeite "somenteEnvios".
+- Se telaDoCarrinho.dadosFaltando tiver itens, peça esses dados UM de cada vez e preencha com preencher_dados (ou definir_cep para o CEP, que completa o endereço). Endereço sem número: pergunte o número.
+- finalizar_pedido aperta o botão de finalizar NA TELA DO CARRINHO (o site leva até lá se precisar). Só use depois do "sim" da pessoa e quando não faltar dado obrigatório.
 
 SEMPRE termine chamando responder_usuario. Em "sugestoes" mande de 2 a 4 respostas rápidas curtas que a pessoa provavelmente vai querer tocar (ex.: "2 embalagens", "Só isso", "Retirar na loja", "PIX").`;
 
@@ -268,6 +331,12 @@ const FERRAMENTAS = [
                     "pedir_login",
                     "ir_checkout",
                     "whatsapp_comercial",
+                    "navegar",
+                    "mostrar_catalogo",
+                    "abrir_produto",
+                    "definir_parcelas",
+                    "definir_observacao",
+                    "preencher_dados",
                   ],
                 },
                 produtoId: { type: "string" },
@@ -275,6 +344,13 @@ const FERRAMENTAS = [
                 metodoEnvio: { type: "string", enum: ["RETIRAR_LOCAL", "TRANSPORTADORA", "PAC", "SEDEX"] },
                 formaPagamento: { type: "string" },
                 cep: { type: "string" },
+                rota: { type: "string", description: "navegar: uma rota de telasQuePodeAbrir." },
+                categoria: { type: "string", description: "mostrar_catalogo: nome da categoria." },
+                busca: { type: "string", description: "mostrar_catalogo: texto a buscar." },
+                parcelas: { type: "integer", description: "definir_parcelas: 1 a 12." },
+                texto: { type: "string", description: "definir_observacao: observação do pedido." },
+                campo: { type: "string", enum: ["nome", "telefone", "documento", "numero", "complemento"], description: "preencher_dados: campo do formulário." },
+                valor: { type: "string", description: "preencher_dados: valor do campo." },
               },
               required: ["tipo"],
             },
@@ -308,7 +384,7 @@ const imagemCartao = (p) => {
 };
 
 // Garante que as ações só usem produtos, quantidades e formas válidas.
-const validarResposta = (args, { porId, pagamentos }) => {
+const validarResposta = (args, { porId, pagamentos, telas }) => {
   const formas = new Set(pagamentos.formas.map((f) => f.codigo));
   // Duas entregas (ou dois pagamentos) diferentes na mesma resposta = a pessoa
   // ainda não escolheu: não aplica nenhuma.
@@ -318,12 +394,25 @@ const validarResposta = (args, { porId, pagamentos }) => {
   });
   const acoes = (args.acoes || [])
     .filter((a) => !indecisos.includes(a.tipo))
-    .map((a) => ({ ...a, quantidade: a.quantidade != null ? Math.min(9999, Math.max(1, Math.round(a.quantidade))) : undefined }))
+    .map((a) => ({
+      ...a,
+      quantidade: a.quantidade != null ? Math.min(9999, Math.max(1, Math.round(a.quantidade))) : undefined,
+      categoria: a.categoria ? String(a.categoria).slice(0, 80) : undefined,
+      busca: a.busca ? String(a.busca).slice(0, 80) : undefined,
+      texto: a.texto != null ? String(a.texto).slice(0, 500) : undefined,
+      valor: a.valor != null ? String(a.valor).trim().slice(0, 120) : undefined,
+    }))
     .filter((a) => {
       if (["adicionar_carrinho", "definir_quantidade", "remover_carrinho"].includes(a.tipo)) return porId.has(a.produtoId);
       if (a.tipo === "definir_pagamento") return formas.has(a.formaPagamento);
       if (a.tipo === "definir_entrega") return ["RETIRAR_LOCAL", "TRANSPORTADORA", "PAC", "SEDEX"].includes(a.metodoEnvio);
       if (a.tipo === "definir_cep") return somenteDigitos(a.cep).length === 8;
+      if (a.tipo === "navegar") return Boolean(telas?.[a.rota]);
+      if (a.tipo === "mostrar_catalogo") return Boolean(String(a.categoria || a.busca || "").trim());
+      if (a.tipo === "abrir_produto") return porId.has(a.produtoId);
+      if (a.tipo === "definir_parcelas") return Number(a.parcelas) >= 1 && Number(a.parcelas) <= 12;
+      if (a.tipo === "definir_observacao") return typeof a.texto === "string";
+      if (a.tipo === "preencher_dados") return ["nome", "telefone", "documento", "numero", "complemento"].includes(a.campo) && String(a.valor || "").trim().length > 0;
       return true;
     });
   const produtos = (args.produtos || [])
@@ -363,14 +452,14 @@ export const conversar = async (req, res) => {
   try {
     limitar(req.ip);
     if (!process.env.OPENAI_API_KEY) throw erroHttp(503, "O Giraldo ainda não está ativado (configure OPENAI_API_KEY no backend).");
-    const { mensagens = [], carrinho = [], estado = {} } = req.body || {};
+    const { mensagens = [], carrinho = [], estado = {}, pagina = "/", checkout = null } = req.body || {};
     const historico = (Array.isArray(mensagens) ? mensagens : [])
       .filter((m) => ["user", "assistant"].includes(m.role) && typeof m.content === "string" && m.content.trim())
       .slice(-MAX_HISTORICO)
       .map((m) => ({ role: m.role, content: m.content.slice(0, 1500) }));
     if (!historico.length || historico[historico.length - 1].role !== "user") throw erroHttp(400, "Envie a mensagem do usuário.");
 
-    const ctx = await montarContexto({ usuario: req.usuario, carrinho, estado });
+    const ctx = await montarContexto({ usuario: req.usuario, carrinho, estado, pagina: String(pagina).slice(0, 120), checkout });
     const conversa = [
       { role: "system", content: INSTRUCOES.replaceAll("{WHATSAPP}", ctx.contexto.whatsappComercial).replaceAll("{ENDERECO}", ctx.contexto.enderecoLoja) },
       { role: "system", content: `CONTEXTO ATUAL (JSON): ${JSON.stringify(ctx.contexto)}` },
