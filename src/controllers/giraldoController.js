@@ -466,6 +466,10 @@ export const conversar = async (req, res) => {
       ...historico,
     ];
 
+    // Última busca feita pela IA: se a pessoa pediu para VER no catálogo e a
+    // IA só mostrou cartões, o site abre o catálogo com essa busca.
+    let ultimaBusca = null;
+    const pediuCatalogo = /(mostr|ver |veja|abr|exib).{0,40}(cat[aá]logo|site|tela)|no cat[aá]logo/i.test(historico[historico.length - 1].content);
     for (let rodada = 0; rodada < MAX_RODADAS; rodada += 1) {
       const msg = await chamarModelo(conversa);
       const chamadas = msg?.tool_calls || [];
@@ -473,6 +477,8 @@ export const conversar = async (req, res) => {
       if (final) {
         const args = JSON.parse(final.function.arguments || "{}");
         const resposta = validarResposta(args, ctx);
+        const navegou = resposta.acoes.some((a) => ["mostrar_catalogo", "navegar", "abrir_produto", "abrir_carrinho", "ir_checkout"].includes(a.tipo));
+        if (pediuCatalogo && ultimaBusca && !navegou) resposta.acoes.push({ tipo: "mostrar_catalogo", busca: ultimaBusca.slice(0, 80) });
         if (resposta.acoes.some((a) => a.tipo === "whatsapp_comercial")) resposta.whatsappComercial = ctx.whatsapp;
         return res.json(resposta);
       }
@@ -482,6 +488,7 @@ export const conversar = async (req, res) => {
         try {
           const args = JSON.parse(chamada.function.arguments || "{}");
           if (chamada.function.name === "buscar_produtos") {
+            ultimaBusca = String(args.busca || "").trim() || ultimaBusca;
             resultado = await buscarProdutos(args);
           } else if (chamada.function.name === "cotar_frete") {
             const itens = (carrinho || []).map((i) => ({ produtoId: i.produtoId, quantidade: i.quantidade }));
