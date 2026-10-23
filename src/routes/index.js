@@ -149,6 +149,7 @@ router.post("/recebimentos/montagem/produtos/:id/ajustar", ...rec, registrarLog(
 router.post("/recebimentos/montagem/ordens/:id/concluir", ...rec, registrarLog("CONCLUIR_MONTAGEM", "OrdemMontagem"), recebimentos.concluirOrdem);
 router.post("/recebimentos/montagem/ordens/:id/cancelar", ...rec, registrarLog("CANCELAR_MONTAGEM", "OrdemMontagem"), recebimentos.cancelarOrdem);
 router.post("/recebimentos/capsulas", ...rec, registrarLog("CRIAR_CAPSULA", "Produto"), recebimentos.criarCapsula);
+router.put("/recebimentos/insumos/:id", ...rec, registrarLog("REGRAS_INSUMO", "Produto"), recebimentos.configurarInsumo);
 router.put("/recebimentos/capsulas/:id", ...rec, registrarLog("MARCAR_CAPSULA", "Produto"), recebimentos.marcarCapsula);
 router.get("/recebimentos", ...rec, recebimentos.listar);
 router.post("/recebimentos", ...rec, registrarLog("CRIAR_PRE_RECEBIMENTO", "PreRecebimento"), recebimentos.criar);

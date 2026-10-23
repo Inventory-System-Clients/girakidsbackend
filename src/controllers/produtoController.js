@@ -352,14 +352,14 @@ export const atualizar = async (req, res) => {
 export const ajustarEstoque = async (req, res) => {
   try {
     const novaQuantidade = Math.round(Number(req.body?.quantidade));
-    const motivo = String(req.body?.motivo || "").trim();
+    // Motivo opcional: o ajuste fica no histórico mesmo sem explicação.
+    const motivo = String(req.body?.motivo || "").trim() || "Ajuste manual de estoque";
     if (!Number.isFinite(novaQuantidade) || novaQuantidade < 0) throw erroHttp(400, "Quantidade inválida.");
-    if (motivo.length < 10) throw erroHttp(400, "Motivo deve ter pelo menos 10 caracteres.");
     await sequelize.transaction(async (transaction) => {
       const produto = await Produto.findByPk(req.params.id, { transaction, lock: transaction.LOCK.UPDATE });
       if (!produto) throw erroHttp(404, "Produto não encontrado.");
       const delta = novaQuantidade - Number(produto.estoque);
-      if (!delta) throw erroHttp(400, "Nova quantidade é igual à quantidade atual.");
+      if (!delta) return;
       await movimentar({ produto, delta, tipo: "AJUSTE", motivo, usuario: req.usuario, transaction });
     });
     res.json(serializarAdmin(await Produto.findByPk(req.params.id)));

@@ -108,8 +108,16 @@ const Produto = sequelize.define(
     capsulas: { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },
     // Quem recebe as cápsulas primeiro quando não dá para todos (maior primeiro).
     prioridadeMontagem: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
-    // Produto usado como cápsula na montagem de outros.
+    // Produto usado como cápsula/sleeve na montagem de outros.
     ehCapsula: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    // CAPSULA ou SLEEVE (sem valor: deduzido pelo nome).
+    tipoInsumo: { type: DataTypes.STRING(20), allowNull: true },
+    // % a mais na sugestão de compra (perda na montagem). Sem valor: 10% para
+    // sleeve, 0 para cápsula.
+    margemPerda: { type: DataTypes.DECIMAL(5, 2), allowNull: true },
+    // Avisa que está acabando quando o estoque chega neste número. Sem valor:
+    // 500 para sleeve, sem aviso para cápsula.
+    avisoCompraAbaixo: { type: DataTypes.INTEGER, allowNull: true },
     fornecedorPreferencialId: {
       type: DataTypes.UUID,
       allowNull: true,

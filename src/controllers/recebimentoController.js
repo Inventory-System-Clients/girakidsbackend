@@ -449,12 +449,14 @@ export const alertas = async (req, res) => {
       painelMontagem(),
     ]);
     const capsulasFaltando = painel.faltas;
+    const insumosAcabando = painel.acabando;
     res.json({
-      total: divergencias.length + respostas.length + capsulasFaltando.length,
+      total: divergencias.length + respostas.length + capsulasFaltando.length + insumosAcabando.length,
       divergencias: divergencias.map(serializar),
       respostas: respostas.map((p) => ({ id: p.id, numero: p.numero, fornecedorNome: p.fornecedorNome, respondidoEm: p.respondidoEm })),
       atrasados: atrasados.map((p) => ({ id: p.id, numero: p.numero, fornecedorNome: p.fornecedorNome, previsao: p.previsaoFornecedor || p.previsaoEntrega })),
       capsulasFaltando,
+      insumosAcabando,
     });
   } catch (error) {
     responderErro(res, error, "Erro ao carregar alertas");
@@ -665,8 +667,7 @@ export const ajustarSaldo = async (req, res) => {
   try {
     const saldo = String(req.body?.saldo || "ESTOQUE");
     const nova = Math.round(numero(req.body?.quantidade));
-    const motivo = texto(req.body?.motivo, 500);
-    if (!motivo) throw erroHttp(400, "Informe o motivo do ajuste.");
+    const motivo = texto(req.body?.motivo, 500) || "sem observação";
     if (!Number.isFinite(nova) || nova < 0) throw erroHttp(400, "Quantidade inválida.");
     await sequelize.transaction(async (transaction) => {
       const produto = await Produto.findByPk(req.params.id, { transaction, lock: transaction.LOCK.UPDATE });
@@ -703,15 +704,19 @@ export const criarCapsula = async (req, res) => {
     const nome = texto(corpo.nome, 200);
     if (!nome) throw erroHttp(400, "Informe o nome da cápsula.");
     const tamanho = { "1": "cap_empty_1inch", "2": "cap_empty_2inch", "105": "cap_empty_105mm" }[String(corpo.tamanho)] || null;
+    const sleeve = corpo.tipoInsumo === "SLEEVE";
     const capsula = await sequelize.transaction(async (transaction) => {
       const nova = await Produto.create(
         {
           sku: texto(corpo.sku, 50) || `CAP-${Date.now().toString(36).toUpperCase()}`,
           nome,
-          categoria: "Cápsulas",
+          categoria: sleeve ? "Sleeves" : "Cápsulas",
           ehCapsula: true,
+          tipoInsumo: sleeve ? "SLEEVE" : "CAPSULA",
+          margemPerda: corpo.margemPerda === "" || corpo.margemPerda == null ? null : numero(corpo.margemPerda),
+          avisoCompraAbaixo: corpo.avisoCompraAbaixo === "" || corpo.avisoCompraAbaixo == null ? null : Math.round(numero(corpo.avisoCompraAbaixo)),
           arquivado: !corpo.venderNoCatalogo,
-          tipoEmbalagem: tamanho,
+          tipoEmbalagem: sleeve ? null : tamanho,
           unidadesPacote: Math.max(1, Math.round(numero(corpo.unidadesPacote) || 1)),
           precoVenda: numero(corpo.precoVenda),
           custo: corpo.custo ? numero(corpo.custo) : null,
@@ -729,6 +734,32 @@ export const criarCapsula = async (req, res) => {
     res.status(201).json(capsula);
   } catch (error) {
     responderErro(res, error, "Erro ao cadastrar cápsula");
+  }
+};
+
+// Regras de compra do insumo: tipo, margem de perda e aviso de estoque baixo
+// (campo vazio = padrão: sleeve 10% e aviso em 500; cápsula 0% e sem aviso).
+export const configurarInsumo = async (req, res) => {
+  try {
+    const produto = await Produto.findByPk(req.params.id);
+    if (!produto) throw erroHttp(404, "Produto não encontrado.");
+    const corpo = req.body || {};
+    const dados = {};
+    if (corpo.tipoInsumo !== undefined) dados.tipoInsumo = ["CAPSULA", "SLEEVE"].includes(corpo.tipoInsumo) ? corpo.tipoInsumo : null;
+    if (corpo.margemPerda !== undefined) {
+      const m = corpo.margemPerda === "" || corpo.margemPerda == null ? null : numero(corpo.margemPerda);
+      if (m != null && (m < 0 || m > 200)) throw erroHttp(400, "Margem de perda entre 0% e 200%.");
+      dados.margemPerda = m;
+    }
+    if (corpo.avisoCompraAbaixo !== undefined) {
+      const a = corpo.avisoCompraAbaixo === "" || corpo.avisoCompraAbaixo == null ? null : Math.round(numero(corpo.avisoCompraAbaixo));
+      if (a != null && a < 0) throw erroHttp(400, "Aviso inválido.");
+      dados.avisoCompraAbaixo = a;
+    }
+    await produto.update({ ...dados, ehCapsula: true });
+    res.json(await painelComOrdens());
+  } catch (error) {
+    responderErro(res, error, "Erro ao salvar regras do insumo");
   }
 };
 

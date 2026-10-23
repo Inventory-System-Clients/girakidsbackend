@@ -53,6 +53,12 @@ export const distribuirGrupo = (grupo, unidades, estoque) => {
   return usos;
 };
 
+// Regras de compra de cada insumo (cápsula ou sleeve).
+export const tipoInsumoDe = (p) => (p?.tipoInsumo ? p.tipoInsumo : /sleeve/i.test(String(p?.nome || "")) ? "SLEEVE" : "CAPSULA");
+export const margemDe = (p) => (p?.margemPerda != null ? Number(p.margemPerda) : tipoInsumoDe(p) === "SLEEVE" ? 10 : 0);
+export const avisoDe = (p) => (p?.avisoCompraAbaixo != null ? Number(p.avisoCompraAbaixo) : tipoInsumoDe(p) === "SLEEVE" ? 500 : null);
+export const comMargem = (quantidade, margem) => Math.ceil(quantidade * (1 + Number(margem || 0) / 100));
+
 // Brinquedos soltos do produto (estoque do produto vinculado ou saldo interno).
 const soltoDe = (produto, porId) =>
   produto.produtoSoltoId ? positivo(porId.get(produto.produtoSoltoId)?.estoque) : positivo(produto.estoqueSemCapsula);
@@ -261,8 +267,9 @@ export const painelMontagem = async () => {
           nome: f.opcoes.map((o) => nomeDe(o.produtoId)).join(" ou "),
           opcoes: f.opcoes.map((o) => {
             const c = porId.get(o.produtoId);
-            return { id: o.produtoId, nome: nomeDe(o.produtoId), sku: c?.sku, imagemUrl: c?.imagemUrl, fornecedorPreferencialId: c?.fornecedorPreferencialId, quantidade: o.quantidade };
+            return { id: o.produtoId, nome: nomeDe(o.produtoId), sku: c?.sku, imagemUrl: c?.imagemUrl, fornecedorPreferencialId: c?.fornecedorPreferencialId, quantidade: o.quantidade, tipoInsumo: tipoInsumoDe(c) };
           }),
+          margem: Math.max(...f.opcoes.map((o) => margemDe(porId.get(o.produtoId)))),
           falta: 0,
           produtos: [],
         };
@@ -292,12 +299,16 @@ export const painelMontagem = async () => {
     };
   });
 
-  const listaFaltas = [...faltas.values()].sort((a, b) => b.falta - a.falta);
+  // Sugestão de compra = falta + margem de perda (ex.: sleeve 5.000 → 5.500).
+  const listaFaltas = [...faltas.values()].map((f) => ({ ...f, sugestao: comMargem(f.falta, f.margem) })).sort((a, b) => b.falta - a.falta);
   const capsulas = [...porId.values()]
     .filter((c) => c.ehCapsula || usos.has(c.id))
     .filter((c) => !controlados.some((p) => p.produtoSoltoId === c.id) || c.ehCapsula)
     .map((c) => {
       const minhas = listaFaltas.filter((f) => f.opcoes.some((o) => o.id === c.id));
+      const falta = minhas.filter((f) => f.opcoes.length === 1).reduce((s, f) => s + f.falta, 0);
+      const aviso = avisoDe(c);
+      const estoque = inteiro(c.estoque);
       return {
         id: c.id,
         nome: c.nome,
@@ -305,15 +316,28 @@ export const painelMontagem = async () => {
         imagemUrl: c.imagemUrl,
         arquivado: c.arquivado,
         fornecedorPreferencialId: c.fornecedorPreferencialId,
-        estoque: inteiro(c.estoque),
+        estoque,
+        tipoInsumo: tipoInsumoDe(c),
+        tipoDefinido: Boolean(c.tipoInsumo),
+        margemPerda: margemDe(c),
+        margemDefinida: c.margemPerda != null,
+        avisoCompraAbaixo: aviso,
+        avisoDefinido: c.avisoCompraAbaixo != null,
+        acabando: aviso != null && estoque <= aviso,
+        sugestaoCompra: falta > 0 ? comMargem(falta, margemDe(c)) : 0,
         // Falta só desta cápsula (itens sem alternativa); com alternativas a
         // falta aparece em "faltas", pelo conjunto.
-        falta: minhas.filter((f) => f.opcoes.length === 1).reduce((s, f) => s + f.falta, 0),
+        falta,
         faltaEmAlternativas: minhas.filter((f) => f.opcoes.length > 1).map((f) => ({ nome: f.nome, falta: f.falta })),
         produtos: usos.get(c.id) || [],
       };
     })
     .sort((a, b) => b.falta - a.falta || a.nome.localeCompare(b.nome));
 
-  return { produtos, capsulas, faltas: listaFaltas };
+  // Insumos chegando no aviso (ex.: sleeve com 500 ou menos).
+  const acabando = capsulas
+    .filter((c) => c.acabando)
+    .map((c) => ({ id: c.id, nome: c.nome, sku: c.sku, imagemUrl: c.imagemUrl, fornecedorPreferencialId: c.fornecedorPreferencialId, tipoInsumo: c.tipoInsumo, estoque: c.estoque, avisoCompraAbaixo: c.avisoCompraAbaixo, sugestao: Math.max(c.sugestaoCompra, comMargem(c.avisoCompraAbaixo, c.margemPerda)) }));
+
+  return { produtos, capsulas, faltas: listaFaltas, acabando };
 };
