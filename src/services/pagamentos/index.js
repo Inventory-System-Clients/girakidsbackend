@@ -16,16 +16,29 @@ import modelo from "./modelo.js";
 import mercadopago from "./mercadopago.js";
 import sumup from "./sumup.js";
 import stone from "./stone.js";
-import { configPagamentos, provedorDoCanal } from "./config.js";
+import { configPagamentos, ordemProvedores, provedorDoCanal } from "./config.js";
 
 export const PROVEDORES = { mercadopago, sumup, stone };
 
 export const obterProvedor = (nome) => PROVEDORES[nome] || (nome === "modelo" ? modelo : null);
 
+// Banco de cada canal: o escolhido pelo admin; sem escolha ("automático"),
+// o único banco com credenciais (ou o cadastrado primeiro, se houver vários).
+// "desligado" desliga o canal.
+const prontoPara = (canal, provedor) => Boolean(provedor && provedor.canais.includes(canal) && provedor.configurado());
+
 const ativoNoCanal = (canal) => {
-  const nome = provedorDoCanal(canal) || (canal === "online" ? process.env.PAGAMENTO_PROVEDOR : null);
-  const provedor = PROVEDORES[nome];
-  return provedor && provedor.canais.includes(canal) && provedor.configurado() ? provedor : null;
+  const escolha = provedorDoCanal(canal);
+  if (escolha === "desligado") return null;
+  const escolhido = PROVEDORES[escolha || (canal === "online" ? process.env.PAGAMENTO_PROVEDOR : "")];
+  if (prontoPara(canal, escolhido)) return escolhido;
+  const candidatos = [...ordemProvedores().map((n) => PROVEDORES[n]), ...Object.values(PROVEDORES)];
+  return candidatos.find((p) => prontoPara(canal, p)) || null;
+};
+
+export const canalAutomatico = (canal) => {
+  const escolha = provedorDoCanal(canal);
+  return !escolha || (escolha !== "desligado" && !prontoPara(canal, PROVEDORES[escolha]));
 };
 
 export const provedorAtivo = () => ativoNoCanal("online");
@@ -39,6 +52,7 @@ export const statusPagamentos = () => {
     provedor: online?.nome || null,
     provedorRotulo: online?.rotulo || null,
     metodos: online?.metodos || [],
+    automatico: Boolean(online) && canalAutomatico("online"),
     maquininha: {
       habilitado: Boolean(maquininha),
       provedor: maquininha?.nome || null,

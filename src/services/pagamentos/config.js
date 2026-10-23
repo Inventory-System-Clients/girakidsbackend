@@ -8,7 +8,7 @@ import { decifrarCredenciais } from "../../utils/cofreCredenciais.js";
 // credenciais (decifradas só aqui dentro) e as maquininhas cadastradas.
 //   canal "online": PIX/cartão no site; canal "maquininha": venda presencial.
 
-const estado = { canais: { online: null, maquininha: null }, credenciais: {}, maquininhas: [], carregado: false };
+const estado = { canais: { online: null, maquininha: null }, credenciais: {}, maquininhas: [], ordem: [], carregado: false };
 
 export const carregarConfigPagamentos = async () => {
   const [canais, maquininhas, linhas] = await Promise.all([
@@ -27,6 +27,9 @@ export const carregarConfigPagamentos = async () => {
   estado.canais = { online: canais?.online || null, maquininha: canais?.maquininha || null };
   estado.maquininhas = Array.isArray(maquininhas) ? maquininhas : [];
   estado.credenciais = credenciais;
+  // Ordem de cadastro: no modo automático, o banco cadastrado primeiro continua
+  // sendo usado quando outro é adicionado depois.
+  estado.ordem = [...linhas].sort((x, y) => new Date(x.createdAt) - new Date(y.createdAt)).map((l) => l.provedor);
   estado.carregado = true;
   return estado;
 };
@@ -34,6 +37,7 @@ export const carregarConfigPagamentos = async () => {
 export const configPagamentos = () => estado;
 export const credenciaisDe = (provedor) => estado.credenciais[provedor] || null;
 export const provedorDoCanal = (canal) => estado.canais[canal] || null;
+export const ordemProvedores = () => estado.ordem;
 
 export const salvarCanais = async (canais) => {
   await salvarConfiguracao("pagamentoCanais", canais);

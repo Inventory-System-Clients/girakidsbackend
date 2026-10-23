@@ -1,5 +1,5 @@
 import { CredencialPagamento, LogAtividade } from "../models/index.js";
-import { PROVEDORES } from "../services/pagamentos/index.js";
+import { PROVEDORES, canalAutomatico, provedorAtivo, provedorMaquininha } from "../services/pagamentos/index.js";
 import {
   carregarConfigPagamentos,
   configPagamentos,
@@ -36,6 +36,13 @@ const visao = async () => {
   const porProvedor = new Map(linhas.map((l) => [l.provedor, l]));
   return {
     canais,
+    // Banco que está cobrando de fato em cada canal (inclui o automático).
+    emUso: {
+      online: provedorAtivo()?.nome || null,
+      maquininha: provedorMaquininha()?.nome || null,
+      onlineAutomatico: canalAutomatico("online"),
+      maquininhaAutomatico: canalAutomatico("maquininha"),
+    },
     chavePropria: usaChavePropria(),
     provedores: Object.values(PROVEDORES).map((p) => {
       const linha = porProvedor.get(p.nome);
@@ -138,7 +145,7 @@ export const salvarCanaisPagamento = async (req, res) => {
     for (const canal of ["online", "maquininha"]) {
       if (req.body?.[canal] === undefined) continue;
       const nome = req.body[canal] || null;
-      if (nome) {
+      if (nome && nome !== "desligado") {
         const provedor = PROVEDORES[nome];
         if (!provedor || !provedor.canais.includes(canal)) throw erroHttp(400, `Banco inválido para ${canal === "online" ? "o pagamento online" : "a maquininha"}.`);
         if (!provedor.configurado()) throw erroHttp(400, `Cadastre as credenciais do ${provedor.rotulo} antes de ativá-lo.`);
@@ -223,6 +230,7 @@ export const parearSumup = async (req, res) => {
 
 // Lista para a equipe escolher na hora de cobrar (sem nada sensível).
 export const maquininhasAtivas = (req, res) => {
-  const { canais, maquininhas } = configPagamentos();
-  res.json(maquininhas.filter((m) => m.ativa !== false && m.provedor === canais.maquininha).map(({ id, nome, provedor }) => ({ id, nome, provedor })));
+  const { maquininhas } = configPagamentos();
+  const ativo = provedorMaquininha()?.nome;
+  res.json(maquininhas.filter((m) => m.ativa !== false && m.provedor === ativo).map(({ id, nome, provedor }) => ({ id, nome, provedor })));
 };
