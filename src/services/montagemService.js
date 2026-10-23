@@ -15,8 +15,43 @@ import { erroHttp } from "../utils/helpers.js";
 const inteiro = (v) => Math.trunc(Number(v) || 0);
 const positivo = (v) => Math.max(0, inteiro(v));
 
-export const capsulasDe = (produto) =>
-  (Array.isArray(produto.capsulas) ? produto.capsulas : []).filter((c) => c?.produtoId && Number(c.quantidade) > 0);
+// Cápsulas por unidade em itens: o produto precisa de TODOS os itens (e), e
+// dentro de um item qualquer opção serve (ou). Ex.: Pokemon 1 pol = um item
+// com as opções "branca" ou "vermelha". Formato salvo:
+//   [{ opcoes: [{ produtoId, quantidade }] }]
+// O formato antigo [{ produtoId, quantidade }] vira um item de uma opção.
+export const gruposDe = (produto) =>
+  (Array.isArray(produto.capsulas) ? produto.capsulas : [])
+    .map((g) =>
+      (Array.isArray(g?.opcoes) ? g.opcoes : [g])
+        .filter((o) => o?.produtoId && Number(o.quantidade) > 0)
+        .map((o) => ({ produtoId: o.produtoId, quantidade: Number(o.quantidade) })),
+    )
+    .filter((opcoes) => opcoes.length)
+    .map((opcoes) => ({ opcoes }));
+
+export const idsCapsulas = (produto) => gruposDe(produto).flatMap((g) => g.opcoes.map((o) => o.produtoId));
+
+// Quantas unidades um item atende com o estoque informado (somando as opções).
+export const capacidadeGrupo = (grupo, estoque) =>
+  grupo.opcoes.reduce((soma, o) => soma + Math.floor(Math.max(0, estoque(o.produtoId)) / o.quantidade), 0);
+
+// Escolhe de quais opções sai o necessário para `unidades` (a opção com mais
+// estoque primeiro). Devolve [{ produtoId, quantidade }] em cápsulas.
+export const distribuirGrupo = (grupo, unidades, estoque) => {
+  const usos = [];
+  let falta = unidades;
+  const ordem = [...grupo.opcoes].sort((a, b) => Math.floor(estoque(b.produtoId) / b.quantidade) - Math.floor(estoque(a.produtoId) / a.quantidade));
+  for (const o of ordem) {
+    if (falta <= 0) break;
+    const u = Math.min(falta, Math.floor(Math.max(0, estoque(o.produtoId)) / o.quantidade));
+    if (u > 0) {
+      usos.push({ produtoId: o.produtoId, quantidade: u * o.quantidade });
+      falta -= u;
+    }
+  }
+  return usos;
+};
 
 // Brinquedos soltos do produto (estoque do produto vinculado ou saldo interno).
 const soltoDe = (produto, porId) =>
@@ -26,19 +61,23 @@ const soltoDe = (produto, porId) =>
 // primeiro; empate por nome). Puro: não grava nada.
 export const calcularMontagem = (controlados, porId) => {
   const restante = new Map([...porId].map(([id, p]) => [id, positivo(p.estoque)]));
+  const livre = (id) => restante.get(id) ?? 0;
   const ordem = [...controlados].sort(
     (a, b) => inteiro(b.prioridadeMontagem) - inteiro(a.prioridadeMontagem) || String(a.nome).localeCompare(String(b.nome)),
   );
   const resultado = new Map();
   for (const p of ordem) {
     const solto = soltoDe(p, porId);
-    const soltoLivre = p.produtoSoltoId ? restante.get(p.produtoSoltoId) ?? 0 : solto;
+    const soltoLivre = p.produtoSoltoId ? livre(p.produtoSoltoId) : solto;
+    const grupos = gruposDe(p);
+    // Quanto falta de cada item para montar todos os soltos.
+    const faltas = grupos.map((g) => ({ opcoes: g.opcoes, falta: Math.max(0, solto - capacidadeGrupo(g, livre)) }));
     let podeMontar = soltoLivre;
-    for (const c of capsulasDe(p)) {
-      podeMontar = Math.min(podeMontar, Math.floor((restante.get(c.produtoId) ?? 0) / Number(c.quantidade)));
-    }
+    for (const g of grupos) podeMontar = Math.min(podeMontar, capacidadeGrupo(g, livre));
     podeMontar = Math.max(0, podeMontar);
-    for (const c of capsulasDe(p)) restante.set(c.produtoId, (restante.get(c.produtoId) ?? 0) - podeMontar * Number(c.quantidade));
+    for (const g of grupos) {
+      for (const uso of distribuirGrupo(g, podeMontar, livre)) restante.set(uso.produtoId, livre(uso.produtoId) - uso.quantidade);
+    }
     if (p.produtoSoltoId) restante.set(p.produtoSoltoId, soltoLivre - podeMontar);
     const montado = inteiro(p.estoqueMontado);
     const emMontagem = inteiro(p.estoqueEmMontagem);
@@ -49,6 +88,7 @@ export const calcularMontagem = (controlados, porId) => {
       montado,
       emMontagem,
       disponivel: montado + emMontagem + podeMontar,
+      faltas,
     });
   }
   return resultado;
@@ -57,7 +97,7 @@ export const calcularMontagem = (controlados, porId) => {
 const carregarInsumos = async (controlados, transaction) => {
   const ids = new Set();
   for (const p of controlados) {
-    capsulasDe(p).forEach((c) => ids.add(c.produtoId));
+    idsCapsulas(p).forEach((id) => ids.add(id));
     if (p.produtoSoltoId) ids.add(p.produtoSoltoId);
   }
   const insumos = ids.size ? await Produto.findAll({ where: { id: [...ids] }, transaction }) : [];
@@ -173,14 +213,18 @@ export const aplicarNosSaldos = async (produto, delta, { motivo, usuario, pedido
 
   if (falta > 0) {
     const porId = await carregarInsumos([produto], transaction);
+    const estoque = (id) => positivo(porId.get(id)?.estoque);
+    const grupos = gruposDe(produto);
     let usar = Math.min(falta, soltoDe(produto, porId));
-    for (const c of capsulasDe(produto)) usar = Math.min(usar, Math.floor(positivo(porId.get(c.produtoId)?.estoque) / Number(c.quantidade)));
+    for (const g of grupos) usar = Math.min(usar, capacidadeGrupo(g, estoque));
     if (usar > 0) {
       const ctx = { motivo: `${motivo} (montar ${usar} un. de ${produto.nome})`, usuario, pedido, transaction, origem: "RECEBIMENTOS" };
       await mexerSolto(produto, -usar, ctx);
-      for (const c of capsulasDe(produto)) {
-        const capsula = porId.get(c.produtoId);
-        if (capsula) await mexerEstoque(capsula, -usar * Number(c.quantidade), ctx);
+      for (const g of grupos) {
+        for (const uso of distribuirGrupo(g, usar, estoque)) {
+          const capsula = porId.get(uso.produtoId);
+          if (capsula) await mexerEstoque(capsula, -uso.quantidade, ctx);
+        }
       }
       falta -= usar;
     }
@@ -189,27 +233,50 @@ export const aplicarNosSaldos = async (produto, delta, { motivo, usuario, pedido
   }
 };
 
-// Painel da aba Recebimentos: produtos com montagem e necessidade de cápsulas.
+// Painel da aba Recebimentos: produtos com montagem, cápsulas e o que comprar.
+// "faltas" junta, por item (cápsula ou alternativas), quanto falta para montar
+// todos os brinquedos sem cápsula.
 export const painelMontagem = async () => {
   const controlados = await Produto.findAll({ where: { controlaMontagem: true }, order: [["nome", "ASC"]] });
   const porId = await carregarInsumos(controlados, undefined);
   const capsulasMarcadas = await Produto.findAll({ where: { ehCapsula: true } });
   capsulasMarcadas.forEach((c) => porId.set(c.id, c));
   const calculo = calcularMontagem(controlados, porId);
+  const nomeDe = (id) => porId.get(id)?.nome || "Cápsula removida";
 
-  const necessidade = new Map();
+  const usos = new Map();
+  const faltas = new Map();
   const produtos = controlados.map((p) => {
     const r = calculo.get(p.id);
-    const capsulas = capsulasDe(p).map((c) => {
-      const capsula = porId.get(c.produtoId);
-      const precisa = r.solto * Number(c.quantidade);
-      const atual = necessidade.get(c.produtoId) || { precisa: 0, produtos: [] };
-      atual.precisa += precisa;
-      if (precisa > 0) atual.produtos.push({ id: p.id, nome: p.nome, unidades: r.solto, precisa });
-      necessidade.set(c.produtoId, atual);
-      return { produtoId: c.produtoId, quantidade: Number(c.quantidade), nome: capsula?.nome || "Cápsula removida", estoque: inteiro(capsula?.estoque) };
+    const capsulas = r.faltas.map((f) => {
+      for (const o of f.opcoes) {
+        const lista = usos.get(o.produtoId) || [];
+        lista.push({ id: p.id, nome: p.nome, alternativa: f.opcoes.length > 1 });
+        usos.set(o.produtoId, lista);
+      }
+      if (f.falta > 0) {
+        const chave = f.opcoes.map((o) => o.produtoId).sort().join("|");
+        const atual = faltas.get(chave) || {
+          chave,
+          nome: f.opcoes.map((o) => nomeDe(o.produtoId)).join(" ou "),
+          opcoes: f.opcoes.map((o) => {
+            const c = porId.get(o.produtoId);
+            return { id: o.produtoId, nome: nomeDe(o.produtoId), sku: c?.sku, imagemUrl: c?.imagemUrl, fornecedorPreferencialId: c?.fornecedorPreferencialId, quantidade: o.quantidade };
+          }),
+          falta: 0,
+          produtos: [],
+        };
+        atual.falta += f.falta * f.opcoes[0].quantidade;
+        atual.produtos.push({ id: p.id, nome: p.nome, unidades: f.falta });
+        faltas.set(chave, atual);
+      }
+      return {
+        falta: f.falta,
+        opcoes: f.opcoes.map((o) => ({ produtoId: o.produtoId, quantidade: o.quantidade, nome: nomeDe(o.produtoId), estoque: inteiro(porId.get(o.produtoId)?.estoque) })),
+      };
     });
     const solto = p.produtoSoltoId ? porId.get(p.produtoSoltoId) : null;
+    const { faltas: _f, ...resto } = r;
     return {
       id: p.id,
       nome: p.nome,
@@ -221,16 +288,16 @@ export const painelMontagem = async () => {
       prioridadeMontagem: inteiro(p.prioridadeMontagem),
       produtoSolto: solto ? { id: solto.id, nome: solto.nome, sku: solto.sku } : null,
       capsulas,
-      ...r,
+      ...resto,
     };
   });
 
+  const listaFaltas = [...faltas.values()].sort((a, b) => b.falta - a.falta);
   const capsulas = [...porId.values()]
-    .filter((c) => c.ehCapsula || necessidade.has(c.id))
+    .filter((c) => c.ehCapsula || usos.has(c.id))
     .filter((c) => !controlados.some((p) => p.produtoSoltoId === c.id) || c.ehCapsula)
     .map((c) => {
-      const n = necessidade.get(c.id) || { precisa: 0, produtos: [] };
-      const estoque = inteiro(c.estoque);
+      const minhas = listaFaltas.filter((f) => f.opcoes.some((o) => o.id === c.id));
       return {
         id: c.id,
         nome: c.nome,
@@ -238,13 +305,15 @@ export const painelMontagem = async () => {
         imagemUrl: c.imagemUrl,
         arquivado: c.arquivado,
         fornecedorPreferencialId: c.fornecedorPreferencialId,
-        estoque,
-        precisa: n.precisa,
-        falta: Math.max(0, n.precisa - estoque),
-        produtos: n.produtos,
+        estoque: inteiro(c.estoque),
+        // Falta só desta cápsula (itens sem alternativa); com alternativas a
+        // falta aparece em "faltas", pelo conjunto.
+        falta: minhas.filter((f) => f.opcoes.length === 1).reduce((s, f) => s + f.falta, 0),
+        faltaEmAlternativas: minhas.filter((f) => f.opcoes.length > 1).map((f) => ({ nome: f.nome, falta: f.falta })),
+        produtos: usos.get(c.id) || [],
       };
     })
     .sort((a, b) => b.falta - a.falta || a.nome.localeCompare(b.nome));
 
-  return { produtos, capsulas };
+  return { produtos, capsulas, faltas: listaFaltas };
 };

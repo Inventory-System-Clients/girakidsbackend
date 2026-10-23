@@ -3,7 +3,10 @@ import { sequelize } from "../database/connection.js";
 import { MovimentacaoEstoque, OrdemMontagem, Parceiro, PreRecebimento, PreRecebimentoItem, Produto } from "../models/index.js";
 import { movimentar } from "../services/estoqueService.js";
 import {
-  capsulasDe,
+  capacidadeGrupo,
+  distribuirGrupo,
+  gruposDe,
+  idsCapsulas,
   mexerEstoque,
   mexerSaldo,
   mexerSolto,
@@ -445,7 +448,7 @@ export const alertas = async (req, res) => {
       }),
       painelMontagem(),
     ]);
-    const capsulasFaltando = painel.capsulas.filter((c) => c.falta > 0);
+    const capsulasFaltando = painel.faltas;
     res.json({
       total: divergencias.length + respostas.length + capsulasFaltando.length,
       divergencias: divergencias.map(serializar),
@@ -513,15 +516,21 @@ export const configurarProduto = async (req, res) => {
         return;
       }
 
-      const capsulas = (Array.isArray(corpo.capsulas) ? corpo.capsulas : [])
-        .filter((c) => c?.produtoId && c.produtoId !== produto.id)
-        .map((c) => ({ produtoId: c.produtoId, quantidade: Math.max(1, Math.round(numero(c.quantidade) || 1)) }));
-      const unicas = [...new Map(capsulas.map((c) => [c.produtoId, c])).values()];
+      // Itens de cápsula: [{ opcoes: [{ produtoId, quantidade }] }] — todos os
+      // itens são necessários; dentro de um item, qualquer opção serve.
+      const grupos = gruposDe({ capsulas: Array.isArray(corpo.capsulas) ? corpo.capsulas : [] })
+        .map((g) => ({
+          opcoes: [...new Map(g.opcoes.filter((o) => o.produtoId !== produto.id).map((o) => [o.produtoId, { produtoId: o.produtoId, quantidade: Math.max(1, Math.round(o.quantidade)) }])).values()],
+        }))
+        .filter((g) => g.opcoes.length);
+      const todosIds = grupos.flatMap((g) => g.opcoes.map((o) => o.produtoId));
+      if (new Set(todosIds).size !== todosIds.length) throw erroHttp(400, "A mesma cápsula aparece em mais de um item. Use-a em um item só (como opção).");
+      const unicas = todosIds.map((produtoId) => ({ produtoId }));
       if (unicas.length) {
-        const existentes = await Produto.findAll({ where: { id: unicas.map((c) => c.produtoId) }, transaction });
-        if (existentes.length !== unicas.length) throw erroHttp(400, "Uma das cápsulas escolhidas não existe.");
+        const existentes = await Produto.findAll({ where: { id: todosIds }, transaction });
+        if (existentes.length !== todosIds.length) throw erroHttp(400, "Uma das cápsulas escolhidas não existe.");
         if (existentes.some((c) => c.controlaMontagem)) throw erroHttp(400, "Um produto com montagem não pode ser cápsula de outro.");
-        await Produto.update({ ehCapsula: true }, { where: { id: unicas.map((c) => c.produtoId) }, transaction });
+        await Produto.update({ ehCapsula: true }, { where: { id: todosIds }, transaction });
       }
       let produtoSoltoId = corpo.produtoSoltoId || null;
       if (produtoSoltoId) {
@@ -532,7 +541,7 @@ export const configurarProduto = async (req, res) => {
       } else {
         produtoSoltoId = null;
       }
-      const dados = { capsulas: unicas, produtoSoltoId, prioridadeMontagem: Math.round(numero(corpo.prioridadeMontagem)) };
+      const dados = { capsulas: grupos, produtoSoltoId, prioridadeMontagem: Math.round(numero(corpo.prioridadeMontagem)) };
       if (!produto.controlaMontagem) {
         Object.assign(dados, { controlaMontagem: true, estoqueMontado: Number(produto.estoque), estoqueEmMontagem: 0 });
       }
@@ -563,14 +572,19 @@ export const enviarParaMontagem = async (req, res) => {
       const solto = produto.produtoSoltoId ? await Produto.findByPk(produto.produtoSoltoId, { transaction }) : null;
       const soltos = solto ? Number(solto.estoque) : Number(produto.estoqueSemCapsula);
       if (quantidade > soltos) throw erroHttp(400, `Só há ${soltos} brinquedos sem cápsula de ${produto.nome}.`);
+      // Cada item precisa cobrir a quantidade (somando as opções dele).
+      const grupos = gruposDe(produto);
+      const ids = idsCapsulas(produto);
+      const porId = new Map((ids.length ? await Produto.findAll({ where: { id: ids }, transaction, lock: transaction.LOCK.UPDATE }) : []).map((c) => [c.id, c]));
+      const estoque = (id) => Number(porId.get(id)?.estoque || 0);
       const capsulas = [];
-      for (const c of capsulasDe(produto)) {
-        const capsula = await Produto.findByPk(c.produtoId, { transaction, lock: transaction.LOCK.UPDATE });
-        const precisa = quantidade * Number(c.quantidade);
-        if (!capsula || Number(capsula.estoque) < precisa) {
-          throw erroHttp(400, `Faltam cápsulas: ${capsula?.nome || "cápsula"} tem ${capsula?.estoque ?? 0}, precisa de ${precisa}.`);
+      for (const g of grupos) {
+        const capacidade = capacidadeGrupo(g, estoque);
+        if (capacidade < quantidade) {
+          const nomes = g.opcoes.map((o) => `${porId.get(o.produtoId)?.nome || "cápsula"} (${estoque(o.produtoId)})`).join(" ou ");
+          throw erroHttp(400, `Faltam cápsulas: ${nomes} dão para ${capacidade} un., precisa de ${quantidade}.`);
         }
-        capsulas.push({ capsula, precisa });
+        for (const uso of distribuirGrupo(g, quantidade, estoque)) capsulas.push({ capsula: porId.get(uso.produtoId), precisa: uso.quantidade });
       }
       const ordem = await OrdemMontagem.create(
         {
@@ -726,7 +740,7 @@ export const marcarCapsula = async (req, res) => {
     const ehCapsula = req.body?.ehCapsula !== false;
     if (ehCapsula && produto.controlaMontagem) throw erroHttp(400, "Produto com montagem não pode ser cápsula.");
     if (!ehCapsula) {
-      const usado = await Produto.count({ where: { controlaMontagem: true, capsulas: { [Op.contains]: [{ produtoId: produto.id }] } } });
+      const usado = (await Produto.findAll({ where: { controlaMontagem: true } })).some((p) => idsCapsulas(p).includes(produto.id));
       if (usado) throw erroHttp(400, "Esta cápsula está na montagem de algum produto. Tire de lá antes.");
     }
     await produto.update({ ehCapsula });
