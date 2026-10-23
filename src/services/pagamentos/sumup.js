@@ -50,6 +50,46 @@ const lerArtefato = async (artefato) => {
   return resposta.ok ? (await resposta.text()).trim() : null;
 };
 
+// Procura os artefatos do PIX na resposta. A SumUp devolve dentro do objeto
+// do método ({ pix: { artefacts } } ou { qr_code_pix: { artefacts } }); os
+// outros lugares ficam como reserva.
+const artefatosDe = (resposta, tipo) =>
+  resposta?.[tipo]?.artefacts || resposta?.pix?.artefacts || resposta?.qr_code_pix?.artefacts || resposta?.artefacts || resposta?.next_step?.artefacts || [];
+
+// Último recurso: qualquer texto no formato do PIX copia e cola (EMV "000201...").
+const acharCopiaECola = (valor) => {
+  if (typeof valor === "string") return /^000201/.test(valor) && /br\.gov\.bcb\.pix/i.test(valor) ? valor : null;
+  if (valor && typeof valor === "object") {
+    for (const item of Object.values(valor)) {
+      const achado = acharCopiaECola(item);
+      if (achado) return achado;
+    }
+  }
+  return null;
+};
+
+const gerarPix = async (checkoutId, tipo, pedido) => {
+  const [primeiro, ...resto] = String(pedido.clienteNome || "").trim().split(/\s+/);
+  const documento = somenteDigitos(pedido.documento);
+  const processado = await chamar("PUT", `/v0.1/checkouts/${checkoutId}`, {
+    payment_type: tipo,
+    personal_details: {
+      ...(pedido.clienteEmail ? { email: pedido.clienteEmail } : {}),
+      ...(primeiro ? { first_name: primeiro } : {}),
+      ...(resto.length ? { last_name: resto.join(" ") } : {}),
+      ...(documento ? { tax_id: documento } : {}),
+    },
+  });
+  const artefatos = artefatosDe(processado, tipo);
+  const codigo = artefatos.find((a) => String(a?.name || "").toLowerCase() === "code");
+  const copiaECola = (await lerArtefato(codigo)) || acharCopiaECola(processado);
+  if (!copiaECola) {
+    // Sem dados do cliente no log: só a estrutura da resposta.
+    console.warn(`[SumUp] Resposta do PIX (${tipo}) sem código. Campos:`, Object.keys(processado || {}).join(", "), "| artefatos:", artefatos.map((a) => a?.name).join(", "));
+  }
+  return copiaECola;
+};
+
 const criarCheckout = async (pedido, extras = {}) => {
   const checkout = await chamar("POST", "/v0.1/checkouts", {
     checkout_reference: `${pedido.id}-${Date.now()}`,
@@ -84,25 +124,22 @@ export default {
     return { conta: eu?.merchant_profile?.company_name || merchantCode, extras: { merchantCode: String(merchantCode) } };
   },
 
+  // PIX: tenta "pix" (cai direto na conta SumUp) e, se a conta não aceitar,
+  // "qr_code_pix" (repasse normal da SumUp). Cada tentativa usa um checkout novo.
   async criarCobranca({ pedido, metodo }) {
     if (metodo === "PIX_ONLINE") {
-      const checkout = await criarCheckout(pedido);
-      const [primeiro, ...resto] = String(pedido.clienteNome || "").trim().split(/\s+/);
-      const documento = somenteDigitos(pedido.documento);
-      const processado = await chamar("PUT", `/v0.1/checkouts/${checkout.id}`, {
-        payment_type: "pix",
-        personal_details: {
-          ...(pedido.clienteEmail ? { email: pedido.clienteEmail } : {}),
-          ...(primeiro ? { first_name: primeiro } : {}),
-          ...(resto.length ? { last_name: resto.join(" ") } : {}),
-          ...(documento ? { tax_id: documento } : {}),
-        },
-      });
-      const artefatos = processado?.artefacts || processado?.next_step?.artefacts || [];
-      const achar = (nome) => artefatos.find((a) => String(a?.name || "").toLowerCase() === nome);
-      const copiaECola = await lerArtefato(achar("code"));
-      if (!copiaECola) throw erroHttp(502, "A SumUp não gerou o PIX. Confira se o PIX online está ativo na conta SumUp.");
-      return { referencia: `checkout:${checkout.id}`, copiaECola };
+      let ultimoErro = null;
+      for (const tipo of ["pix", "qr_code_pix"]) {
+        try {
+          const checkout = await criarCheckout(pedido);
+          const copiaECola = await gerarPix(checkout.id, tipo, pedido);
+          if (copiaECola) return { referencia: `checkout:${checkout.id}`, copiaECola };
+        } catch (error) {
+          ultimoErro = error;
+          console.warn(`[SumUp] PIX (${tipo}) não gerado:`, error.message);
+        }
+      }
+      throw erroHttp(502, `A SumUp não gerou o PIX${ultimoErro ? ` (${ultimoErro.message})` : ""}. Confira se o PIX está ativo na conta SumUp.`);
     }
     const checkout = await criarCheckout(pedido, {
       hosted_checkout: { enabled: true },
