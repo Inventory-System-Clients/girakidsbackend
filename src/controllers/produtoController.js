@@ -43,6 +43,7 @@ const serializarCatalogo = (produto) => {
     sku: p.sku,
     nome: p.nome,
     descricao: p.descricao,
+    videoUrl: p.videoUrl,
     categoria: p.categoria,
     precoVenda: Number(p.precoVenda),
     unidadesPacote: p.unidadesPacote,
@@ -248,7 +249,7 @@ const CAMPOS = [
   "sku", "nome", "descricao", "categoria", "tipo", "componentes", "modoVenda",
   "unidadesPacote", "pesoPacoteGramas", "tipoEmbalagem", "estoqueMinimo",
   "fornecedorPreferencialId", "observacoesCompra", "imagemUrl",
-  "imagemSemEstoqueUrl", "destaque",
+  "imagemSemEstoqueUrl", "destaque", "videoUrl",
 ];
 
 const normalizar = (corpo) => {
@@ -264,6 +265,12 @@ const normalizar = (corpo) => {
   if (dados.tipoEmbalagem && !TIPOS_EMBALAGEM[dados.tipoEmbalagem]) dados.tipoEmbalagem = null;
   if (dados.fornecedorPreferencialId === "") dados.fornecedorPreferencialId = null;
   if (dados.categoria) dados.categoria = String(dados.categoria).trim();
+  // Só links http(s) (nada de "javascript:").
+  if (dados.videoUrl !== undefined) {
+    const url = String(dados.videoUrl || "").trim();
+    if (url && !/^https?:\/\/[^\s]+$/i.test(url)) throw erroHttp(400, "Link do vídeo inválido. Cole o endereço do YouTube (https://...).");
+    dados.videoUrl = url || null;
+  }
   // Carrossel: lista de URLs; a primeira vira a capa.
   if (Array.isArray(corpo.imagens)) {
     dados.imagens = corpo.imagens.filter((url) => typeof url === "string" && url.trim()).slice(0, 15);

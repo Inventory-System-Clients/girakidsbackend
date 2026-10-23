@@ -126,6 +126,8 @@ const Produto = sequelize.define(
       type: DataTypes.TEXT,
       allowNull: true,
     },
+    // Vídeo demonstrativo (link do YouTube) mostrado nos detalhes do catálogo.
+    videoUrl: { type: DataTypes.TEXT, allowNull: true },
     // Capa do produto (sempre a primeira de "imagens").
     imagemUrl: {
       type: DataTypes.TEXT,
