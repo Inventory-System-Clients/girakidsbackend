@@ -68,6 +68,11 @@ app.use((err, req, res, next) => {
 try {
   await sequelize.authenticate();
   await sincronizarBanco();
+  // Bancos de pagamento (credenciais cifradas) e conciliação automática.
+  const { carregarConfigPagamentos } = await import("./services/pagamentos/config.js");
+  await carregarConfigPagamentos();
+  const { iniciarConciliacao } = await import("./controllers/pagamentoController.js");
+  iniciarConciliacao();
   app.listen(PORT, () => console.log(`🎡 Gira Kids backend rodando na porta ${PORT}`));
   // Em segundo plano: confere se as imagens de esgotado são cópias das de estoque.
   const { verificarPendentes } = await import("./services/imagemEsgotadoService.js");

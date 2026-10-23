@@ -16,6 +16,7 @@ import * as usuarios from "../controllers/usuarioController.js";
 import * as dashboard from "../controllers/dashboardController.js";
 import * as arquivos from "../controllers/arquivoController.js";
 import * as pagamentos from "../controllers/pagamentoController.js";
+import * as pagamentosConfig from "../controllers/pagamentoConfigController.js";
 import * as comercial from "../controllers/comercialController.js";
 import * as correios from "../controllers/correiosController.js";
 import * as banners from "../controllers/bannerController.js";
@@ -196,6 +197,25 @@ router.get("/arquivos/:id", arquivos.servir);
 router.get("/pagamentos/status", pagamentos.status);
 router.post("/pagamentos/webhook/:provedor", pagamentos.webhook);
 router.post("/pagamentos/pedidos/:id/consultar", autenticar, pagamentos.consultar);
+router.post("/pagamentos/pedidos/:id/cobranca", autenticar, pagamentos.gerarCobranca);
+// Cobrança na maquininha (equipe)
+const cobraMaquininha = [autenticar, exigirPermissao("VENDAS", "FINANCEIRO", "CHECKOUT")];
+router.get("/pagamentos/maquininhas", ...cobraMaquininha, pagamentosConfig.maquininhasAtivas);
+router.post("/pagamentos/pedidos/:id/maquininha", ...cobraMaquininha, registrarLog("COBRAR_MAQUININHA", "Pedido"), pagamentos.cobrarNaMaquininha);
+router.post("/pagamentos/pedidos/:id/maquininha/cancelar", ...cobraMaquininha, registrarLog("CANCELAR_MAQUININHA", "Pedido"), pagamentos.cancelarNaMaquininha);
+// Aba Pagamentos (só ADMIN; credenciais nunca saem em texto). Sem
+// registrarLog aqui: ele gravaria o corpo com as chaves — o controller
+// registra só o que mudou.
+const adminPag = [autenticar, pagamentosConfig.soAdmin];
+router.get("/pagamentos/config", ...adminPag, pagamentosConfig.obter);
+router.put("/pagamentos/config/canais", ...adminPag, pagamentosConfig.salvarCanaisPagamento);
+router.put("/pagamentos/config/credenciais/:provedor", ...adminPag, pagamentosConfig.salvarCredenciais);
+router.delete("/pagamentos/config/credenciais/:provedor", ...adminPag, pagamentosConfig.removerCredenciais);
+router.post("/pagamentos/config/maquininhas", ...adminPag, pagamentosConfig.criarMaquininha);
+router.put("/pagamentos/config/maquininhas/:id", ...adminPag, pagamentosConfig.atualizarMaquininha);
+router.delete("/pagamentos/config/maquininhas/:id", ...adminPag, pagamentosConfig.removerMaquininha);
+router.get("/pagamentos/config/sumup/readers", ...adminPag, pagamentosConfig.readersSumup);
+router.post("/pagamentos/config/sumup/parear", ...adminPag, pagamentosConfig.parearSumup);
 
 // Comercial (herdado do AgarraMais, agora consultando os pedidos da loja)
 const com = [autenticar, exigirPermissao("COMERCIAL")];

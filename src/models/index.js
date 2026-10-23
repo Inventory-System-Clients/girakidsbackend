@@ -13,6 +13,7 @@ import LogAtividade from "./LogAtividade.js";
 import Arquivo from "./Arquivo.js";
 import Banner from "./Banner.js";
 import PedidoCustoExtra from "./PedidoCustoExtra.js";
+import CredencialPagamento from "./CredencialPagamento.js";
 import { PreRecebimento, PreRecebimentoItem, OrdemMontagem } from "./PreRecebimento.js";
 
 Produto.belongsTo(Parceiro, {
@@ -70,4 +71,5 @@ export {
   PreRecebimento,
   PreRecebimentoItem,
   OrdemMontagem,
+  CredencialPagamento,
 };
