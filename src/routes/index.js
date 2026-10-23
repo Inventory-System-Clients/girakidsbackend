@@ -198,6 +198,8 @@ router.get("/arquivos/:id", arquivos.servir);
 // Pagamentos online (banco/gateway configurável)
 router.get("/pagamentos/status", pagamentos.status);
 router.post("/pagamentos/webhook/:provedor", pagamentos.webhook);
+// A Getnet pode notificar por GET (parâmetros na URL).
+router.get("/pagamentos/webhook/:provedor", pagamentos.webhook);
 router.post("/pagamentos/pedidos/:id/consultar", autenticar, pagamentos.consultar);
 router.post("/pagamentos/pedidos/:id/cobranca", autenticar, pagamentos.gerarCobranca);
 // Cobrança na maquininha (equipe)

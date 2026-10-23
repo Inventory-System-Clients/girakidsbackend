@@ -16,9 +16,10 @@ import modelo from "./modelo.js";
 import mercadopago from "./mercadopago.js";
 import sumup from "./sumup.js";
 import stone from "./stone.js";
+import getnet from "./getnet.js";
 import { configPagamentos, ordemProvedores, provedorDoCanal } from "./config.js";
 
-export const PROVEDORES = { mercadopago, sumup, stone };
+export const PROVEDORES = { mercadopago, sumup, getnet, stone };
 
 export const obterProvedor = (nome) => PROVEDORES[nome] || (nome === "modelo" ? modelo : null);
 

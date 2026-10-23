@@ -57,7 +57,8 @@ const visao = async () => {
         validadoEm: linha?.validadoEm || null,
         atualizadoPor: linha?.atualizadoPor || null,
         atualizadoEm: linha?.updatedAt || null,
-        webhookUrl: p.webhook ? `${urlBackend()}/api/pagamentos/webhook/${p.nome}` : null,
+        webhookUrl: p.webhookUrl ? p.webhookUrl() : p.webhook ? `${urlBackend()}/api/pagamentos/webhook/${p.nome}` : null,
+        ajudaWebhook: p.ajudaWebhook || null,
         ajudaMaquininha: p.ajudaMaquininha,
       };
     }),
