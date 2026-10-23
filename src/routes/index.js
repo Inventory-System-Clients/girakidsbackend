@@ -124,7 +124,8 @@ router.put("/produtos/:id/arquivar", ...prod, registrarLog("ARQUIVAR_PRODUTO", "
 router.get("/produtos/:id/historico-precos", ...prod, produtos.historicoPrecos);
 
 // Entradas e parceiros
-const ent = [autenticar, exigirPermissao("ENTRADAS")];
+// Resumo de entradas: abre pela aba Recebimentos também.
+const ent = [autenticar, exigirPermissao("ENTRADAS", "RECEBIMENTOS")];
 router.get("/parceiros", autenticar, exigirInterno, entradas.listarParceiros);
 // Fornecedores também são cadastrados pela aba Recebimentos.
 const parc = [autenticar, exigirPermissao("ENTRADAS", "RECEBIMENTOS")];
