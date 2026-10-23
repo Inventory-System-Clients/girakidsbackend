@@ -329,8 +329,8 @@ export const liberar = async (req, res) => {
 
 export const cancelar = async (req, res) => {
   try {
-    const motivo = String(req.body?.motivo || "").trim();
-    if (!motivo) throw erroHttp(400, "Informe o motivo do cancelamento.");
+    // Motivo opcional.
+    const motivo = String(req.body?.motivo || "").trim() || "Sem motivo informado";
     await sequelize.transaction(async (transaction) => {
       const pedido = await carregarParaAlterar(req.params.id, transaction);
       garantirNaoCancelado(pedido);
