@@ -530,6 +530,10 @@ export const conversar = async (req, res) => {
         const navegou = resposta.acoes.some((a) => ["mostrar_catalogo", "navegar", "abrir_produto", "abrir_carrinho", "ir_checkout"].includes(a.tipo));
         if (pediuCatalogo && ultimaBusca && !navegou) resposta.acoes.push({ tipo: "mostrar_catalogo", busca: ultimaBusca.slice(0, 80) });
         if (resposta.acoes.some((a) => a.tipo === "whatsapp_comercial")) resposta.whatsappComercial = ctx.whatsapp;
+        // Já no carrinho: não anuncia que "abriu o carrinho".
+        if (String(pagina).startsWith("/checkout") && !navegou) {
+          resposta.mensagem = resposta.mensagem.replace(/\s*Abri o carrinho( para você)?[.!]?\s*/i, " ").trim() || resposta.mensagem;
+        }
         return res.json(resposta);
       }
       conversa.push({ role: "assistant", content: msg?.content || null, tool_calls: chamadas });
