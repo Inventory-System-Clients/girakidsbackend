@@ -26,6 +26,9 @@ export const FORMAS_PAGAMENTO = {
   MESCLA: { nome: "Mescla de pagamentos", admin: true, taxa: 0 },
 };
 
+// Formas "admin" que o totem do showroom também pode usar (além das do cliente).
+export const FORMAS_SHOWROOM = ["MAQUININHA", "LINK_PAGAMENTO", "PIX_PRESENCIAL", "A_RECEBER", "MESCLA"];
+
 // Taxa (%) do cartão de crédito por número de parcelas. Pode ser trocada em
 // Configurações (chave "taxasCartao") conforme o contrato com o banco.
 export const TAXAS_CARTAO_PADRAO = {

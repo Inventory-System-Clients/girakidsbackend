@@ -13,6 +13,7 @@ import {
   calcularTotais,
   criarPedido,
   ehInterno,
+  ehShowroom,
   montarFiltroPedidos,
   montarItens,
   resolverTransportadora,
@@ -27,7 +28,7 @@ import {
 import { cotarFrete } from "../services/freteService.js";
 import { statusPagamentos } from "../services/pagamentos/index.js";
 import { lerConfiguracao, salvarConfiguracao } from "../models/Configuracao.js";
-import { ENDERECO_LOJA_PADRAO, FORMAS_PAGAMENTO } from "../utils/formasPagamento.js";
+import { ENDERECO_LOJA_PADRAO, FORMAS_PAGAMENTO, FORMAS_SHOWROOM } from "../utils/formasPagamento.js";
 import {
   arredondar,
   erroHttp,
@@ -119,7 +120,7 @@ export const obter = async (req, res) => {
   try {
     const pedido = await Pedido.findByPk(req.params.id, { include: [...INCLUDE_COMPLETO, INCLUDE_CLIENTE] });
     if (!pedido) throw erroHttp(404, "Pedido não encontrado.");
-    if (!ehInterno(req.usuario) && pedido.clienteId !== req.usuario.id) {
+    if (!ehInterno(req.usuario) && pedido.clienteId !== req.usuario.id && !(ehShowroom(req.usuario) && pedido.criadoPorId === req.usuario.id)) {
       return res.status(403).json({ error: "Este pedido não pertence à sua conta." });
     }
     const dados = serializarPedido(pedido);
@@ -174,8 +175,9 @@ export const opcoesCheckout = async (req, res) => {
     const pagamentos = statusPagamentos();
     const cartoesHabilitados = await lerConfiguracao("cartoesOnlineHabilitados", true);
     const interno = ehInterno(req.usuario);
+    const showroom = ehShowroom(req.usuario);
     const formas = Object.entries(FORMAS_PAGAMENTO)
-      .filter(([, cfg]) => interno || !cfg.admin)
+      .filter(([codigo, cfg]) => interno || !cfg.admin || (showroom && FORMAS_SHOWROOM.includes(codigo)))
       .filter(([, cfg]) => interno || !cfg.outros || req.usuario?.outrosPagamentos)
       .map(([codigo, cfg]) => ({
         codigo,

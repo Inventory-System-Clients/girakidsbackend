@@ -5,6 +5,7 @@ import {
   autenticarOpcional,
   exigirInterno,
   exigirPermissao,
+  exigirPermissaoOuShowroom,
   registrarLog,
 } from "../middlewares/auth.js";
 import * as auth from "../controllers/authController.js";
@@ -70,7 +71,7 @@ router.get("/checkout/transportadoras", ...tiraPedido, transportadoras.sugestoes
 router.post("/checkout/transportadoras/ia", ...tiraPedido, registrarLog("BUSCAR_TRANSPORTADORAS", "Transportadora"), transportadoras.buscarTransportadoras);
 router.post("/checkout/frete", autenticar, pedidos.cotar);
 router.post("/pedidos", autenticar, (req, res, next) =>
-  req.usuario.role === "CLIENTE" ? next() : exigirPermissao("CHECKOUT", "VENDAS")(req, res, next),
+  ["CLIENTE", "SHOWROOM"].includes(req.usuario.role) ? next() : exigirPermissao("CHECKOUT", "VENDAS")(req, res, next),
 registrarLog("CRIAR_PEDIDO", "Pedido"), pedidos.criar);
 router.get("/pedidos/meus", autenticar, pedidos.meusPedidos);
 router.get("/pedidos/codigo/:codigo", autenticar, pedidos.obterPorCodigo);
@@ -169,7 +170,7 @@ router.put("/publico/pre-recebimento", publicoFornecedor, recebimentos.publicoRe
 
 // Gerenciar Usuários
 const usr = [autenticar, exigirPermissao("USUARIOS")];
-router.get("/usuarios/clientes", autenticar, exigirPermissao("CHECKOUT", "ORCAMENTOS", "VENDAS", "USUARIOS"), usuarios.buscarClientes);
+router.get("/usuarios/clientes", autenticar, exigirPermissaoOuShowroom("CHECKOUT", "ORCAMENTOS", "VENDAS", "USUARIOS"), usuarios.buscarClientes);
 router.get("/usuarios/etiquetas", autenticar, exigirInterno, usuarios.etiquetasUsadas);
 router.put("/usuarios/:id/etiquetas", autenticar, exigirPermissao("VENDAS", "COMERCIAL", "USUARIOS", "ORCAMENTOS"), registrarLog("ETIQUETAS_CLIENTE", "Usuario"), usuarios.atualizarEtiquetas);
 router.get("/usuarios/:id/historico", autenticar, exigirPermissao("CHECKOUT", "ORCAMENTOS", "VENDAS", "COMERCIAL"), comercial.historicoCliente);
@@ -203,7 +204,7 @@ router.get("/pagamentos/webhook/:provedor", pagamentos.webhook);
 router.post("/pagamentos/pedidos/:id/consultar", autenticar, pagamentos.consultar);
 router.post("/pagamentos/pedidos/:id/cobranca", autenticar, pagamentos.gerarCobranca);
 // Cobrança na maquininha (equipe)
-const cobraMaquininha = [autenticar, exigirPermissao("VENDAS", "FINANCEIRO", "CHECKOUT")];
+const cobraMaquininha = [autenticar, exigirPermissaoOuShowroom("VENDAS", "FINANCEIRO", "CHECKOUT")];
 router.get("/pagamentos/maquininhas", ...cobraMaquininha, pagamentosConfig.maquininhasAtivas);
 router.post("/pagamentos/pedidos/:id/maquininha", ...cobraMaquininha, registrarLog("COBRAR_MAQUININHA", "Pedido"), pagamentos.cobrarNaMaquininha);
 router.post("/pagamentos/pedidos/:id/maquininha/cancelar", ...cobraMaquininha, registrarLog("CANCELAR_MAQUININHA", "Pedido"), pagamentos.cancelarNaMaquininha);

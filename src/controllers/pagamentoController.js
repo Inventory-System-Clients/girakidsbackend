@@ -133,6 +133,7 @@ export const webhook = async (req, res) => {
 const verificarAcesso = (req, pedido) => {
   if (!pedido) throw erroHttp(404, "Pedido não encontrado.");
   if (req.usuario.role === "CLIENTE" && pedido.clienteId !== req.usuario.id) throw erroHttp(403, "Este pedido não pertence à sua conta.");
+  if (req.usuario.role === "SHOWROOM" && pedido.criadoPorId !== req.usuario.id) throw erroHttp(403, "Este pedido não foi tirado neste showroom.");
 };
 
 // "Atualizar status" na tela de pagamento: consulta o banco direto.

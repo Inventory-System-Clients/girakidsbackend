@@ -5,7 +5,7 @@ import { PERMISSOES } from "../models/Usuario.js";
 import { erroHttp, numero, responderErro, somenteDigitos, documentoValido } from "../utils/helpers.js";
 import { contem, comecaComSql } from "../utils/busca.js";
 
-const ROLES = ["ADMIN", "FUNCIONARIO", "CLIENTE"];
+const ROLES = ["ADMIN", "FUNCIONARIO", "CLIENTE", "SHOWROOM"];
 
 export const listar = async (req, res) => {
   try {
@@ -47,7 +47,8 @@ const ATRIBUTOS_BUSCA = [
 export const buscarClientes = async (req, res) => {
   try {
     const busca = String(req.query.busca || "").trim();
-    if (busca.length < 2) return res.json([]);
+    const totem = req.usuario.role === "SHOWROOM";
+    if (busca.length < (totem ? 3 : 2)) return res.json([]);
     const digitos = somenteDigitos(busca);
     const ou = [
       contem("nome", busca),
@@ -59,7 +60,7 @@ export const buscarClientes = async (req, res) => {
     }
     const usuarios = await Usuario.findAll({
       attributes: ATRIBUTOS_BUSCA,
-      where: { ativo: true, [Op.or]: ou },
+      where: { ativo: true, [Op.or]: ou, ...(totem ? { role: "CLIENTE" } : {}) },
       order: [
         [sequelize.literal(`CASE WHEN ${comecaComSql("nome", busca)} THEN 0 WHEN "email" ILIKE ${sequelize.escape(`${busca}%`)} THEN 1 ELSE 2 END`), "ASC"],
         ["nome", "ASC"],
@@ -80,6 +81,8 @@ export const buscarClientes = async (req, res) => {
     res.json(
       usuarios.map((u) => ({
         ...u.toJSON(),
+        // Etiquetas, observação e crédito são internos: não vão para o totem.
+        ...(totem ? { etiquetas: [], observacaoComercial: null, credito: 0 } : {}),
         ultimoPedidoEm: porCliente.get(u.id)?.ultimoEm || null,
         totalPedidos: Number(porCliente.get(u.id)?.pedidos || 0),
       })),

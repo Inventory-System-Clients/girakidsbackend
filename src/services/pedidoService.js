@@ -15,6 +15,7 @@ import { cotarFrete } from "./freteService.js";
 import { provedorAtivo } from "./pagamentos/index.js";
 import {
   FORMAS_PAGAMENTO,
+  FORMAS_SHOWROOM,
   TAXAS_CARTAO_PADRAO,
 } from "../utils/formasPagamento.js";
 import {
@@ -40,6 +41,9 @@ export const INCLUDE_COMPLETO = [
 ];
 
 export const ehInterno = (usuario) => ["ADMIN", "FUNCIONARIO"].includes(usuario?.role);
+export const ehShowroom = (usuario) => usuario?.role === "SHOWROOM";
+// Quem tira pedido em nome de clientes (escolhe ou cadastra o cliente).
+export const tiraPedidoParaCliente = (usuario) => ehInterno(usuario) || ehShowroom(usuario);
 
 export const formatarNumero = (pedido) =>
   pedido.codigoLegado ||
@@ -92,6 +96,7 @@ const validarFormaPagamento = (forma, usuario, cliente, metodoEnvio) => {
   const config = FORMAS_PAGAMENTO[forma];
   if (!config) throw erroHttp(400, "Forma de pagamento inválida.");
   if (ehInterno(usuario)) return;
+  if (ehShowroom(usuario) && FORMAS_SHOWROOM.includes(forma)) return;
   if (forma === "A_DEFINIR" && clientePodeCombinar(metodoEnvio)) return;
   if (config.admin) throw erroHttp(403, "Forma de pagamento disponível só para a equipe.");
   if (config.outros && !cliente?.outrosPagamentos) {
@@ -152,7 +157,11 @@ const dadosCliente = async (corpo, usuario) => {
   let cliente = null;
   if (ehInterno(usuario) && corpo.clienteId) {
     cliente = await Usuario.findByPk(corpo.clienteId);
-  } else if (!ehInterno(usuario)) {
+  } else if (ehShowroom(usuario) && corpo.clienteId) {
+    // Totem: só cadastros de clientes (nunca contas da equipe).
+    cliente = await Usuario.findOne({ where: { id: corpo.clienteId, role: "CLIENTE", ativo: true } });
+    if (!cliente) throw erroHttp(400, "Cliente não encontrado.");
+  } else if (!tiraPedidoParaCliente(usuario)) {
     cliente = usuario;
   }
 
@@ -262,8 +271,17 @@ const garantirClienteCadastrado = async (dados, transaction) => {
 export const criarPedido = async (corpo, usuario, tipo = "PEDIDO") => {
   const interno = ehInterno(usuario);
   const formaPagamento = corpo.formaPagamento || "A_DEFINIR";
+  const showroom = ehShowroom(usuario);
   const { dados: cliente, cliente: cadastroCliente } = await dadosCliente(corpo, usuario);
   validarFormaPagamento(formaPagamento, usuario, cadastroCliente, corpo.metodoEnvio);
+  if (showroom && tipo !== "PEDIDO") throw erroHttp(403, "O showroom só tira pedidos.");
+  if (formaPagamento === "MESCLA" && !interno) {
+    for (const linha of corpo.composicaoPagamento || []) {
+      if (linha?.metodo === "MESCLA") throw erroHttp(400, "Forma inválida na mescla de pagamentos.");
+      validarFormaPagamento(linha?.metodo, usuario, cadastroCliente, corpo.metodoEnvio);
+      if (FORMAS_PAGAMENTO[linha.metodo]?.online) throw erroHttp(400, "Na mescla use formas presenciais (PIX presencial, maquininha, link, a receber...).");
+    }
+  }
 
   const metodoEnvio = corpo.metodoEnvio || (interno ? null : "");
   if (!interno && !metodoEnvio) throw erroHttp(400, "Selecione uma opção de entrega.");
@@ -273,7 +291,7 @@ export const criarPedido = async (corpo, usuario, tipo = "PEDIDO") => {
 
   let clienteCadastro = null;
   const pedidoCriado = await sequelize.transaction(async (transaction) => {
-    if (interno && !cliente.clienteId) {
+    if ((interno || showroom) && !cliente.clienteId) {
       clienteCadastro = await garantirClienteCadastrado(cliente, transaction);
       if (clienteCadastro) cliente.clienteId = clienteCadastro.usuario.id;
     }
@@ -294,7 +312,7 @@ export const criarPedido = async (corpo, usuario, tipo = "PEDIDO") => {
     const desconto = interno ? Math.min(subtotal, Math.max(0, numero(corpo.desconto))) : 0;
     const freteAdicional = interno ? Math.max(0, numero(corpo.freteAdicional)) : 0;
     const creditoDisponivel = Number(cadastroCliente?.credito || 0);
-    const creditoUsado = corpo.usarCredito
+    const creditoUsado = corpo.usarCredito && !showroom
       ? Math.min(creditoDisponivel, Math.max(0, subtotal - desconto))
       : 0;
     const parcelasCartao = corpo.parcelasCartao ? Number(corpo.parcelasCartao) : null;
@@ -409,7 +427,8 @@ export const criarPedido = async (corpo, usuario, tipo = "PEDIDO") => {
       criado: clienteCadastro.criado,
       email: clienteCadastro.usuario.email,
       emailGerado: Boolean(clienteCadastro.emailGerado),
-      senhaPadrao: clienteCadastro.criado ? SENHA_PADRAO_CLIENTE() : null,
+      // No totem a senha padrão não aparece na tela.
+      senhaPadrao: clienteCadastro.criado && !showroom ? SENHA_PADRAO_CLIENTE() : null,
     };
   }
   return pedido;

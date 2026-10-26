@@ -43,9 +43,10 @@ const Usuario = sequelize.define(
       allowNull: false,
     },
     // ADMIN: acesso total; FUNCIONARIO: acesso pelas permissões; CLIENTE:
-    // catálogo, checkout e "Meus Pedidos".
+    // catálogo, checkout e "Meus Pedidos"; SHOWROOM: totem da loja — só tira
+    // pedidos para clientes cadastrados, sem nenhuma tela administrativa.
     role: {
-      type: DataTypes.ENUM("ADMIN", "FUNCIONARIO", "CLIENTE"),
+      type: DataTypes.ENUM("ADMIN", "FUNCIONARIO", "CLIENTE", "SHOWROOM"),
       allowNull: false,
       defaultValue: "CLIENTE",
     },

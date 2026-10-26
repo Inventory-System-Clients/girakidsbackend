@@ -57,6 +57,12 @@ export const exigirPermissao = (...permissoes) => (req, res, next) => {
   next();
 };
 
+// Como exigirPermissao, mas também libera o totem do showroom.
+export const exigirPermissaoOuShowroom = (...permissoes) => (req, res, next) => {
+  if (req.usuario?.role === "SHOWROOM") return next();
+  return exigirPermissao(...permissoes)(req, res, next);
+};
+
 export const exigirInterno = (req, res, next) => {
   if (!["ADMIN", "FUNCIONARIO"].includes(req.usuario?.role)) {
     return res.status(403).json({ error: "Acesso restrito à equipe." });

@@ -4,7 +4,7 @@ import { lerConfiguracao } from "../models/Configuracao.js";
 import { cotarFrete } from "../services/freteService.js";
 import { statusPagamentos } from "../services/pagamentos/index.js";
 import { clientePodeCombinar, ehInterno } from "../services/pedidoService.js";
-import { ENDERECO_LOJA_PADRAO, FORMAS_PAGAMENTO } from "../utils/formasPagamento.js";
+import { ENDERECO_LOJA_PADRAO, FORMAS_PAGAMENTO, FORMAS_SHOWROOM } from "../utils/formasPagamento.js";
 import { arredondar, erroHttp, responderErro, somenteDigitos } from "../utils/helpers.js";
 
 // Giraldo: assistente de compras do catálogo (OpenAI com ferramentas).
@@ -132,6 +132,7 @@ const formasPermitidas = (usuario) => {
   const formas = Object.entries(FORMAS_PAGAMENTO)
     .filter(([codigo, cfg]) => {
       if (ehInterno(usuario)) return !["MESCLA"].includes(codigo);
+      if (usuario?.role === "SHOWROOM" && FORMAS_SHOWROOM.includes(codigo)) return codigo !== "MESCLA";
       if (cfg.admin) return false;
       if (cfg.outros) return Boolean(usuario?.outrosPagamentos);
       if (cfg.online) return online.habilitado && online.metodos.includes(codigo);
@@ -158,6 +159,7 @@ const TELAS_EQUIPE = {
 const telasPermitidas = (usuario) => {
   const telas = { "/": "Catálogo de produtos", "/checkout": "Carrinho / finalizar pedido" };
   if (!usuario) return { ...telas, "/login": "Entrar na conta", "/registrar": "Criar conta" };
+  if (usuario.role === "SHOWROOM") return telas;
   telas["/perfil"] = "Meu perfil (dados e endereço)";
   if (usuario.role === "CLIENTE") telas["/meus-pedidos"] = "Meus pedidos";
   for (const [permissao, [rota, nome]] of Object.entries(TELAS_EQUIPE)) {
@@ -219,6 +221,7 @@ const montarContexto = async ({ usuario, carrinho, estado, pagina, checkout }) =
             logado: true,
             nome: usuario.nome?.split(" ")[0],
             equipeInterna: ehInterno(usuario),
+            totemShowroom: usuario.role === "SHOWROOM",
             cadastroCompleto: temCadastroCompleto,
             cep: usuario.cep || null,
             cidade: usuario.cidade ? `${usuario.cidade}/${usuario.estado || ""}` : null,

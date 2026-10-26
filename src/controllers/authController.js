@@ -68,6 +68,7 @@ export const perfil = async (req, res) => res.json(req.usuario);
 
 export const atualizarPerfil = async (req, res) => {
   try {
+    if (req.usuario.role === "SHOWROOM") throw erroHttp(403, "A conta do showroom só pode ser alterada pelo administrador.");
     const corpo = { ...req.usuario.toJSON(), ...req.body };
     validarCadastro(corpo, { exigirEndereco: req.usuario.role === "CLIENTE" });
     const documento = somenteDigitos(corpo.documento);
@@ -92,6 +93,9 @@ export const atualizarPerfil = async (req, res) => {
 export const alterarSenha = async (req, res) => {
   try {
     const { senhaAtual, novaSenha } = req.body || {};
+    if (req.usuario.role === "SHOWROOM" && !req.usuario.trocarSenha) {
+      throw erroHttp(403, "A senha do showroom só pode ser alterada pelo administrador.");
+    }
     if (String(novaSenha || "").length < 8) throw erroHttp(400, "A nova senha deve ter no mínimo 8 caracteres.");
     if (!req.usuario.trocarSenha && !(await req.usuario.verificarSenha(String(senhaAtual || "")))) {
       throw erroHttp(400, "Senha atual incorreta.");
