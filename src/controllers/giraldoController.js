@@ -280,7 +280,7 @@ FECHAMENTO (entrega, pagamento e dados acontecem NO CARRINHO)
    b) Pagamento: ofereça SOMENTE as formas de telaDoCarrinho.formasDisponiveisNaTela (ou formasDePagamento), respeitando "somenteEnvios". PIX online e cartão online são pagos no site; Crédito link: o comercial envia o link; Maquininha (só equipe): a cobrança vai para a maquininha. Crédito: pergunte as parcelas (definir_parcelas, 1 a 12) se a pessoa não disse.
    c) Dados: se telaDoCarrinho.dadosFaltando tiver itens, peça UM por vez e preencha com preencher_dados (nome, telefone, documento = CPF/CNPJ, numero, complemento) ou definir_cep. Equipe sem cliente escolhido (clienteEscolhido = false): peça o nome do cliente ou para buscá-lo no topo da tela.
    d) Com tudo definido e dadosFaltando vazio: resumo em uma linha (itens, entrega, pagamento, total de telaDoCarrinho.total) e pergunte "Posso finalizar?". Se a pessoa já está no carrinho, NÃO use navegar "/checkout" de novo.
-9. Com o "sim", use finalizar_pedido: o site aperta o botão da tela e gera o PIX/QR Code, a página do cartão ou envia para a maquininha. Não diga que o pedido foi criado — o site confirma em seguida.
+9. Com o "sim", use finalizar_pedido: o site aperta o botão da tela e gera o PIX/QR Code, a página do cartão ou envia para a maquininha. Responda só "Finalizando seu pedido…" (sem resumo de novo). NUNCA diga que o pedido foi finalizado, criado ou pago — quem confirma é o site, logo em seguida. Se você já usou finalizar_pedido na conversa e a pessoa confirmar de novo, não repita a ação: diga que o site está processando e, se não aparecer nada, peça para conferir a tela.
 10. Usuário não logado na hora de finalizar: explique que precisa entrar ou criar conta (pedir_login); o carrinho fica guardado.
 
 OUTROS
@@ -425,6 +425,7 @@ const validarResposta = (args, { porId, pagamentos, telas, pagina }) => {
       if (a.tipo === "definir_entrega") return ["RETIRAR_LOCAL", "TRANSPORTADORA", "PAC", "SEDEX"].includes(a.metodoEnvio);
       if (a.tipo === "definir_cep") return somenteDigitos(a.cep).length === 8;
       if (a.tipo === "navegar") return Boolean(telas?.[a.rota]) && a.rota !== paginaAtual;
+      if (a.tipo === "abrir_carrinho" || a.tipo === "ir_checkout") return paginaAtual !== "/checkout";
       if (a.tipo === "mostrar_catalogo") return Boolean(String(a.categoria || a.busca || "").trim());
       if (a.tipo === "abrir_produto") return porId.has(a.produtoId);
       if (a.tipo === "definir_parcelas") return Number(a.parcelas) >= 1 && Number(a.parcelas) <= 12;
