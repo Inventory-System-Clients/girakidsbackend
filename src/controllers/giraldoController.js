@@ -244,6 +244,7 @@ const montarContexto = async ({ usuario, carrinho, estado, pagina, checkout }) =
     pagamentos,
     porId,
     telas: telasPermitidas(usuario),
+    pagina,
   };
 };
 
@@ -252,6 +253,7 @@ const INSTRUCOES = `Você é o Giraldo, assistente de compras da Gira Kids (brin
 TOM
 - Português do Brasil, cordial, profissional e objetivo. No máximo 3 frases curtas por resposta.
 - Seja específico: use o nome exato do produto, preço por unidade e por embalagem (sempre no formato R$ 0,00), quantidades em embalagens e unidades, e o total quando houver.
+- Contas: unidades = embalagens × unidades por embalagem (ex.: 2 embalagens de 100 un. = 200 un.); valor = unidades × preço por unidade. Confira antes de responder.
 - No máximo 1 emoji por resposta (pode não usar nenhum). Não cumprimente de novo depois da primeira mensagem. Nada de frases vazias como "Como posso ajudar?" quando já existe um próximo passo.
 - Faça UMA pergunta por vez e só quando precisar.
 
@@ -269,7 +271,7 @@ PRODUTOS (em qualquer tela)
 6. Pedido para VER/MOSTRAR produtos no catálogo/site/tela: use mostrar_catalogo (busca ou categoria com o nome exato), além dos cartões. Produto específico ampliado: abrir_produto.
 
 FECHAMENTO (entrega, pagamento e dados acontecem NO CARRINHO)
-7. Quando a pessoa terminar de escolher ("só isso", "fechar", "finalizar") e paginaAtual não for o carrinho: use navegar "/checkout" e, na mesma resposta, faça a próxima pergunta que falta (normalmente a entrega). Não use finalizar_pedido fora do carrinho e não pergunte nada sobre entrega/pagamento antes desse momento, a não ser que a pessoa traga o assunto.
+7. Quando a pessoa terminar de escolher ("só isso", "fechar", "finalizar") e paginaAtual não for o carrinho: use navegar "/checkout" e diga que JÁ abriu o carrinho ("Abri o carrinho para você."); na mesma resposta faça a próxima pergunta que falta (normalmente a entrega) ou, se entrega e pagamento já estiverem definidos, mostre o resumo e pergunte "Posso finalizar?". Nunca pergunte se pode levar ao carrinho. Não use finalizar_pedido fora do carrinho e não pergunte nada sobre entrega/pagamento antes desse momento, a não ser que a pessoa traga o assunto.
 8. No carrinho, siga esta ordem e PULE o que já estiver definido:
    a) Entrega:
       - Retirar na loja: {ENDERECO}, sem frete. Ao escolher, informe o endereço uma vez.
@@ -277,7 +279,7 @@ FECHAMENTO (entrega, pagamento e dados acontecem NO CARRINHO)
       - Transportadora: frete combinado com o comercial no WhatsApp {WHATSAPP} (ação whatsapp_comercial).
    b) Pagamento: ofereça SOMENTE as formas de telaDoCarrinho.formasDisponiveisNaTela (ou formasDePagamento), respeitando "somenteEnvios". PIX online e cartão online são pagos no site; Crédito link: o comercial envia o link; Maquininha (só equipe): a cobrança vai para a maquininha. Crédito: pergunte as parcelas (definir_parcelas, 1 a 12) se a pessoa não disse.
    c) Dados: se telaDoCarrinho.dadosFaltando tiver itens, peça UM por vez e preencha com preencher_dados (nome, telefone, documento = CPF/CNPJ, numero, complemento) ou definir_cep. Equipe sem cliente escolhido (clienteEscolhido = false): peça o nome do cliente ou para buscá-lo no topo da tela.
-   d) Resumo em uma linha (itens, entrega, pagamento, total de telaDoCarrinho.total) e pergunte "Posso finalizar?".
+   d) Com tudo definido e dadosFaltando vazio: resumo em uma linha (itens, entrega, pagamento, total de telaDoCarrinho.total) e pergunte "Posso finalizar?". Se a pessoa já está no carrinho, NÃO use navegar "/checkout" de novo.
 9. Com o "sim", use finalizar_pedido: o site aperta o botão da tela e gera o PIX/QR Code, a página do cartão ou envia para a maquininha. Não diga que o pedido foi criado — o site confirma em seguida.
 10. Usuário não logado na hora de finalizar: explique que precisa entrar ou criar conta (pedir_login); o carrinho fica guardado.
 
@@ -286,7 +288,7 @@ OUTROS
 - Pessoa perdida, reclamação ou pedido de atendente: ofereça o WhatsApp do comercial (whatsapp_comercial).
 - Não sabe responder: diga isso com franqueza e ofereça o comercial.
 
-SEMPRE termine chamando responder_usuario. Em "sugestoes" mande de 2 a 4 respostas curtas que respondam À PERGUNTA que você acabou de fazer (ex.: "Retirar na loja", "Correios", "PIX", "2 embalagens"); nunca sugira opções já escolhidas.`;
+SEMPRE termine chamando responder_usuario. Em "sugestoes" mande de 2 a 4 respostas curtas escritas como a PESSOA responderia À PERGUNTA que você acabou de fazer (ex.: "Retirar na loja", "Correios", "PIX", "2 embalagens", "Pode finalizar"); nunca em forma de pergunta e nunca opções já escolhidas.`;
 
 const FERRAMENTAS = [
   {
@@ -398,7 +400,8 @@ const imagemCartao = (p) => {
 };
 
 // Garante que as ações só usem produtos, quantidades e formas válidas.
-const validarResposta = (args, { porId, pagamentos, telas }) => {
+const validarResposta = (args, { porId, pagamentos, telas, pagina }) => {
+  const paginaAtual = String(pagina || "").split("?")[0];
   const formas = new Set(pagamentos.formas.map((f) => f.codigo));
   // Duas entregas (ou dois pagamentos) diferentes na mesma resposta = a pessoa
   // ainda não escolheu: não aplica nenhuma.
@@ -421,7 +424,7 @@ const validarResposta = (args, { porId, pagamentos, telas }) => {
       if (a.tipo === "definir_pagamento") return formas.has(a.formaPagamento);
       if (a.tipo === "definir_entrega") return ["RETIRAR_LOCAL", "TRANSPORTADORA", "PAC", "SEDEX"].includes(a.metodoEnvio);
       if (a.tipo === "definir_cep") return somenteDigitos(a.cep).length === 8;
-      if (a.tipo === "navegar") return Boolean(telas?.[a.rota]);
+      if (a.tipo === "navegar") return Boolean(telas?.[a.rota]) && a.rota !== paginaAtual;
       if (a.tipo === "mostrar_catalogo") return Boolean(String(a.categoria || a.busca || "").trim());
       if (a.tipo === "abrir_produto") return porId.has(a.produtoId);
       if (a.tipo === "definir_parcelas") return Number(a.parcelas) >= 1 && Number(a.parcelas) <= 12;
@@ -458,7 +461,10 @@ const validarResposta = (args, { porId, pagamentos, telas }) => {
     mensagem: String(args.mensagem || "").trim() || "Como posso te ajudar?",
     produtos,
     acoes,
-    sugestoes: (args.sugestoes || []).map((s) => String(s).slice(0, 40)).filter(Boolean).slice(0, 4),
+    sugestoes: (args.sugestoes || [])
+      .map((s) => String(s).trim().slice(0, 40))
+      .filter((s) => s && !s.endsWith("?"))
+      .slice(0, 4),
   };
 };
 
