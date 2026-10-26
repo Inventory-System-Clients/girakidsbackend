@@ -283,7 +283,7 @@ FECHAMENTO (entrega, pagamento e dados acontecem NO CARRINHO)
    b) Pagamento: ofereça SOMENTE as formas de telaDoCarrinho.formasDisponiveisNaTela (ou formasDePagamento), respeitando "somenteEnvios". PIX online e cartão online são pagos no site; Crédito link: o comercial envia o link; Maquininha (só equipe): a cobrança vai para a maquininha. Crédito: pergunte as parcelas (definir_parcelas, 1 a 12) se a pessoa não disse.
    c) Dados: se telaDoCarrinho.dadosFaltando tiver itens, peça UM por vez e preencha com preencher_dados (nome, telefone, documento = CPF/CNPJ, numero, complemento) ou definir_cep. Equipe sem cliente escolhido (clienteEscolhido = false): peça o nome do cliente ou para buscá-lo no topo da tela.
    d) Com tudo definido e dadosFaltando vazio: resumo em uma linha (itens, entrega, pagamento, total de telaDoCarrinho.total) e pergunte "Posso finalizar?". Se a pessoa já está no carrinho, NÃO use navegar "/checkout" de novo.
-9. Com o "sim", use finalizar_pedido: o site aperta o botão da tela e gera o PIX/QR Code, a página do cartão ou envia para a maquininha. Responda só "Finalizando seu pedido…" (sem resumo de novo). NUNCA diga que o pedido foi finalizado, criado ou pago — quem confirma é o site, logo em seguida. Se você já usou finalizar_pedido na conversa e a pessoa confirmar de novo, não repita a ação: diga que o site está processando e, se não aparecer nada, peça para conferir a tela.
+9. Com o "sim", use finalizar_pedido: o site aperta o botão da tela e gera o PIX/QR Code, a página do cartão ou envia para a maquininha. Na MESMA resposta mande a ação finalizar_pedido e o texto "Finalizando seu pedido…" (sem resumo de novo) — texto sem a ação não finaliza nada. NUNCA diga que o pedido foi finalizado, criado ou pago — quem confirma é o site, logo em seguida. Se você já usou finalizar_pedido na conversa e a pessoa confirmar de novo, não repita a ação: diga que o site está processando e, se não aparecer nada, peça para conferir a tela.
 10. Usuário não logado na hora de finalizar: explique que precisa entrar ou criar conta (pedir_login); o carrinho fica guardado.
 
 OUTROS
@@ -472,6 +472,22 @@ const validarResposta = (args, { porId, pagamentos, telas, pagina }) => {
   };
 };
 
+// Texto e ações precisam bater: "Adicionei" sem adicionar_carrinho válido ou
+// "Finalizando" no carrinho sem finalizar_pedido voltam para a IA corrigir.
+const conferirResposta = (args, resposta, pagina) => {
+  const tipos = new Set(resposta.acoes.map((a) => a.tipo));
+  const pedidas = (args.acoes || []).filter((a) => ["adicionar_carrinho", "definir_quantidade"].includes(a.tipo)).length;
+  const validas = resposta.acoes.filter((a) => ["adicionar_carrinho", "definir_quantidade"].includes(a.tipo)).length;
+  if (pedidas > validas) return "Há ações de carrinho com produtoId inválido. Use buscar_produtos e use só ids que vieram dela; depois chame responder_usuario de novo.";
+  if (/adicionei|adicionad[oa]s? ao carrinho/i.test(resposta.mensagem) && !tipos.has("adicionar_carrinho") && !tipos.has("definir_quantidade")) {
+    return "Você escreveu que adicionou, mas não mandou adicionar_carrinho. Use buscar_produtos se precisar e mande adicionar_carrinho (produtoId da busca + quantidade), ou não diga que adicionou.";
+  }
+  if (String(pagina || "").startsWith("/checkout") && /finalizando/i.test(resposta.mensagem) && !tipos.has("finalizar_pedido")) {
+    return "Você escreveu que está finalizando, mas não mandou a ação finalizar_pedido. Mande finalizar_pedido junto com a mensagem.";
+  }
+  return null;
+};
+
 export const conversar = async (req, res) => {
   try {
     limitar(req.ip);
@@ -494,6 +510,7 @@ export const conversar = async (req, res) => {
     // IA só mostrou cartões, o site abre o catálogo com essa busca.
     let ultimaBusca = null;
     const pediuCatalogo = /(mostr|ver |veja|abr|exib).{0,40}(cat[aá]logo|site|tela)|no cat[aá]logo/i.test(historico[historico.length - 1].content);
+    let corrigiu = false;
     for (let rodada = 0; rodada < MAX_RODADAS; rodada += 1) {
       const msg = await chamarModelo(conversa);
       const chamadas = msg?.tool_calls || [];
@@ -501,6 +518,15 @@ export const conversar = async (req, res) => {
       if (final) {
         const args = JSON.parse(final.function.arguments || "{}");
         const resposta = validarResposta(args, ctx);
+        const problema = !corrigiu && rodada < MAX_RODADAS - 1 ? conferirResposta(args, resposta, pagina) : null;
+        if (problema) {
+          corrigiu = true;
+          conversa.push({ role: "assistant", content: msg?.content || null, tool_calls: chamadas });
+          for (const chamada of chamadas) {
+            conversa.push({ role: "tool", tool_call_id: chamada.id, content: JSON.stringify(chamada === final ? { erro: problema } : { ignorado: true }) });
+          }
+          continue;
+        }
         const navegou = resposta.acoes.some((a) => ["mostrar_catalogo", "navegar", "abrir_produto", "abrir_carrinho", "ir_checkout"].includes(a.tipo));
         if (pediuCatalogo && ultimaBusca && !navegou) resposta.acoes.push({ tipo: "mostrar_catalogo", busca: ultimaBusca.slice(0, 80) });
         if (resposta.acoes.some((a) => a.tipo === "whatsapp_comercial")) resposta.whatsappComercial = ctx.whatsapp;
