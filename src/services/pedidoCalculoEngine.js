@@ -1,390 +1,284 @@
-export const CAMPOS_PRODUTO = [
-  { chave: "qtd1pol", label: "1pol" },
-  { chave: "qtd2pol", label: "2pol" },
-  { chave: "qtd27mm", label: "27mm" },
-  { chave: "qtd32mm", label: "32mm" },
-  { chave: "qtd45mm", label: "45mm" },
-  { chave: "caps1pol", label: "Cap 1" },
-  { chave: "caps2pol", label: "Cap 2" },
-  { chave: "squareGlobinho", label: "Square/Globinho" },
-  { chave: "gvTodas", label: "GV Todas" },
-  { chave: "pedestalX", label: "Pedestal X" },
-  { chave: "hack", label: "Hack" },
-  { chave: "cuba", label: "Cuba" },
-  { chave: "pelucia", label: "Pelúcia" },
-  { chave: "chiclete", label: "Chiclete" },
-  { chave: "pedestalRedondo", label: "Pedestal Redondo" },
+import { lerConfiguracao, salvarConfiguracao } from "../models/Configuracao.js";
+
+// Calculadora de Pedidos (Comercial): valor de nota, peso e caixas.
+//
+// Caixas: a base é a caixa de referência 70x50x60, que comporta 3000
+// encapsulados de 1" ou 1000 de 2". Cada item tem "unidades por caixa de
+// referência"; daí sai o volume que cada unidade ocupa (já com o espaço vazio
+// entre elas), e qualquer outra caixa comporta proporcionalmente ao volume.
+// Peças sem padrão (pedestais, pelúcias...) usam as medidas A x L x C
+// informadas por unidade.
+
+export const CHAVE_PARAMETROS = "calculadoraPedidos";
+
+// granel = tem capacidade na caixa de referência; senão precisa de medidas.
+// fonte: "informado" (base passada pela loja) ou "estimado" (ajustável).
+export const ITENS_PADRAO = [
+  { chave: "qtd1pol", label: 'Encapsulado 1"', grupo: "Encapsulados", granel: true, porCaixaRef: 3000, valorNf: 0.05, pesoKg: 0.01, fonte: "informado" },
+  { chave: "qtd2pol", label: 'Encapsulado 2"', grupo: "Encapsulados", granel: true, porCaixaRef: 1000, valorNf: 0.14, pesoKg: 0.01, fonte: "informado" },
+  { chave: "qtd27mm", label: "Bolinha 27mm", grupo: "Bolinhas pula-pula", granel: true, porCaixaRef: 7000, valorNf: 0.08, pesoKg: 0.01, fonte: "estimado" },
+  { chave: "qtd32mm", label: "Bolinha 32mm", grupo: "Bolinhas pula-pula", granel: true, porCaixaRef: 4600, valorNf: 0.16, pesoKg: 0.025, fonte: "estimado" },
+  { chave: "qtd45mm", label: "Bolinha 45mm", grupo: "Bolinhas pula-pula", granel: true, porCaixaRef: 1600, valorNf: 0.44, pesoKg: 0.05, fonte: "estimado" },
+  { chave: "caps1pol", label: 'Cápsula vazia 1"', grupo: "Cápsulas vazias", granel: true, porCaixaRef: 3000, valorNf: 0.04, pesoKg: 0.003, fonte: "estimado" },
+  { chave: "caps2pol", label: 'Cápsula vazia 2"', grupo: "Cápsulas vazias", granel: true, porCaixaRef: 1000, valorNf: 0.1, pesoKg: 0.006, fonte: "estimado" },
+  { chave: "squareGlobinho", label: "Square / Globinho", grupo: "Peças e máquinas", granel: false, valorNf: 57, pesoKg: 6 },
+  { chave: "gvTodas", label: "GV (todas)", grupo: "Peças e máquinas", granel: false, valorNf: 195, pesoKg: 10 },
+  { chave: "pedestalX", label: "Pedestal X", grupo: "Peças e máquinas", granel: false, valorNf: 19, pesoKg: 6 },
+  { chave: "pedestalRedondo", label: "Pedestal redondo", grupo: "Peças e máquinas", granel: false, valorNf: 19, pesoKg: 10 },
+  { chave: "hack", label: "Hack", grupo: "Peças e máquinas", granel: false, valorNf: 45, pesoKg: 10 },
+  { chave: "cuba", label: "Cuba", grupo: "Peças e máquinas", granel: false, valorNf: 26, pesoKg: 0.5 },
+  { chave: "chiclete", label: "Chiclete", grupo: "Peças e máquinas", granel: false, valorNf: 97.5, pesoKg: 6 },
+  { chave: "pelucia", label: "Pelúcia", grupo: "Pelúcias", granel: false, valorNf: 2.33, pesoKg: 0.0035 },
 ];
 
-// Catálogo de caixas padrão já usadas pela empresa (dimensões em cm, Altura x Largura x Comprimento)
-export const CATALOGO_CAIXAS = [
-  { nome: "30x30x35", altura: 30, largura: 30, comprimento: 35 },
-  { nome: "30x30x40", altura: 30, largura: 30, comprimento: 40 },
-  { nome: "40x40x40", altura: 40, largura: 40, comprimento: 40 },
-  { nome: "30x60x50", altura: 30, largura: 60, comprimento: 50 },
-  { nome: "50x60x50", altura: 50, largura: 60, comprimento: 50 },
-  { nome: "70x50x60", altura: 70, largura: 50, comprimento: 60 },
-].map((caixa) => ({
-  ...caixa,
-  volumeLitros: (caixa.altura * caixa.largura * caixa.comprimento) / 1000,
-}));
-
-// Python sempre imprime float de divisão com decimal (ex: 3.0, 2.25); replica aqui.
-const formatarDivisao = (valor) =>
-  Number.isInteger(valor) ? `${valor}.0` : `${valor}`;
-
-// Campos que são bolinhas/cápsulas esféricas com diâmetro conhecido (mm).
-const DIAMETRO_MM_BOLINHA = {
-  qtd1pol: 25.4,
-  qtd27mm: 27,
-  qtd32mm: 32,
-  qtd45mm: 45,
-  qtd2pol: 50.8,
-};
-
-const volumeEsferaCm3 = (diametroMm) => {
-  const raioCm = diametroMm / 2 / 10;
-  return (4 / 3) * Math.PI * raioCm ** 3;
-};
-
-const VOLUME_UNITARIO_BOLINHA_CM3 = Object.fromEntries(
-  Object.entries(DIAMETRO_MM_BOLINHA).map(([chave, diametro]) => [
-    chave,
-    volumeEsferaCm3(diametro),
-  ]),
-);
-
-// Esferas soltas dentro de uma caixa nunca preenchem 100% do volume: ~55-65%
-// de aproveitamento real é o padrão físico de empacotamento aleatório de esferas.
-const FATOR_OCUPACAO_BOLINHAS = 0.6;
-
-// Prioridade do negócio: encher a caixa até a boca, usando todo o volume
-// interno disponível, em vez de reservar margem "de segurança".
-const FATOR_APROVEITAMENTO_CAIXA = 1.0;
-
-// Itens sem tamanho físico conhecido no catálogo (só têm fórmula de preço/peso,
-// nunca dimensão) - o usuário precisa descrever a caixa AxLxC antes de calcular.
-export const CAMPOS_SEM_TAMANHO_CONHECIDO = [
-  "caps1pol",
-  "caps2pol",
-  "squareGlobinho",
-  "gvTodas",
-  "pedestalX",
-  "hack",
-  "cuba",
-  "pelucia",
-  "chiclete",
-  "pedestalRedondo",
+// Medidas internas em cm (Altura x Largura x Comprimento).
+export const CAIXAS_PADRAO = [
+  { altura: 30, largura: 30, comprimento: 35 },
+  { altura: 30, largura: 30, comprimento: 40 },
+  { altura: 40, largura: 40, comprimento: 40 },
+  { altura: 30, largura: 60, comprimento: 50 },
+  { altura: 50, largura: 60, comprimento: 50 },
+  { altura: 70, largura: 50, comprimento: 60 },
 ];
+export const CAIXA_REFERENCIA = "70x50x60";
 
-// Volume real necessário (em litros) só para os itens que são bolinhas/cápsulas,
-// já descontando o espaço vazio entre as esferas.
-export const calcularVolumeBolinhasLitros = (quantidades) => {
-  let cm3 = 0;
-  for (const chave of Object.keys(VOLUME_UNITARIO_BOLINHA_CM3)) {
-    cm3 += (quantidades[chave] || 0) * VOLUME_UNITARIO_BOLINHA_CM3[chave];
-  }
-  return cm3 / FATOR_OCUPACAO_BOLINHAS / 1000;
+// Correios (PAC/SEDEX): limites por volume e divisor do peso cubado.
+export const LIMITE_PESO_CORREIOS_KG = 30;
+const LIMITE_SOMA_LADOS_CORREIOS_CM = 200;
+const LIMITE_LADO_CORREIOS_CM = 100;
+const DIVISOR_CUBAGEM = 6000;
+
+const positivo = (valor) => {
+  const n = Number(String(valor ?? "").replace(",", "."));
+  return Number.isFinite(n) && n > 0 ? n : 0;
+};
+const arred = (n, casas = 2) => Math.round(n * 10 ** casas) / 10 ** casas;
+const litrosDe = (c) => (c.altura * c.largura * c.comprimento) / 1000;
+const nomeCaixa = (c) => `${c.altura}x${c.largura}x${c.comprimento}`;
+const ladosOrdenados = (d) => [d.altura, d.largura, d.comprimento].map(Number).sort((a, b) => a - b);
+// A peça cabe na caixa em alguma posição (compara os lados ordenados).
+const cabePeca = (peca, caixa) => {
+  const c = ladosOrdenados(caixa);
+  return ladosOrdenados(peca).every((lado, i) => lado <= c[i]);
 };
 
-// Volume (em litros) dos itens sem tamanho conhecido, a partir das dimensões
-// AxLxC (cm) que o usuário descreveu para cada um.
-export const calcularVolumePecasLitros = (quantidades, dimensoesPecas = {}) => {
-  let cm3 = 0;
-  for (const chave of CAMPOS_SEM_TAMANHO_CONHECIDO) {
-    const qtd = quantidades[chave] || 0;
-    if (qtd <= 0) continue;
-    const dim = dimensoesPecas[chave];
-    if (!dim || !dim.altura || !dim.largura || !dim.comprimento) continue;
-    cm3 += qtd * dim.altura * dim.largura * dim.comprimento;
-  }
-  return cm3 / 1000;
+// ---------------------------------------------------------------------------
+// Parâmetros (editáveis pelo Comercial)
+// ---------------------------------------------------------------------------
+
+const normalizarParametros = (salvos = {}) => {
+  const porChave = Object.fromEntries((salvos.itens || []).map((i) => [i.chave, i]));
+  const itens = ITENS_PADRAO.map((padrao) => {
+    const s = porChave[padrao.chave] || {};
+    const item = { ...padrao, padrao: { valorNf: padrao.valorNf, pesoKg: padrao.pesoKg, porCaixaRef: padrao.porCaixaRef ?? null } };
+    if (s.valorNf != null && Number.isFinite(Number(s.valorNf)) && Number(s.valorNf) >= 0) item.valorNf = Number(s.valorNf);
+    if (positivo(s.pesoKg)) item.pesoKg = positivo(s.pesoKg);
+    if (padrao.granel && positivo(s.porCaixaRef)) {
+      item.porCaixaRef = Math.round(positivo(s.porCaixaRef));
+      if (item.porCaixaRef !== padrao.porCaixaRef) item.fonte = "ajustado";
+    }
+    return item;
+  });
+  const caixas = (Array.isArray(salvos.caixas) && salvos.caixas.length ? salvos.caixas : CAIXAS_PADRAO)
+    .map((c) => ({ altura: positivo(c.altura), largura: positivo(c.largura), comprimento: positivo(c.comprimento) }))
+    .filter((c) => c.altura && c.largura && c.comprimento);
+  if (!caixas.some((c) => nomeCaixa(c) === CAIXA_REFERENCIA)) caixas.push({ altura: 70, largura: 50, comprimento: 60 });
+  const unicas = [...new Map(caixas.map((c) => [nomeCaixa(c), { ...c, nome: nomeCaixa(c), litros: litrosDe(c) }])).values()]
+    .sort((a, b) => a.litros - b.litros);
+  return { itens, caixas: unicas, referencia: CAIXA_REFERENCIA, atualizadoEm: salvos.atualizadoEm || null, atualizadoPor: salvos.atualizadoPor || null };
 };
 
-// Lista, dentre os campos sem tamanho conhecido, quais têm quantidade > 0 mas
-// ainda não tiveram suas dimensões descritas pelo usuário.
-export const listarPecasSemDescricao = (quantidades, dimensoesPecas = {}) =>
-  CAMPOS_SEM_TAMANHO_CONHECIDO.filter((chave) => (quantidades[chave] || 0) > 0).filter(
-    (chave) => {
-      const dim = dimensoesPecas[chave];
-      return !dim || !dim.altura || !dim.largura || !dim.comprimento;
-    },
-  );
+export const lerParametros = async () => normalizarParametros((await lerConfiguracao(CHAVE_PARAMETROS)) || {});
 
-// Sugestão determinística (sem IA) de embalagem a partir do volume total
-// necessário: prioriza sempre a MAIOR quantidade de volumes da MENOR caixa
-// do catálogo que comporte tudo, em vez de menos caixas grandes.
-export const sugerirEmpacotamentoPorVolume = (litrosNecessarios) => {
-  if (!litrosNecessarios || litrosNecessarios <= 0) return null;
+export const salvarParametros = async (entrada, usuarioNome) => {
+  const atual = (await lerConfiguracao(CHAVE_PARAMETROS)) || {};
+  const itens = Array.isArray(entrada?.itens)
+    ? entrada.itens
+        .filter((i) => ITENS_PADRAO.some((p) => p.chave === i?.chave))
+        .map((i) => ({ chave: i.chave, valorNf: Math.max(0, Number(String(i.valorNf ?? "").replace(",", ".")) || 0), pesoKg: positivo(i.pesoKg), porCaixaRef: positivo(i.porCaixaRef) }))
+    : atual.itens;
+  const caixas = Array.isArray(entrada?.caixas)
+    ? entrada.caixas
+        .map((c) => ({ altura: positivo(c.altura), largura: positivo(c.largura), comprimento: positivo(c.comprimento) }))
+        .filter((c) => c.altura && c.largura && c.comprimento && c.altura <= 300 && c.largura <= 300 && c.comprimento <= 300)
+        .slice(0, 20)
+    : atual.caixas;
+  await salvarConfiguracao(CHAVE_PARAMETROS, { itens, caixas, atualizadoEm: new Date().toISOString(), atualizadoPor: usuarioNome || null });
+  return lerParametros();
+};
 
-  const capacidadeUtilLitros = (caixa) =>
-    caixa.volumeLitros * FATOR_APROVEITAMENTO_CAIXA;
+// ---------------------------------------------------------------------------
+// Cálculo
+// ---------------------------------------------------------------------------
 
-  const ordenadoPorVolume = [...CATALOGO_CAIXAS].sort(
-    (a, b) => a.volumeLitros - b.volumeLitros,
-  );
+// Linhas do pedido: itens do catálogo + produtos avulsos (com medidas).
+const montarLinhas = (params, quantidades = {}, medidas = {}, avulsos = []) => {
+  const ref = params.caixas.find((c) => c.nome === params.referencia);
+  const linhas = [];
+  const faltandoMedidas = [];
+  for (const item of params.itens) {
+    const qtd = Math.round(positivo(quantidades?.[item.chave]));
+    if (!qtd) continue;
+    const linha = { chave: item.chave, label: item.label, quantidade: qtd, valorNfUn: item.valorNf, pesoUn: item.pesoKg, granel: item.granel };
+    if (item.granel) {
+      linha.litrosUn = ref.litros / item.porCaixaRef;
+    } else {
+      const m = medidas?.[item.chave] || {};
+      linha.medidas = { altura: positivo(m.altura), largura: positivo(m.largura), comprimento: positivo(m.comprimento) };
+      if (!linha.medidas.altura || !linha.medidas.largura || !linha.medidas.comprimento) faltandoMedidas.push(item.label);
+      linha.litrosUn = litrosDe(linha.medidas);
+    }
+    linhas.push(linha);
+  }
+  for (const [i, a] of (Array.isArray(avulsos) ? avulsos : []).slice(0, 50).entries()) {
+    const nome = String(a?.nome || "").trim().slice(0, 80);
+    const qtd = Math.round(positivo(a?.quantidade));
+    if (!nome || !qtd) continue;
+    const dims = { altura: positivo(a.altura), largura: positivo(a.largura), comprimento: positivo(a.comprimento) };
+    if (!dims.altura || !dims.largura || !dims.comprimento) faltandoMedidas.push(nome);
+    linhas.push({
+      chave: `avulso_${i}`,
+      label: nome,
+      quantidade: qtd,
+      valorNfUn: Math.max(0, Number(String(a.valorNf ?? "").replace(",", ".")) || 0),
+      pesoUn: positivo(a.pesoUnitario),
+      granel: false,
+      medidas: dims,
+      litrosUn: litrosDe(dims),
+      avulso: true,
+    });
+  }
+  return { linhas, faltandoMedidas };
+};
 
-  const menorCaixa = ordenadoPorVolume[0];
-  const quantidade = Math.max(
-    1,
-    Math.ceil(litrosNecessarios / capacidadeUtilLitros(menorCaixa)),
-  );
-
+const resumoVolume = (caixa, itens, sobMedida = false) => {
+  const litrosUsados = itens.reduce((s, i) => s + i.quantidade * i.litrosUn, 0);
+  const pesoKg = itens.reduce((s, i) => s + i.quantidade * i.pesoUn, 0);
+  const pesoCubadoKg = (caixa.altura * caixa.largura * caixa.comprimento) / DIVISOR_CUBAGEM;
+  const alertas = [];
+  if (pesoKg > LIMITE_PESO_CORREIOS_KG) alertas.push(`Mais de ${LIMITE_PESO_CORREIOS_KG} kg: não vai por PAC/SEDEX.`);
+  if (caixa.altura + caixa.largura + caixa.comprimento > LIMITE_SOMA_LADOS_CORREIOS_CM || Math.max(caixa.altura, caixa.largura, caixa.comprimento) > LIMITE_LADO_CORREIOS_CM) {
+    alertas.push("Fora das medidas dos Correios (soma dos lados até 200 cm e lado até 100 cm).");
+  }
   return {
-    nome: menorCaixa.nome,
-    quantidade,
-    volumeNecessarioLitros: litrosNecessarios,
+    caixa: nomeCaixa(caixa),
+    medidas: { altura: caixa.altura, largura: caixa.largura, comprimento: caixa.comprimento },
+    sobMedida,
+    itens: itens.map((i) => ({ label: i.label, quantidade: i.quantidade })),
+    ocupacao: Math.min(100, Math.round((litrosUsados / litrosDe(caixa)) * 100)),
+    pesoKg: arred(pesoKg),
+    pesoCubadoKg: arred(pesoCubadoKg),
+    pesoTaxadoKg: arred(Math.max(pesoKg, pesoCubadoKg)),
+    alertas,
   };
 };
 
-const normalizarQuantidades = (quantidadesBrutas = {}) => {
-  const quantidades = {};
-  for (const { chave } of CAMPOS_PRODUTO) {
-    const valor = Number(quantidadesBrutas[chave]);
-    quantidades[chave] = Number.isFinite(valor) && valor > 0 ? valor : 0;
+// Distribuição: enche a maior caixa até a boca enquanto sobrar mais do que
+// cabe numa caixa; o restante vai para a MENOR caixa que comporta tudo.
+export const planejarCaixas = (linhas, caixas) => {
+  const volumes = [];
+  const restante = linhas.map((l) => ({ ...l }));
+
+  // Peça que não cabe nem na maior caixa: volume sob medida por unidade.
+  for (const l of restante.filter((x) => x.medidas)) {
+    if (caixas.some((c) => cabePeca(l.medidas, c))) continue;
+    const caixa = { altura: l.medidas.altura + 4, largura: l.medidas.largura + 4, comprimento: l.medidas.comprimento + 4 };
+    for (let n = 0; n < l.quantidade; n += 1) volumes.push(resumoVolume(caixa, [{ ...l, quantidade: 1 }], true));
+    l.quantidade = 0;
   }
-  return quantidades;
+
+  const pendentes = () => restante.filter((l) => l.quantidade > 0);
+  const servem = (lista) => caixas.filter((c) => lista.every((l) => !l.medidas || cabePeca(l.medidas, c)));
+  for (let rodada = 0; pendentes().length && rodada < 1000; rodada += 1) {
+    const lista = pendentes();
+    const total = lista.reduce((s, l) => s + l.quantidade * l.litrosUn, 0);
+    const opcoes = servem(lista);
+    const final = opcoes.find((c) => c.litros + 1e-9 >= total);
+    if (final) {
+      volumes.push(resumoVolume(final, lista));
+      break;
+    }
+    // Enche a maior caixa onde as peças restantes cabem: peças primeiro,
+    // o granel completa o espaço.
+    const caixa = opcoes[opcoes.length - 1] || caixas[caixas.length - 1];
+    let livre = caixa.litros;
+    const dentro = [];
+    const ordem = [...lista].sort((a, b) => Number(Boolean(b.medidas)) - Number(Boolean(a.medidas)) || b.litrosUn - a.litrosUn);
+    for (const l of ordem) {
+      if (l.medidas && !cabePeca(l.medidas, caixa)) continue;
+      const n = Math.min(l.quantidade, Math.floor((livre + 1e-9) / l.litrosUn));
+      if (n <= 0) continue;
+      dentro.push({ ...l, quantidade: n });
+      l.quantidade -= n;
+      livre -= n * l.litrosUn;
+    }
+    if (!dentro.length) {
+      const l = ordem[0];
+      dentro.push({ ...l, quantidade: 1 });
+      l.quantidade -= 1;
+    }
+    volumes.push(resumoVolume(caixa, dentro));
+  }
+  return volumes;
 };
 
-export const calcularNfEPeso = (quantidades) => {
-  const {
-    qtd1pol,
-    qtd2pol,
-    qtd27mm,
-    qtd32mm,
-    qtd45mm,
-    caps1pol,
-    caps2pol,
-    squareGlobinho,
-    gvTodas,
-    pedestalX,
-    hack,
-    cuba,
-    pelucia,
-    chiclete,
-    pedestalRedondo,
-  } = quantidades;
+// "Só com esta caixa": quantos volumes de cada tamanho seriam necessários.
+const porTamanho = (linhas, caixas) => {
+  const total = linhas.reduce((s, l) => s + l.quantidade * l.litrosUn, 0);
+  const pecas = linhas.filter((l) => l.medidas);
+  return caixas.map((c) => {
+    const servePecas = pecas.every((p) => cabePeca(p.medidas, c));
+    const volumes = servePecas ? Math.max(1, Math.ceil(total / c.litros - 1e-9)) : null;
+    return {
+      caixa: c.nome,
+      litros: arred(c.litros, 1),
+      volumes,
+      ocupacaoMedia: volumes ? Math.round((total / (volumes * c.litros)) * 100) : null,
+      motivo: servePecas ? null : "Alguma peça não cabe",
+    };
+  });
+};
 
-  const nf1 =
-    qtd1pol * 0.05 +
-    qtd2pol * 0.14 +
-    qtd27mm * 0.08 +
-    caps1pol * 0.04 +
-    caps2pol * 0.1 +
-    squareGlobinho * 57.0 +
-    gvTodas * 195.0 +
-    pedestalX * 19.0;
-
-  const nf2 =
-    qtd32mm * 0.16 +
-    qtd45mm * 0.44 +
-    hack * 45.0 +
-    cuba * 26.0 +
-    pelucia * 2.33 +
-    chiclete * 97.5 +
-    pedestalRedondo * 19.0;
-
-  const peso1 =
-    qtd1pol * 0.01 +
-    qtd2pol * 0.01 +
-    qtd27mm * 0.01 +
-    chiclete * 6.0 +
-    pedestalX * 6.0 +
-    caps1pol * 0.003 +
-    caps2pol * 0.006 +
-    squareGlobinho * 6.0;
-
-  const peso2 =
-    qtd32mm * 0.025 +
-    qtd45mm * 0.05 +
-    gvTodas * 10.0 +
-    hack * 10.0 +
-    pelucia * 0.0035 +
-    cuba * 0.5 +
-    pedestalRedondo * 10.0;
-
+export const calcularPedidoCompleto = async ({ quantidades, medidas, avulsos }) => {
+  const params = await lerParametros();
+  const { linhas, faltandoMedidas } = montarLinhas(params, quantidades, medidas, avulsos);
+  const itens = linhas.map((l) => ({
+    chave: l.chave,
+    label: l.label,
+    quantidade: l.quantidade,
+    valorNfUn: l.valorNfUn,
+    valorNf: arred(l.quantidade * l.valorNfUn),
+    pesoUn: l.pesoUn,
+    pesoKg: arred(l.quantidade * l.pesoUn, 3),
+    litros: arred(l.quantidade * l.litrosUn, 1),
+    avulso: Boolean(l.avulso),
+  }));
+  const resumo = {
+    valorNf: arred(itens.reduce((s, i) => s + i.valorNf, 0)),
+    pesoKg: arred(itens.reduce((s, i) => s + i.pesoKg, 0)),
+    litros: arred(linhas.reduce((s, l) => s + l.quantidade * l.litrosUn, 0), 1),
+    unidades: itens.reduce((s, i) => s + i.quantidade, 0),
+  };
+  if (faltandoMedidas.length || !linhas.length) {
+    return { itens, resumo, faltandoMedidas, volumes: [], porTamanho: [], referencia: params.referencia };
+  }
+  const volumes = planejarCaixas(linhas, params.caixas);
   return {
-    nfTotal: nf1 + nf2,
-    pesoTotal: peso1 + peso2,
+    itens,
+    resumo: { ...resumo, volumes: volumes.length, pesoTaxadoKg: arred(volumes.reduce((s, v) => s + v.pesoTaxadoKg, 0)) },
+    faltandoMedidas: [],
+    volumes,
+    porTamanho: porTamanho(linhas, params.caixas),
+    referencia: params.referencia,
   };
 };
 
-// Portado 1:1 do sistema legado em Python (18GKSISTEM.py), mesma ordem e limiares.
-// A primeira regra que bater decide o resultado - não reordenar.
-export const determinarCaixaLegado = (quantidades) => {
-  const {
-    qtd1pol,
-    qtd2pol,
-    qtd27mm,
-    qtd32mm,
-    qtd45mm,
-    caps1pol,
-    caps2pol,
-    squareGlobinho,
-    gvTodas,
-    pedestalX,
-    hack,
-    cuba,
-    pelucia,
-    chiclete,
-    pedestalRedondo,
-  } = quantidades;
-
-  const div27 = qtd27mm / 2000;
-  const div2pol = qtd2pol / 1000;
-  const total2pol = qtd2pol + qtd45mm;
-
-  if (
-    caps1pol !== 0 ||
-    caps2pol !== 0 ||
-    squareGlobinho !== 0 ||
-    gvTodas !== 0 ||
-    pedestalX !== 0 ||
-    hack !== 0 ||
-    cuba !== 0 ||
-    pelucia !== 0 ||
-    chiclete !== 0 ||
-    pedestalRedondo !== 0
-  ) {
-    return "Personalizada (peças ou pelúcias)";
-  }
-  if (qtd1pol === 100 && qtd32mm <= 700) return "30x30x40";
-  if (qtd1pol === 100 && qtd27mm <= 1600) return "30x30x35";
-  if (qtd1pol === 400 && qtd32mm === 500) return "30x30x35";
-  if (
-    400 >= qtd1pol &&
-    qtd1pol >= 300 &&
-    600 >= qtd32mm &&
-    qtd32mm >= 500 &&
-    200 >= qtd2pol &&
-    qtd2pol >= 100
-  )
-    return "30x60x50";
-  if (
-    qtd2pol === 100 &&
-    ((400 >= qtd1pol && qtd1pol > 100) ||
-      (500 > qtd27mm && qtd27mm > 250) ||
-      (500 > qtd32mm && qtd32mm > 100))
-  )
-    return "30x60x50";
-  if (
-    qtd2pol === 100 &&
-    (qtd1pol === 100 || qtd27mm === 250 || qtd32mm === 100)
-  )
-    return "40x40x40";
-  if (500 >= qtd2pol && qtd2pol >= 300) return "50x60x50";
-  if (1000 >= qtd2pol && qtd2pol > 500) return "70x50x60";
-  if (
-    400 >= qtd2pol &&
-    qtd2pol >= 300 &&
-    (qtd1pol === 100 || qtd27mm === 250 || qtd32mm === 100)
-  )
-    return "50x60x50";
-  if (1100 > qtd27mm && qtd27mm >= 1000 && 1100 > qtd32mm && qtd32mm >= 1000)
-    return "30x30x35 e 30x30x35";
-  if (
-    1500 >= qtd2pol &&
-    qtd2pol >= 1000 &&
-    ((700 >= qtd1pol && qtd1pol > 0) ||
-      (1000 >= qtd32mm && qtd32mm > 0) ||
-      (2000 >= qtd27mm && qtd27mm > 0))
-  )
-    return "70x50x60 e 40x40x40";
-  if (
-    1500 >= qtd2pol &&
-    qtd2pol >= 1000 &&
-    ((2000 >= qtd1pol && qtd1pol > 1000) ||
-      (2000 >= qtd32mm && qtd32mm > 1000) ||
-      (4000 >= qtd27mm && qtd27mm > 2000))
-  )
-    return "70x50x60 e 30x60x50";
-  if (1500 >= qtd2pol && qtd2pol >= 1000) return "70x50x60 e 40x40x40";
-  if (2000 >= qtd2pol && qtd2pol >= 1500) return "70x50x60 e 70x50x60";
-  if (2000 >= qtd2pol && qtd2pol >= 1500 && 2000 >= qtd1pol && qtd1pol > 1200)
-    return "70x50x60 e 70x60x50 e 30x30x35";
-  if (
-    400 >= qtd45mm &&
-    qtd45mm >= 300 &&
-    (qtd1pol === 100 || qtd27mm === 250 || qtd32mm === 100 || qtd2pol === 100)
-  )
-    return "50x60x50";
-  if (1100 > qtd27mm && qtd27mm >= 1000 && 1100 > qtd32mm && qtd32mm >= 1000)
-    return "30x30x35 e 30x30x35";
-  if (
-    1500 >= qtd45mm &&
-    qtd45mm >= 1000 &&
-    ((700 >= qtd1pol && qtd1pol > 0) ||
-      (1000 >= qtd32mm && qtd32mm > 0) ||
-      (2000 >= qtd27mm && qtd27mm > 0) ||
-      (500 >= qtd2pol && qtd2pol > 200))
-  )
-    return "70x50x60 e 40x40x40";
-  if (
-    1500 >= qtd45mm &&
-    qtd45mm >= 1000 &&
-    ((2000 >= qtd1pol && qtd1pol > 1000) ||
-      (2000 >= qtd32mm && qtd32mm > 1000) ||
-      (4000 >= qtd27mm && qtd27mm > 2000))
-  )
-    return "70x50x60 e 30x60x50";
-  if (1500 >= qtd45mm && qtd45mm >= 1000) return "70x50x60 e 40x40x40";
-  if (2000 >= qtd45mm && qtd45mm >= 1500) return "70x50x60 e 70x50x60";
-  if (2000 >= qtd45mm && qtd45mm >= 1500 && 2000 >= qtd1pol && qtd1pol > 1200)
-    return "70x50x60 e 70x60x50 e 30x30x35";
-  if (600 > total2pol && total2pol >= 500) return "40x40x40";
-  if (
-    500 > qtd45mm &&
-    qtd45mm > 0 &&
-    ((700 >= qtd1pol && qtd1pol > 0) ||
-      (1000 >= qtd32mm && qtd32mm > 0) ||
-      (2000 >= qtd27mm && qtd27mm > 0))
-  )
-    return "30x30x35 e 30x30x35";
-  if (
-    500 > qtd45mm &&
-    qtd45mm > 0 &&
-    ((2000 >= qtd1pol && qtd1pol > 1000) ||
-      (2000 >= qtd32mm && qtd32mm > 1000) ||
-      (4000 >= qtd27mm && qtd27mm > 2000))
-  )
-    return "30x30x35 e 30x50x60";
-  if (500 > qtd45mm && qtd45mm > 0 && 2000 >= qtd1pol && qtd1pol > 1200)
-    return "30x30x35 e 70x60x50 e 30x30x35";
-  if (
-    500 > qtd45mm &&
-    qtd45mm > 0 &&
-    (qtd27mm > 4000 || qtd32mm > 2000 || qtd1pol > 2000 || qtd2pol > 2000)
-  )
-    return "30x30x35 e Personalizada";
-  if (500 > qtd45mm && qtd45mm > 0) return "30x30x35";
-
-  if (total2pol === 1000 || qtd1pol === 3000) return "70x50x60";
-  if (
-    total2pol === 500 ||
-    qtd1pol === 1500 ||
-    qtd27mm === 3000 ||
-    qtd32mm === 2000
-  )
-    return "30x60x50";
-  if (qtd1pol === 3000 || qtd2pol === 700) return "50x60x50";
-  if (qtd27mm > 3000) return `30x30x35 x${formatarDivisao(div27)}`;
-  if (qtd2pol > 1000) return `70x50x60 x${formatarDivisao(div2pol)}`;
-
-  return "Personalizada";
-};
-
-export const precisaAnaliseIA = (caixaLegado, produtosPersonalizados = []) => {
-  const temPersonalizada =
-    typeof caixaLegado === "string" && caixaLegado.includes("Personalizada");
-  const temProdutosPersonalizados =
-    Array.isArray(produtosPersonalizados) && produtosPersonalizados.length > 0;
-  return temPersonalizada || temProdutosPersonalizados;
-};
-
-export const calcularPedido = (quantidadesBrutas) => {
-  const quantidades = normalizarQuantidades(quantidadesBrutas);
-  const { nfTotal, pesoTotal } = calcularNfEPeso(quantidades);
-  const caixaLegado = determinarCaixaLegado(quantidades);
-
-  return { quantidades, nfTotal, pesoTotal, caixaLegado };
+// Frete do checkout: medidas do primeiro volume (só itens a granel).
+export const caixaParaFrete = async (quantidades) => {
+  const params = await lerParametros();
+  const { linhas } = montarLinhas(params, quantidades, {}, []);
+  const granel = linhas.filter((l) => l.granel);
+  if (!granel.length) return null;
+  const [primeiro] = planejarCaixas(granel, params.caixas);
+  return primeiro?.medidas || null;
 };

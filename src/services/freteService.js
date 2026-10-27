@@ -1,6 +1,6 @@
 import { Produto } from "../models/index.js";
 import { lerConfiguracao } from "../models/Configuracao.js";
-import { calcularPedido } from "./pedidoCalculoEngine.js";
+import { caixaParaFrete } from "./pedidoCalculoEngine.js";
 import { cotarServicosVipp } from "./vippService.js";
 import { arredondar, somenteDigitos } from "../utils/helpers.js";
 import { ENDERECO_LOJA_PADRAO } from "../utils/formasPagamento.js";
@@ -54,18 +54,8 @@ export const resumirCarga = async (itens) => {
     }
   }
 
-  let caixa = CAIXA_PADRAO;
-  if (Object.keys(quantidades).length) {
-    const { caixaLegado } = calcularPedido(quantidades);
-    const medidas = String(caixaLegado || "").match(/(\d+)\s*x\s*(\d+)\s*x\s*(\d+)/i);
-    if (medidas) {
-      caixa = {
-        altura: Number(medidas[1]),
-        largura: Number(medidas[2]),
-        comprimento: Number(medidas[3]),
-      };
-    }
-  }
+  // Caixa do primeiro volume pela Calculadora de Pedidos (base 70x50x60).
+  const caixa = (Object.keys(quantidades).length && (await caixaParaFrete(quantidades))) || CAIXA_PADRAO;
 
   return { pesoGramas, freteIndisponivel, quantidades, caixa };
 };

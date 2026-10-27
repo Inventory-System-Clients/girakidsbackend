@@ -1,7 +1,9 @@
 import express from "express";
 import {
   analisarComIA,
+  atualizarParametros,
   calcular,
+  parametros,
 } from "../controllers/calculoPedidoController.js";
 import {
   autenticar,
@@ -10,21 +12,11 @@ import {
 } from "../middlewares/auth.js";
 
 const router = express.Router();
+const comercial = [autenticar, exigirPermissao("COMERCIAL")];
 
-router.post(
-  "/calcular",
-  autenticar,
-  exigirPermissao("COMERCIAL"),
-  registrarLog("CALCULAR_PEDIDO", "CalculadoraPedidos"),
-  calcular,
-);
-
-router.post(
-  "/analisar-ia",
-  autenticar,
-  exigirPermissao("COMERCIAL"),
-  registrarLog("ANALISAR_CAIXAS_IA", "CalculadoraPedidos"),
-  analisarComIA,
-);
+router.get("/parametros", ...comercial, parametros);
+router.put("/parametros", ...comercial, registrarLog("PARAMETROS_CALCULADORA", "Configuracao"), atualizarParametros);
+router.post("/calcular", ...comercial, calcular);
+router.post("/analisar-ia", ...comercial, registrarLog("ANALISAR_CAIXAS_IA", "CalculadoraPedidos"), analisarComIA);
 
 export default router;

@@ -239,6 +239,7 @@ router.post("/correios/cotacao", ...com, correios.cotar);
 router.post("/correios/postagens", ...com, registrarLog("CRIAR_POSTAGEM_VIPP", "CorreiosPostagem"), correios.criarPostagem);
 router.get("/correios/postagens/:id/pdfs", ...com, correios.baixarPdfs);
 router.use("/transportadoras", transportadoraRoutes);
+router.use("/calculadora-pedidos", calculoPedidoRoutes);
 router.use("/calculo-pedido", calculoPedidoRoutes);
 router.use("/pedidos-notas-fiscais", pedidoNotaFiscalRoutes);
 
