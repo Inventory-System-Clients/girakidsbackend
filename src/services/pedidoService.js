@@ -50,13 +50,17 @@ export const formatarNumero = (pedido) =>
   pedido.codigoLegado ||
   (pedido.tipo === "ORCAMENTO" ? String(pedido.numero).padStart(4, "0") : String(pedido.numero));
 
+// Pedido do sistema antigo cujo número já existia aqui recebe número interno a
+// partir daqui (e mostra "63127-ANT"); a sequência normal ignora essa faixa.
+export const NUMERO_COLISAO_LEGADO = 900000;
+
 // Próximo número sequencial do tipo, sob lock transacional.
-const proximoNumero = async (tipo, transaction) => {
+export const proximoNumero = async (tipo, transaction) => {
   await sequelize.query("SELECT pg_advisory_xact_lock(hashtext(:chave))", {
     replacements: { chave: `pedido_numero_${tipo}` },
     transaction,
   });
-  const maior = await Pedido.max("numero", { where: { tipo }, transaction });
+  const maior = await Pedido.max("numero", { where: { tipo, numero: { [Op.lt]: NUMERO_COLISAO_LEGADO } }, transaction });
   const inicial = tipo === "PEDIDO" ? Number(process.env.PEDIDO_NUMERO_INICIAL || 1) : 1;
   return Math.max(Number(maior || 0) + 1, inicial);
 };

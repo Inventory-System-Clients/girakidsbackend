@@ -115,7 +115,7 @@ const Usuario = sequelize.define(
       type: DataTypes.TEXT,
       allowNull: true,
     },
-    // Identificador no sistema antigo (Firebase), usado só na importação.
+    // Identificador no sistema antigo (Firebase): importação e sincronização.
     legadoId: {
       type: DataTypes.STRING(150),
       allowNull: true,

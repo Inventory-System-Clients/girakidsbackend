@@ -169,6 +169,10 @@ const Produto = sequelize.define(
     criadoPor: { type: DataTypes.STRING(150), allowNull: true },
     atualizadoPor: { type: DataTypes.STRING(150), allowNull: true },
     legadoId: { type: DataTypes.STRING(100), allowNull: true },
+    // Sincronização com o sistema antigo: estoque lido lá na última vez. A
+    // diferença entre leituras (vendas e ajustes feitos lá) é aplicada aqui,
+    // sem apagar o que foi movimentado no sistema novo.
+    legadoEstoque: { type: DataTypes.INTEGER, allowNull: true },
   },
   {
     tableName: "produtos",

@@ -179,12 +179,17 @@ export const Pedido = sequelize.define(
     criadoPorNome: { type: DataTypes.STRING(150), allowNull: true },
     criadoPorRole: { type: DataTypes.STRING(20), allowNull: true },
     legadoId: { type: DataTypes.STRING(100), allowNull: true },
+    // Sincronização com o sistema antigo: assinatura do andamento lá (pagamento,
+    // liberação, expedição...) na última leitura.
+    legadoAssinatura: { type: DataTypes.STRING(40), allowNull: true },
     // Pedido feito pelo próprio cliente no site: alerta o comercial até alguém
     // marcar como visto.
     alertaComercial: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     alertaVistoEm: { type: DataTypes.DATE, allowNull: true },
     alertaVistoPor: { type: DataTypes.STRING(150), allowNull: true },
     // Código antigo não numérico (ex.: GK-110326-006), exibido no lugar do número.
+    // Também usado quando o número do sistema antigo já existia aqui (ex.:
+    // "63127-ANT"); o pedido fica com número interno a partir de 900000.
     codigoLegado: { type: DataTypes.STRING(30), allowNull: true },
   },
   {
@@ -193,6 +198,7 @@ export const Pedido = sequelize.define(
     indexes: [
       { unique: true, fields: ["tipo", "numero"] },
       { fields: ["createdAt"] },
+      { fields: ["legadoId"] },
       { fields: ["expedidoEm"] },
       { fields: ["clienteId"] },
     ],

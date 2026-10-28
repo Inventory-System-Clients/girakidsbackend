@@ -26,6 +26,7 @@ import * as giraldo from "../controllers/giraldoController.js";
 import * as transportadoras from "../controllers/transportadoraController.js";
 import * as recebimentos from "../controllers/recebimentoController.js";
 import * as whatsapp from "../controllers/whatsappController.js";
+import * as legado from "../controllers/sincronizacaoLegadoController.js";
 import { limitarTaxa } from "../utils/linkSeguro.js";
 import transportadoraRoutes from "./transportadora.routes.js";
 import calculoPedidoRoutes from "./calculoPedido.routes.js";
@@ -232,6 +233,12 @@ router.post("/whatsapp/avisos/conectar", ...adminWhats, registrarLog("CONECTAR_W
 router.post("/whatsapp/avisos/teste", ...adminWhats, registrarLog("TESTE_WHATSAPP", "WhatsApp"), whatsapp.teste);
 router.post("/whatsapp/avisos/mensagens/:id/reenviar", ...adminWhats, registrarLog("REENVIAR_WHATSAPP", "WhatsApp"), whatsapp.reenviar);
 router.post("/whatsapp/webhook/:token", whatsapp.webhook);
+
+// Sincronização com o sistema antigo (Krion) — só ADMIN
+const adminLegado = [autenticar, legado.soAdmin];
+router.get("/sistema-antigo/sincronizacao", ...adminLegado, legado.status);
+router.put("/sistema-antigo/sincronizacao", ...adminLegado, legado.salvar);
+router.post("/sistema-antigo/sincronizacao/executar", ...adminLegado, legado.executar);
 
 // Comercial (herdado do AgarraMais, agora consultando os pedidos da loja)
 const com = [autenticar, exigirPermissao("COMERCIAL")];

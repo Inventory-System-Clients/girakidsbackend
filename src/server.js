@@ -76,6 +76,9 @@ try {
   // Avisos de pedido no WhatsApp: retoma a fila de onde parou.
   const { iniciarFila } = await import("./services/whatsappService.js");
   iniciarFila();
+  // Sincronização com o sistema antigo (Krion), se estiver ligada.
+  const { iniciarSincronizacao } = await import("./services/sincronizacaoLegadoService.js");
+  iniciarSincronizacao();
   app.listen(PORT, () => console.log(`🎡 Gira Kids backend rodando na porta ${PORT}`));
   // Em segundo plano: confere se as imagens de esgotado são cópias das de estoque.
   const { verificarPendentes } = await import("./services/imagemEsgotadoService.js");

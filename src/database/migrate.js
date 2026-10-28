@@ -3,6 +3,29 @@ import { sequelize } from "./connection.js";
 import "../models/index.js";
 import { Usuario } from "../models/index.js";
 
+// Usuários sem telefone/documento/endereço (importados da loja antiga)
+// herdam os dados do pedido mais recente deles. Só preenche o que está vazio.
+export const preencherUsuariosPeloPedido = () =>
+  sequelize.query(`
+    UPDATE usuarios u SET
+      telefone = COALESCE(u.telefone, p."clienteTelefone"),
+      documento = COALESCE(u.documento, p.documento),
+      "documentoTipo" = COALESCE(u."documentoTipo", CAST(p."documentoTipo" AS "enum_usuarios_documentoTipo")),
+      cep = COALESCE(u.cep, p.cep),
+      rua = COALESCE(u.rua, p.rua),
+      numero = COALESCE(u.numero, p."numeroEndereco"),
+      complemento = COALESCE(u.complemento, p.complemento),
+      bairro = COALESCE(u.bairro, p.bairro),
+      cidade = COALESCE(u.cidade, p.cidade),
+      estado = COALESCE(u.estado, p.estado)
+    FROM (
+      SELECT DISTINCT ON ("clienteId") * FROM pedidos
+      WHERE "clienteId" IS NOT NULL ORDER BY "clienteId", "createdAt" DESC
+    ) p
+    WHERE p."clienteId" = u.id
+      AND (u.telefone IS NULL OR u.documento IS NULL OR u.cep IS NULL)
+  `);
+
 // Cria/ajusta as tabelas a partir dos models (alter: só adiciona colunas e
 // ajusta tipos; não apaga dados) e garante o administrador inicial.
 export const sincronizarBanco = async () => {
@@ -27,27 +50,7 @@ export const sincronizarBanco = async () => {
     `UPDATE produtos SET imagens = jsonb_build_array("imagemUrl") WHERE imagens = '[]'::jsonb AND "imagemUrl" IS NOT NULL`,
   );
 
-  // Usuários sem telefone/documento/endereço (importados da loja antiga)
-  // herdam os dados do pedido mais recente deles. Só preenche o que está vazio.
-  await sequelize.query(`
-    UPDATE usuarios u SET
-      telefone = COALESCE(u.telefone, p."clienteTelefone"),
-      documento = COALESCE(u.documento, p.documento),
-      "documentoTipo" = COALESCE(u."documentoTipo", CAST(p."documentoTipo" AS "enum_usuarios_documentoTipo")),
-      cep = COALESCE(u.cep, p.cep),
-      rua = COALESCE(u.rua, p.rua),
-      numero = COALESCE(u.numero, p."numeroEndereco"),
-      complemento = COALESCE(u.complemento, p.complemento),
-      bairro = COALESCE(u.bairro, p.bairro),
-      cidade = COALESCE(u.cidade, p.cidade),
-      estado = COALESCE(u.estado, p.estado)
-    FROM (
-      SELECT DISTINCT ON ("clienteId") * FROM pedidos
-      WHERE "clienteId" IS NOT NULL ORDER BY "clienteId", "createdAt" DESC
-    ) p
-    WHERE p."clienteId" = u.id
-      AND (u.telefone IS NULL OR u.documento IS NULL OR u.cep IS NULL)
-  `);
+  await preencherUsuariosPeloPedido();
 
   // Busca sem acento e sem diferenciar maiúsculas: f_unaccent (sem depender
   // da extensão unaccent).
