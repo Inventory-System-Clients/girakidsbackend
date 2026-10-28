@@ -14,6 +14,7 @@ import Arquivo from "./Arquivo.js";
 import Banner from "./Banner.js";
 import PedidoCustoExtra from "./PedidoCustoExtra.js";
 import CredencialPagamento from "./CredencialPagamento.js";
+import { WhatsappMensagem, WhatsappOptOut } from "./Whatsapp.js";
 import { PreRecebimento, PreRecebimentoItem, OrdemMontagem } from "./PreRecebimento.js";
 
 Produto.belongsTo(Parceiro, {
@@ -72,4 +73,6 @@ export {
   PreRecebimentoItem,
   OrdemMontagem,
   CredencialPagamento,
+  WhatsappMensagem,
+  WhatsappOptOut,
 };

@@ -1,6 +1,7 @@
 import jwt from "jsonwebtoken";
 import { Usuario } from "../models/index.js";
 import { documentoValido, erroHttp, responderErro, somenteDigitos } from "../utils/helpers.js";
+import { definirAvisosCliente } from "../services/whatsappService.js";
 
 const gerarToken = (usuario) =>
   jwt.sign({ id: usuario.id, role: usuario.role }, process.env.JWT_SECRET, {
@@ -81,6 +82,9 @@ export const atualizarPerfil = async (req, res) => {
       ...Object.fromEntries(ENDERECO.map((c) => [c, corpo[c] || null])),
       cep: somenteDigitos(corpo.cep) || null,
     });
+    if (req.body?.whatsappAvisos !== undefined && Boolean(req.body.whatsappAvisos) !== req.usuario.whatsappAvisos) {
+      await definirAvisosCliente(req.usuario, Boolean(req.body.whatsappAvisos));
+    }
     res.json(req.usuario);
   } catch (error) {
     if (error.name === "SequelizeUniqueConstraintError") {

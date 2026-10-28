@@ -4,6 +4,7 @@ import { Usuario, Pedido, LogAtividade } from "../models/index.js";
 import { PERMISSOES } from "../models/Usuario.js";
 import { erroHttp, numero, responderErro, somenteDigitos, documentoValido } from "../utils/helpers.js";
 import { contem, comecaComSql } from "../utils/busca.js";
+import { definirAvisosCliente } from "../services/whatsappService.js";
 
 const ROLES = ["ADMIN", "FUNCIONARIO", "CLIENTE", "SHOWROOM"];
 
@@ -185,6 +186,10 @@ export const atualizar = async (req, res) => {
       throw erroHttp(400, "Você não pode remover seu próprio acesso de administrador.");
     }
     await usuario.update(atualizacao);
+    // Avisos de pedido no WhatsApp (desligar também bloqueia o número).
+    if (req.body?.whatsappAvisos !== undefined && Boolean(req.body.whatsappAvisos) !== usuario.whatsappAvisos) {
+      await definirAvisosCliente(usuario, Boolean(req.body.whatsappAvisos));
+    }
     res.json(usuario);
   } catch (error) {
     if (error.name === "SequelizeUniqueConstraintError") {

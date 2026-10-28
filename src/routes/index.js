@@ -25,6 +25,7 @@ import * as custosExtras from "../controllers/custoExtraController.js";
 import * as giraldo from "../controllers/giraldoController.js";
 import * as transportadoras from "../controllers/transportadoraController.js";
 import * as recebimentos from "../controllers/recebimentoController.js";
+import * as whatsapp from "../controllers/whatsappController.js";
 import { limitarTaxa } from "../utils/linkSeguro.js";
 import transportadoraRoutes from "./transportadora.routes.js";
 import calculoPedidoRoutes from "./calculoPedido.routes.js";
@@ -221,6 +222,16 @@ router.put("/pagamentos/config/maquininhas/:id", ...adminPag, pagamentosConfig.a
 router.delete("/pagamentos/config/maquininhas/:id", ...adminPag, pagamentosConfig.removerMaquininha);
 router.get("/pagamentos/config/sumup/readers", ...adminPag, pagamentosConfig.readersSumup);
 router.post("/pagamentos/config/sumup/parear", ...adminPag, pagamentosConfig.parearSumup);
+
+// Avisos de pedido no WhatsApp (Evolution API). Configuração só do ADMIN;
+// o webhook é público, protegido pelo token secreto na URL.
+const adminWhats = [autenticar, whatsapp.soAdmin];
+router.get("/whatsapp/avisos", ...adminWhats, whatsapp.status);
+router.put("/whatsapp/avisos", ...adminWhats, whatsapp.salvar);
+router.post("/whatsapp/avisos/conectar", ...adminWhats, registrarLog("CONECTAR_WHATSAPP", "WhatsApp"), whatsapp.conectar);
+router.post("/whatsapp/avisos/teste", ...adminWhats, registrarLog("TESTE_WHATSAPP", "WhatsApp"), whatsapp.teste);
+router.post("/whatsapp/avisos/mensagens/:id/reenviar", ...adminWhats, registrarLog("REENVIAR_WHATSAPP", "WhatsApp"), whatsapp.reenviar);
+router.post("/whatsapp/webhook/:token", whatsapp.webhook);
 
 // Comercial (herdado do AgarraMais, agora consultando os pedidos da loja)
 const com = [autenticar, exigirPermissao("COMERCIAL")];

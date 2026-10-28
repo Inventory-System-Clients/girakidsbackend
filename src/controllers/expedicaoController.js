@@ -2,6 +2,7 @@ import { Op } from "sequelize";
 import { sequelize } from "../database/connection.js";
 import { Pedido, PedidoItem } from "../models/index.js";
 import { INCLUDE_COMPLETO, serializarPedido } from "../services/pedidoService.js";
+import { avisarPedido, esquecerAviso } from "../services/whatsappService.js";
 import { erroHttp, responderErro } from "../utils/helpers.js";
 import { contem } from "../utils/busca.js";
 
@@ -117,6 +118,8 @@ export const concluirMontagem = async (req, res) => {
       montagemConcluidaPor: req.usuario.nome,
       ...(req.body?.observacoes !== undefined ? { observacoesExpedicao: req.body.observacoes || null } : {}),
     });
+    // WhatsApp: "pronto para retirada" ou "pronto e será enviado".
+    avisarPedido(pedido.id, "PRONTO");
     await responder(res, pedido.id);
   } catch (error) {
     responderErro(res, error, "Erro ao concluir montagem");
@@ -172,6 +175,8 @@ export const desfazerChecklist = async (req, res) => {
         { transaction },
       );
     });
+    // Ao concluir de novo, o aviso de pronto pode sair (se não saiu ainda).
+    esquecerAviso(req.params.id, "PRONTO");
     await responder(res, req.params.id);
   } catch (error) {
     responderErro(res, error, "Erro ao desfazer montagem");
@@ -199,6 +204,8 @@ export const expedir = async (req, res) => {
       imagemExpedicaoUrl: imagensExpedicao[0] || null,
       observacoesExpedicao: req.body?.observacoes ?? pedido.observacoesExpedicao,
     });
+    // WhatsApp: coletado pela transportadora / postado nos Correios.
+    avisarPedido(pedido.id, "A_CAMINHO");
     await responder(res, pedido.id);
   } catch (error) {
     responderErro(res, error, "Erro ao expedir pedido");

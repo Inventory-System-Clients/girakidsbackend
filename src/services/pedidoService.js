@@ -27,6 +27,7 @@ import {
   somenteDigitos,
 } from "../utils/helpers.js";
 import { contem } from "../utils/busca.js";
+import { avisarPedido } from "./whatsappService.js";
 
 // Itens trazem a capa atual do produto para quem não tem imagem própria
 // (itens antigos da loja anterior).
@@ -421,6 +422,9 @@ export const criarPedido = async (corpo, usuario, tipo = "PEDIDO") => {
     }
     pedido = await Pedido.findByPk(pedido.id, { include: INCLUDE_COMPLETO });
   }
+
+  // WhatsApp: "recebemos seu pedido" (cliente sozinho ou equipe tirando para ele).
+  if (tipo === "PEDIDO") avisarPedido(pedido.id, "CRIADO");
 
   if (clienteCadastro) {
     pedido.clienteCadastro = {

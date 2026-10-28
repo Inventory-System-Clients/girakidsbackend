@@ -67,6 +67,12 @@ const Usuario = sequelize.define(
       type: DataTypes.STRING(20),
       allowNull: true,
     },
+    // Avisos de pedido no WhatsApp (o cliente desliga respondendo SAIR).
+    whatsappAvisos: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: true,
+    },
     cep: { type: DataTypes.STRING(9), allowNull: true },
     rua: { type: DataTypes.STRING(150), allowNull: true },
     numero: { type: DataTypes.STRING(20), allowNull: true },
