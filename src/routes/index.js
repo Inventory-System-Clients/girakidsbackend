@@ -163,6 +163,7 @@ router.post("/recebimentos/:id/receber", ...rec, registrarLog("CONFERIR_RECEBIME
 router.post("/recebimentos/:id/divergencia/resolver", ...rec, registrarLog("RESOLVER_DIVERGENCIA", "PreRecebimento"), recebimentos.resolverDivergencia);
 router.post("/recebimentos/:id/cancelar", ...rec, registrarLog("CANCELAR_PRE_RECEBIMENTO", "PreRecebimento"), recebimentos.cancelar);
 router.post("/recebimentos/:id/estornar", ...rec, registrarLog("ESTORNAR_PRE_RECEBIMENTO", "PreRecebimento"), recebimentos.estornar);
+router.delete("/recebimentos/:id", ...rec, registrarLog("EXCLUIR_PRE_RECEBIMENTO", "PreRecebimento"), recebimentos.excluir);
 
 // Link público do fornecedor (sem login; token no cabeçalho, nunca na URL
 // do servidor, e limite de tentativas por IP).

@@ -433,6 +433,30 @@ export const estornar = async (req, res) => {
   }
 };
 
+// Apaga o pré-recebimento de vez (some da lista). Se já tinha entrado no
+// estoque, a entrada é desfeita antes; o histórico de movimentações fica.
+export const excluir = async (req, res) => {
+  try {
+    let numero;
+    let estornado = false;
+    await sequelize.transaction(async (transaction) => {
+      const pre = await carregarParaAlterar(req.params.id, transaction);
+      numero = pre.numero;
+      if (["RECEBIDO", "RECEBIDO_PARCIAL"].includes(pre.status)) {
+        for (const item of pre.itens) await aplicarNoEstoque(pre, item, item.quantidadeRecebida || 0, req.usuario, transaction, -1);
+        estornado = true;
+      }
+      // Restantes gerados a partir dele continuam, só perdem o vínculo.
+      await PreRecebimento.update({ origemId: null }, { where: { origemId: pre.id }, transaction });
+      await PreRecebimentoItem.destroy({ where: { preRecebimentoId: pre.id }, transaction });
+      await pre.destroy({ transaction });
+    });
+    res.json({ ok: true, numero, estornado });
+  } catch (error) {
+    responderErro(res, error, "Erro ao excluir");
+  }
+};
+
 // ---------------------------------------------------------------------------
 // Alertas (cabeçalho e topo da aba)
 // ---------------------------------------------------------------------------
