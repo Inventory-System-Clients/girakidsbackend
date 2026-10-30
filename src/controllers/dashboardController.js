@@ -128,7 +128,7 @@ export const resumo = async (req, res) => {
 
     const card = () => ({ pedidos: 0, bruta: 0, liquida: 0 });
     const cards = { total: card(), recebida: card(), aberto: card(), antigos: card() };
-    const semana = DIAS.map((dia) => ({ dia, pedidos: 0, bruta: 0, liquida: 0, vendaItens: 0, margem: 0 }));
+    const semana = DIAS.map((dia) => ({ dia, pedidos: 0, bruta: 0, liquida: 0, vendaItens: 0, margem: 0, vendas: 0, vendasPedidos: 0 }));
     const extras = { taxas: 0, frete: 0, desconto: 0, custoItens: 0, custosPosVenda: 0 };
 
     for (const pedido of pedidos) {
@@ -159,6 +159,19 @@ export const resumo = async (req, res) => {
 
     }
 
+    // Vendas por dia da semana no mesmo critério do "Realizado" da Meta:
+    // pedidos criados no período, menos cancelados.
+    const vendidos = await Pedido.findAll({
+      where: { tipo: "PEDIDO", statusVendas: { [Op.ne]: "CANCELADO" }, createdAt: { [Op.between]: [p.de, p.ate] } },
+      attributes: ["total", "createdAt"],
+      raw: true,
+    });
+    for (const pedido of vendidos) {
+      const dia = semana[diaDaSemana(pedido.createdAt)];
+      dia.vendasPedidos += 1;
+      dia.vendas += Number(pedido.total);
+    }
+
     const arredondarCard = (c) => ({ pedidos: c.pedidos, bruta: arredondar(c.bruta), liquida: arredondar(c.liquida) });
     const listaProdutos = agregarProdutos(pedidos);
     const ordemSemana = [1, 2, 3, 4, 5, 6, 0];
@@ -180,6 +193,8 @@ export const resumo = async (req, res) => {
           liquida: arredondar(d.liquida),
           margem: arredondar(d.margem),
           margemPercentual: d.vendaItens > 0 ? arredondar((d.margem / d.vendaItens) * 100) : null,
+          vendas: arredondar(d.vendas),
+          vendasPedidos: d.vendasPedidos,
         };
       }),
       // Listas completas; o frontend filtra Todos / Top 10 / Top 3 / O mais.
