@@ -229,11 +229,21 @@ export const meta = async (req, res) => {
         statusVendas: { [Op.ne]: "CANCELADO" },
         createdAt: { [Op.between]: [p.de, p.ate] },
       },
-      attributes: ["total", "createdAt"],
+      attributes: ["total", "createdAt", "statusVendas"],
       raw: true,
     });
+    // Composição do realizado, para conciliar com a receita do Resumo (que
+    // conta só expedidos = liberados, incluindo antigos expedidos no período).
+    const composicao = {
+      liberados: { pedidos: 0, valor: 0 },
+      aguardando: { pedidos: 0, valor: 0 },
+      antigosExpedidos: { pedidos: 0, valor: 0 },
+    };
     const porDia = new Map();
     for (const pedido of pedidos) {
+      const parte = composicao[pedido.statusVendas === "LIBERADO" ? "liberados" : "aguardando"];
+      parte.pedidos += 1;
+      parte.valor += Number(pedido.total);
       const dia = dataISO(pedido.createdAt);
       porDia.set(dia, (porDia.get(dia) || 0) + Number(pedido.total));
     }
@@ -286,6 +296,22 @@ export const meta = async (req, res) => {
     }
 
     const realizado = [...porDia.values()].reduce((s, v) => s + v, 0);
+    // Pedidos criados antes do período e expedidos dentro dele: entram na
+    // receita do Resumo, mas não no realizado da meta.
+    const antigos = await Pedido.findAll({
+      where: {
+        tipo: "PEDIDO",
+        statusVendas: "LIBERADO",
+        createdAt: { [Op.lt]: p.de },
+        expedidoEm: { [Op.between]: [p.de, p.ate] },
+      },
+      attributes: ["total"],
+      raw: true,
+    });
+    composicao.antigosExpedidos.pedidos = antigos.length;
+    composicao.antigosExpedidos.valor = antigos.reduce((t, x) => t + Number(x.total), 0);
+    for (const parte of Object.values(composicao)) parte.valor = arredondar(parte.valor);
+
     res.json({
       periodo: { inicio: p.inicio, fim: p.fim },
       mes: mesCalendario,
@@ -294,6 +320,8 @@ export const meta = async (req, res) => {
       diasComerciaisPeriodo,
       metaPeriodo: arredondar(metaPeriodo),
       realizado: arredondar(realizado),
+      composicao,
+      receitaResumo: arredondar(composicao.liberados.valor + composicao.antigosExpedidos.valor),
       progresso: metaPeriodo ? arredondar((realizado / metaPeriodo) * 100) : null,
       metaDiaria: arredondar(metaDiaria),
       calendario,
