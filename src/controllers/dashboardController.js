@@ -140,15 +140,142 @@ const agregarProdutos = (pedidos) => {
   }));
 };
 
+const horaSP = (data) => Number(new Date(data).toLocaleString("en-US", { timeZone: "America/Sao_Paulo", hour: "numeric", hourCycle: "h23" }));
+// Segunda-feira da semana da data (AAAA-MM-DD), no fuso de São Paulo.
+const segundaDaSemana = (data) => {
+  const d = new Date(`${dataISO(data)}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
+  return d.toISOString().slice(0, 10);
+};
+const chaveCliente = (pedido) => pedido.clienteId || (pedido.documento ? `doc:${pedido.documento}` : `nome:${(pedido.clienteNome || "").trim().toLowerCase()}`);
+
+// Recebimentos: pedidos marcados como pago no período (data do pagamento),
+// sem relação com a data do pedido ou da expedição. Pedidos antigos
+// importados sem data de pagamento usam a data do pedido.
+const pagosNoPeriodo = async ({ de, ate }) => {
+  const pedidos = await Pedido.findAll({
+    where: {
+      tipo: "PEDIDO",
+      statusFinanceiro: "PAGO",
+      statusVendas: { [Op.ne]: "CANCELADO" },
+      [Op.or]: [
+        { pagoEm: { [Op.between]: [de, ate] } },
+        { pagoEm: null, createdAt: { [Op.between]: [de, ate] } },
+      ],
+    },
+    attributes: ["total", "taxas", "formaPagamento", "createdAt"],
+    raw: true,
+  });
+  const formas = new Map();
+  const r = { pedidos: 0, valor: 0, taxas: 0, doPeriodo: 0, deAntes: 0 };
+  for (const pedido of pedidos) {
+    const total = Number(pedido.total);
+    r.pedidos += 1;
+    r.valor += total;
+    r.taxas += Number(pedido.taxas);
+    if (new Date(pedido.createdAt) >= de) r.doPeriodo += total;
+    else r.deAntes += total;
+    const f = formas.get(pedido.formaPagamento) || { forma: pedido.formaPagamento, pedidos: 0, valor: 0 };
+    f.pedidos += 1;
+    f.valor += total;
+    formas.set(pedido.formaPagamento, f);
+  }
+  return {
+    pedidos: r.pedidos,
+    valor: arredondar(r.valor),
+    taxas: arredondar(r.taxas),
+    liquido: arredondar(r.valor - r.taxas),
+    doPeriodo: arredondar(r.doPeriodo),
+    deAntes: arredondar(r.deAntes),
+    porForma: [...formas.values()].map((f) => ({ ...f, valor: arredondar(f.valor) })).sort((a, b) => b.valor - a.valor),
+  };
+};
+
+// Mês atual até hoje x mês passado até o mesmo dia, acumulado dia a dia.
+// Não depende do período selecionado.
+const comparativoMes = async () => {
+  const hoje = hojeISO();
+  const diaHoje = Number(hoje.slice(8, 10));
+  const mesAtual = hoje.slice(0, 7);
+  const [ano, mes] = mesAtual.split("-").map(Number);
+  const mesAnterior = new Date(Date.UTC(ano, mes - 2, 1)).toISOString().slice(0, 7);
+  const pedidos = await Pedido.findAll({
+    where: { tipo: "PEDIDO", statusVendas: { [Op.ne]: "CANCELADO" }, createdAt: { [Op.gte]: inicioDoDia(`${mesAnterior}-01`) } },
+    attributes: ["total", "createdAt"],
+    raw: true,
+  });
+  const porDia = { [mesAtual]: new Array(32).fill(0), [mesAnterior]: new Array(32).fill(0) };
+  for (const pedido of pedidos) {
+    const iso = dataISO(pedido.createdAt);
+    const lista = porDia[iso.slice(0, 7)];
+    if (lista) lista[Number(iso.slice(8, 10))] += Number(pedido.total);
+  }
+  const [anoA, mesA] = mesAnterior.split("-").map(Number);
+  const ultimoDiaAnterior = new Date(Date.UTC(anoA, mesA, 0)).getUTCDate();
+  const dias = [];
+  let atual = 0;
+  let anterior = 0;
+  for (let dia = 1; dia <= diaHoje; dia += 1) {
+    atual += porDia[mesAtual][dia];
+    if (dia <= ultimoDiaAnterior) anterior += porDia[mesAnterior][dia];
+    dias.push({ dia, atual: arredondar(atual), anterior: arredondar(anterior) });
+  }
+  return {
+    mesAtual,
+    mesAnterior,
+    dia: diaHoje,
+    dias,
+    totalAtual: arredondar(atual),
+    totalAnterior: arredondar(anterior),
+    variacao: anterior > 0 ? arredondar(((atual - anterior) / anterior) * 100) : null,
+  };
+};
+
+// Clientes do período que já tinham comprado antes (recorrentes) x primeira compra.
+const clientesNovosRecorrentes = async (pedidos, de) => {
+  const ids = [...new Set(pedidos.map((x) => x.clienteId).filter(Boolean))];
+  const docs = [...new Set(pedidos.filter((x) => !x.clienteId && x.documento).map((x) => x.documento))];
+  const anteriores = new Set();
+  const base = { tipo: "PEDIDO", statusVendas: { [Op.ne]: "CANCELADO" }, createdAt: { [Op.lt]: de } };
+  if (ids.length) {
+    const r = await Pedido.findAll({ where: { ...base, clienteId: ids }, attributes: ["clienteId"], group: ["clienteId"], raw: true });
+    r.forEach((x) => anteriores.add(x.clienteId));
+  }
+  if (docs.length) {
+    const r = await Pedido.findAll({ where: { ...base, documento: docs }, attributes: ["documento"], group: ["documento"], raw: true });
+    r.forEach((x) => anteriores.add(`doc:${x.documento}`));
+  }
+  const grupos = { novos: { clientes: new Set(), pedidos: 0, bruta: 0 }, recorrentes: { clientes: new Set(), pedidos: 0, bruta: 0 } };
+  for (const pedido of pedidos) {
+    const chave = chaveCliente(pedido);
+    const g = grupos[anteriores.has(chave) ? "recorrentes" : "novos"];
+    g.clientes.add(chave);
+    g.pedidos += 1;
+    g.bruta += Number(pedido.total);
+  }
+  return Object.fromEntries(Object.entries(grupos).map(([k, g]) => [k, { clientes: g.clientes.size, pedidos: g.pedidos, bruta: arredondar(g.bruta) }]));
+};
+
 export const resumo = async (req, res) => {
   try {
     const p = periodo(req.query);
     const pedidos = await vendidosNoPeriodo(p);
+    const [pagos, comparativo, clientes] = await Promise.all([pagosNoPeriodo(p), comparativoMes(), clientesNovosRecorrentes(pedidos, p.de)]);
 
     const card = () => ({ pedidos: 0, bruta: 0, liquida: 0 });
     const cards = { total: card(), recebida: card(), aberto: card(), aguardando: card() };
     const semana = DIAS.map((dia) => ({ dia, pedidos: 0, bruta: 0, liquida: 0, vendaItens: 0, margem: 0 }));
     const extras = { taxas: 0, frete: 0, desconto: 0, custoItens: 0, custosPosVenda: 0 };
+    const semanas = new Map();
+    const porCliente = new Map();
+    const horas = Array.from({ length: 24 }, (_, hora) => ({ hora, pedidos: 0, bruta: 0 }));
+    const formas = new Map();
+    const somarEm = (mapa, chave, inicial, total) => {
+      const x = mapa.get(chave) || inicial();
+      x.pedidos += 1;
+      x.bruta += total;
+      mapa.set(chave, x);
+    };
 
     for (const pedido of pedidos) {
       const a = analisarPedido(pedido);
@@ -174,7 +301,16 @@ export const resumo = async (req, res) => {
       dia.liquida += a.liquida;
       dia.vendaItens += a.vendaItens;
       dia.margem += a.vendaItens - a.custoItens;
+
+      const segunda = segundaDaSemana(pedido.createdAt);
+      somarEm(semanas, segunda, () => ({ segunda, pedidos: 0, bruta: 0 }), a.total);
+      somarEm(porCliente, chaveCliente(pedido), () => ({ nome: pedido.clienteNome, pedidos: 0, bruta: 0 }), a.total);
+      somarEm(formas, pedido.formaPagamento, () => ({ forma: pedido.formaPagamento, pedidos: 0, bruta: 0 }), a.total);
+      const h = horas[horaSP(pedido.createdAt)];
+      h.pedidos += 1;
+      h.bruta += a.total;
     }
+    const arredondarBruta = (x) => ({ ...x, bruta: arredondar(x.bruta) });
 
     const arredondarCard = (c) => ({ pedidos: c.pedidos, bruta: arredondar(c.bruta), liquida: arredondar(c.liquida) });
     const listaProdutos = agregarProdutos(pedidos);
@@ -204,6 +340,16 @@ export const resumo = async (req, res) => {
       topMargem: listaProdutos
         .filter((x) => x.custoCompleto && x.receita > 0)
         .sort((a, b) => b.margemPercentual - a.margemPercentual || b.lucro - a.lucro),
+      pagos,
+      // Dados dos gráficos alternativos do Resumo.
+      graficos: {
+        semanas: [...semanas.values()].sort((a, b) => a.segunda.localeCompare(b.segunda)).map(arredondarBruta),
+        topClientes: [...porCliente.values()].sort((a, b) => b.bruta - a.bruta).slice(0, 7).map(arredondarBruta),
+        horas: horas.map(arredondarBruta),
+        formas: [...formas.values()].sort((a, b) => b.bruta - a.bruta).map(arredondarBruta),
+        clientes,
+        comparativo,
+      },
     });
   } catch (error) {
     responderErro(res, error, "Erro ao carregar resumo");
