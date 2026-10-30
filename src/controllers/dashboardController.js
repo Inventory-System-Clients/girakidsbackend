@@ -85,6 +85,25 @@ const expedidosNoPeriodo = ({ de, ate }, extra = {}) =>
     order: [["numero", "DESC"]],
   });
 
+// Vendas do período: mesmo critério do "Realizado" da Meta — pedidos criados
+// no período, menos cancelados (inclui os que ainda aguardam liberação).
+// Pedido de outro período expedido agora não entra: conta no período em que
+// foi tirado.
+const vendidosNoPeriodo = ({ de, ate }) =>
+  Pedido.findAll({
+    where: {
+      tipo: "PEDIDO",
+      statusVendas: { [Op.ne]: "CANCELADO" },
+      createdAt: { [Op.between]: [de, ate] },
+    },
+    include: [
+      { model: PedidoItem, as: "itens" },
+      { model: PedidoParcela, as: "parcelas" },
+      { model: PedidoCustoExtra, as: "custosExtras" },
+    ],
+    order: [["numero", "DESC"]],
+  });
+
 // ---------------------------------------------------------------------------
 // Resumo
 // ---------------------------------------------------------------------------
@@ -124,11 +143,11 @@ const agregarProdutos = (pedidos) => {
 export const resumo = async (req, res) => {
   try {
     const p = periodo(req.query);
-    const pedidos = await expedidosNoPeriodo(p);
+    const pedidos = await vendidosNoPeriodo(p);
 
     const card = () => ({ pedidos: 0, bruta: 0, liquida: 0 });
-    const cards = { total: card(), recebida: card(), aberto: card(), antigos: card() };
-    const semana = DIAS.map((dia) => ({ dia, pedidos: 0, bruta: 0, liquida: 0, vendaItens: 0, margem: 0, vendas: 0, vendasPedidos: 0 }));
+    const cards = { total: card(), recebida: card(), aberto: card(), aguardando: card() };
+    const semana = DIAS.map((dia) => ({ dia, pedidos: 0, bruta: 0, liquida: 0, vendaItens: 0, margem: 0 }));
     const extras = { taxas: 0, frete: 0, desconto: 0, custoItens: 0, custosPosVenda: 0 };
 
     for (const pedido of pedidos) {
@@ -141,7 +160,7 @@ export const resumo = async (req, res) => {
       somar(cards.total);
       if (pedido.statusFinanceiro === "PAGO") somar(cards.recebida);
       else somar(cards.aberto);
-      if (new Date(pedido.createdAt) < p.de) somar(cards.antigos);
+      if (pedido.statusVendas !== "LIBERADO") somar(cards.aguardando);
 
       extras.taxas += Number(pedido.taxas);
       extras.frete += Number(pedido.frete) + Number(pedido.freteAdicional);
@@ -149,27 +168,12 @@ export const resumo = async (req, res) => {
       extras.custoItens += a.custoItens;
       extras.custosPosVenda += a.custoExtra;
 
-      const referencia = pedido.expedidoEm || pedido.createdAt;
-      const dia = semana[diaDaSemana(referencia)];
+      const dia = semana[diaDaSemana(pedido.createdAt)];
       dia.pedidos += 1;
       dia.bruta += a.total;
       dia.liquida += a.liquida;
       dia.vendaItens += a.vendaItens;
       dia.margem += a.vendaItens - a.custoItens;
-
-    }
-
-    // Vendas por dia da semana no mesmo critério do "Realizado" da Meta:
-    // pedidos criados no período, menos cancelados.
-    const vendidos = await Pedido.findAll({
-      where: { tipo: "PEDIDO", statusVendas: { [Op.ne]: "CANCELADO" }, createdAt: { [Op.between]: [p.de, p.ate] } },
-      attributes: ["total", "createdAt"],
-      raw: true,
-    });
-    for (const pedido of vendidos) {
-      const dia = semana[diaDaSemana(pedido.createdAt)];
-      dia.vendasPedidos += 1;
-      dia.vendas += Number(pedido.total);
     }
 
     const arredondarCard = (c) => ({ pedidos: c.pedidos, bruta: arredondar(c.bruta), liquida: arredondar(c.liquida) });
@@ -193,8 +197,6 @@ export const resumo = async (req, res) => {
           liquida: arredondar(d.liquida),
           margem: arredondar(d.margem),
           margemPercentual: d.vendaItens > 0 ? arredondar((d.margem / d.vendaItens) * 100) : null,
-          vendas: arredondar(d.vendas),
-          vendasPedidos: d.vendasPedidos,
         };
       }),
       // Listas completas; o frontend filtra Todos / Top 10 / Top 3 / O mais.
@@ -229,21 +231,11 @@ export const meta = async (req, res) => {
         statusVendas: { [Op.ne]: "CANCELADO" },
         createdAt: { [Op.between]: [p.de, p.ate] },
       },
-      attributes: ["total", "createdAt", "statusVendas"],
+      attributes: ["total", "createdAt"],
       raw: true,
     });
-    // Composição do realizado, para conciliar com a receita do Resumo (que
-    // conta só expedidos = liberados, incluindo antigos expedidos no período).
-    const composicao = {
-      liberados: { pedidos: 0, valor: 0 },
-      aguardando: { pedidos: 0, valor: 0 },
-      antigosExpedidos: { pedidos: 0, valor: 0 },
-    };
     const porDia = new Map();
     for (const pedido of pedidos) {
-      const parte = composicao[pedido.statusVendas === "LIBERADO" ? "liberados" : "aguardando"];
-      parte.pedidos += 1;
-      parte.valor += Number(pedido.total);
       const dia = dataISO(pedido.createdAt);
       porDia.set(dia, (porDia.get(dia) || 0) + Number(pedido.total));
     }
@@ -296,22 +288,6 @@ export const meta = async (req, res) => {
     }
 
     const realizado = [...porDia.values()].reduce((s, v) => s + v, 0);
-    // Pedidos criados antes do período e expedidos dentro dele: entram na
-    // receita do Resumo, mas não no realizado da meta.
-    const antigos = await Pedido.findAll({
-      where: {
-        tipo: "PEDIDO",
-        statusVendas: "LIBERADO",
-        createdAt: { [Op.lt]: p.de },
-        expedidoEm: { [Op.between]: [p.de, p.ate] },
-      },
-      attributes: ["total"],
-      raw: true,
-    });
-    composicao.antigosExpedidos.pedidos = antigos.length;
-    composicao.antigosExpedidos.valor = antigos.reduce((t, x) => t + Number(x.total), 0);
-    for (const parte of Object.values(composicao)) parte.valor = arredondar(parte.valor);
-
     res.json({
       periodo: { inicio: p.inicio, fim: p.fim },
       mes: mesCalendario,
@@ -320,8 +296,6 @@ export const meta = async (req, res) => {
       diasComerciaisPeriodo,
       metaPeriodo: arredondar(metaPeriodo),
       realizado: arredondar(realizado),
-      composicao,
-      receitaResumo: arredondar(composicao.liberados.valor + composicao.antigosExpedidos.valor),
       progresso: metaPeriodo ? arredondar((realizado / metaPeriodo) * 100) : null,
       metaDiaria: arredondar(metaDiaria),
       calendario,
@@ -568,7 +542,7 @@ const dadosAtuais = (produto) =>
 export const analise = async (req, res) => {
   try {
     const p = periodo(req.query);
-    const [pedidos, cadastro] = await Promise.all([expedidosNoPeriodo(p), Produto.findAll()]);
+    const [pedidos, cadastro] = await Promise.all([vendidosNoPeriodo(p), Produto.findAll()]);
     const porId = new Map(cadastro.map((x) => [x.id, x]));
 
     const vendas = agregarProdutos(pedidos).map((v) => ({ ...v, ...dadosAtuais(porId.get(v.produtoId)), nome: v.nome }));
