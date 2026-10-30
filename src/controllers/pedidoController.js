@@ -85,7 +85,9 @@ export const listar = async (req, res) => {
       where,
       include: [...INCLUDE_COMPLETO, INCLUDE_CLIENTE],
       distinct: true,
-      order: [["numero", "DESC"]],
+      // Mais recente primeiro pela data: os "-ANT" têm número 900000+ e
+      // ficariam sempre no topo se ordenasse pelo número.
+      order: [["createdAt", "DESC"], ["numero", "DESC"]],
       limit: limite,
       offset: (pagina - 1) * limite,
     });
