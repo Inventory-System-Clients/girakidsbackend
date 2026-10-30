@@ -643,3 +643,174 @@ export const produtosAtivos = async (req, res) => {
     responderErro(res, error, "Erro ao carregar produtos ativos");
   }
 };
+
+// ---------------------------------------------------------------------------
+// Tendências de venda x estoque (aba Análise)
+// ---------------------------------------------------------------------------
+
+const MESES_TENDENCIA = 6;
+// Abaixo disso (unidades/mês) a oscilação é ruído e o produto não entra.
+const MINIMO_MENSAL = 10;
+
+const somarMes = (chave, meses) => {
+  const [ano, mes] = chave.split("-").map(Number);
+  return new Date(Date.UTC(ano, mes - 1 + meses, 1)).toISOString().slice(0, 7);
+};
+
+// Meses seguidos subindo (positivo) ou caindo (negativo) até o último mês fechado.
+const sequencia = (valores) => {
+  let n = 0;
+  for (let i = valores.length - 1; i > 0; i -= 1) {
+    const diff = valores[i] - valores[i - 1];
+    if (diff > 0 && n >= 0) n += 1;
+    else if (diff < 0 && n <= 0) n -= 1;
+    else break;
+  }
+  return n;
+};
+
+// Vendas por mês de cada produto de estoque (kits contam nos componentes),
+// em unidades, nos últimos 6 meses fechados + mês atual; ritmo dos últimos 30
+// dias; quantas vezes zerou e quantas reposições teve. Mesmo critério de
+// venda do restante do Financeiro: pedidos criados, menos cancelados.
+export const tendencias = async (req, res) => {
+  try {
+    const mesAtual = hojeISO().slice(0, 7);
+    const meses = Array.from({ length: MESES_TENDENCIA }, (_, i) => somarMes(mesAtual, i - MESES_TENDENCIA));
+    const desde = inicioDoDia(`${meses[0]}-01`);
+    const trintaDias = new Date(Date.now() - 30 * 86400000);
+
+    const [itens, produtos, movimentos] = await Promise.all([
+      PedidoItem.findAll({
+        attributes: ["produtoId", "quantidade", "unidadesPacote"],
+        include: [{
+          model: Pedido,
+          as: "pedido",
+          attributes: ["createdAt"],
+          where: { tipo: "PEDIDO", statusVendas: { [Op.ne]: "CANCELADO" }, createdAt: { [Op.gte]: desde } },
+        }],
+        raw: true,
+        nest: true,
+      }),
+      Produto.findAll(),
+      MovimentacaoEstoque.findAll({
+        attributes: ["produtoId", "tipo", "quantidadeAnterior", "quantidadeNova"],
+        where: { createdAt: { [Op.gte]: desde }, produtoId: { [Op.ne]: null } },
+        raw: true,
+      }),
+    ]);
+    const porId = new Map(produtos.map((p) => [p.id, p]));
+
+    const vendas = new Map(); // produtoId -> { meses: {chave: un}, ultimos30 }
+    const somar = (produtoId, unidades, chave, recente) => {
+      const v = vendas.get(produtoId) || { meses: {}, ultimos30: 0 };
+      v.meses[chave] = (v.meses[chave] || 0) + unidades;
+      if (recente) v.ultimos30 += unidades;
+      vendas.set(produtoId, v);
+    };
+    for (const item of itens) {
+      const produto = porId.get(item.produtoId);
+      if (!produto) continue;
+      const unidades = Number(item.quantidade) * Number(item.unidadesPacote || 1);
+      const chave = dataISO(item.pedido.createdAt).slice(0, 7);
+      const recente = new Date(item.pedido.createdAt) >= trintaDias;
+      if (produto.tipo === "COMPOSTO" && produto.componentes?.length) {
+        for (const c of produto.componentes) somar(c.produtoId, unidades * Number(c.quantidade || 1), chave, recente);
+      } else somar(produto.id, unidades, chave, recente);
+    }
+
+    const estoqueMov = new Map(); // produtoId -> { zerou, reposicoes }
+    for (const m of movimentos) {
+      const e = estoqueMov.get(m.produtoId) || { zerou: 0, reposicoes: 0 };
+      if (m.quantidadeAnterior > 0 && m.quantidadeNova != null && m.quantidadeNova <= 0) e.zerou += 1;
+      if (m.tipo === "ENTRADA") e.reposicoes += 1;
+      estoqueMov.set(m.produtoId, e);
+    }
+
+    const subindo = [];
+    const caindo = [];
+    for (const [produtoId, v] of vendas) {
+      const produto = porId.get(produtoId);
+      if (!produto || produto.arquivado || produto.tipo === "COMPOSTO") continue;
+      const mensal = meses.map((m) => v.meses[m] || 0);
+      const media3 = mensal.slice(-3).reduce((s, x) => s + x, 0) / 3;
+      const media3Ant = mensal.slice(0, 3).reduce((s, x) => s + x, 0) / 3;
+      if (Math.max(media3, media3Ant) < MINIMO_MENSAL) continue;
+
+      // Base anterior pequena demais: % não diz nada, conta como "começou a vender".
+      const variacao = media3Ant >= MINIMO_MENSAL ? ((media3 - media3Ant) / media3Ant) * 100 : null;
+      const seq = sequencia(mensal);
+      // Ritmo atual: o maior entre os últimos 30 dias e a média dos 3 meses.
+      const ritmoDiario = Math.max(v.ultimos30, media3) / 30;
+      const estoque = Number(produto.estoque);
+      const coberturaDias = ritmoDiario > 0 ? Math.max(0, Math.round(estoque / ritmoDiario)) : null;
+      const mov = estoqueMov.get(produtoId) || { zerou: 0, reposicoes: 0 };
+
+      const linha = {
+        produtoId,
+        nome: produto.nome,
+        sku: produto.sku,
+        categoria: produto.categoria,
+        imagemUrl: produto.imagemUrl,
+        estoque,
+        mensal,
+        mesAtual: v.meses[mesAtual] || 0,
+        ultimos30: v.ultimos30,
+        mediaRecente: arredondar(media3, 1),
+        mediaAnterior: arredondar(media3Ant, 1),
+        variacao: variacao == null ? null : arredondar(variacao, 1),
+        sequencia: seq,
+        ritmoDiario: arredondar(ritmoDiario, 2),
+        coberturaDias,
+        vezesZerou: mov.zerou,
+        reposicoes: mov.reposicoes,
+      };
+
+      // Repor com mais frequência: vendas subindo, ou estoque que acaba rápido.
+      const vendasCaindo = variacao != null && variacao <= -25;
+      const motivosSobe = [];
+      if (variacao == null) motivosSobe.push("Começou a vender nos últimos 3 meses");
+      else if (variacao >= 200) motivosSobe.push(`Vendas ${Math.round(media3 / media3Ant)}x maiores`);
+      else if (variacao >= 20) motivosSobe.push(`Vendas subiram ${Math.round(variacao)}%`);
+      if (seq >= 3) motivosSobe.push(`${seq} meses seguidos em alta`);
+      if (mov.zerou >= 2) motivosSobe.push(`Zerou ${mov.zerou}x em ${MESES_TENDENCIA} meses`);
+      if (coberturaDias != null && coberturaDias < 30 && v.ultimos30 > 0) {
+        motivosSobe.push(coberturaDias === 0 ? "Sem estoque" : `Estoque dura ~${coberturaDias} dias`);
+      }
+      if (motivosSobe.length && !vendasCaindo) {
+        subindo.push({
+          ...linha,
+          motivos: motivosSobe,
+          pontos: Math.min(variacao ?? 100, 300) / 10 + Math.max(0, seq) * 3 + mov.zerou * 4 + (coberturaDias != null ? Math.max(0, 30 - coberturaDias) / 3 : 0),
+        });
+      }
+
+      // Pode comprar menos: vendas caindo.
+      const motivosCai = [];
+      if (vendasCaindo) motivosCai.push(`Vendas caíram ${Math.abs(Math.round(variacao))}%`);
+      if (seq <= -3) motivosCai.push(`${Math.abs(seq)} meses seguidos em queda`);
+      if (motivosCai.length) {
+        if (coberturaDias == null) motivosCai.push("Sem vendas no ritmo atual");
+        else if (coberturaDias >= 90) motivosCai.push(`Estoque dura ~${Math.round(coberturaDias / 30)} meses`);
+        caindo.push({
+          ...linha,
+          motivos: motivosCai,
+          // Primeiro quem tem mais estoque parado (é onde dá para cortar compra).
+          pontos: Math.min(-(variacao || 0), 100) / 10 + Math.max(0, -seq) * 3 +
+            (estoque <= 0 ? 0 : coberturaDias == null ? 24 : Math.min(coberturaDias / 30, 12) * 2),
+        });
+      }
+    }
+
+    const porPontos = (a, b) => b.pontos - a.pontos;
+    res.json({
+      meses,
+      mesAtual,
+      minimoMensal: MINIMO_MENSAL,
+      subindo: subindo.sort(porPontos),
+      caindo: caindo.sort(porPontos),
+    });
+  } catch (error) {
+    responderErro(res, error, "Erro ao carregar tendências");
+  }
+};
