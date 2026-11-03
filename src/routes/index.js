@@ -257,6 +257,9 @@ router.delete("/custos-extras/:id", ...custo, registrarLog("EXCLUIR_CUSTO_EXTRA"
 router.get("/correios/pedidos", ...com, correios.buscarPedidos);
 router.get("/correios/pedidos/:id", ...com, correios.detalharPedido);
 router.post("/correios/cotacao", ...com, correios.cotar);
+router.get("/correios/vipp/status", ...com, correios.vippStatus);
+router.post("/correios/vipp/captcha", ...com, correios.vippCaptcha);
+router.post("/correios/vipp/entrar", ...com, registrarLog("ENTRAR_VIPP", "CorreiosPostagem"), correios.vippEntrar);
 router.post("/correios/postagens", ...com, registrarLog("CRIAR_POSTAGEM_VIPP", "CorreiosPostagem"), correios.criarPostagem);
 router.get("/correios/postagens/:id/pdfs", ...com, correios.baixarPdfs);
 router.use("/transportadoras", transportadoraRoutes);

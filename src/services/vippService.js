@@ -104,7 +104,8 @@ const criarSessao = () => {
     });
     const corpo = await texto(resposta);
     if (resposta.status >= 300 && resposta.status < 400) {
-      throw new Error("Sessão do VIPP expirou. Tente novamente.");
+      sessaoAtiva = null;
+      throw precisaCaptcha();
     }
     try {
       return JSON.parse(corpo);
@@ -120,15 +121,15 @@ const criarSessao = () => {
 
 const atributo = (html, regex) => html.match(regex)?.[1]?.trim() || "";
 
-// Faz login e lê da tela de digitação os dados fixos da conta: contrato,
-// cartão, remetente, agência postadora e se o contrato é PPN.
-const abrirSessaoVipp = async () => {
-  const sessao = criarSessao();
+const erroHttp = (status, mensagem) => Object.assign(new Error(mensagem), { status });
 
-  await sessao.requisitar(`${BASE_URL}/inicio/index.php`);
+// Login com usuário, senha e (quando a tela pede) o captcha digitado por uma
+// pessoa na nossa tela de Correios.
+const entrar = async (sessao, captcha = "") => {
   const corpoLogin = new URLSearchParams({
     txtUsr: required("VIPP_USUARIO"),
     txtPwd: required("VIPP_SENHA"),
+    txtCaptcha: String(captcha || "").trim().toUpperCase(),
   }).toString();
   const respostaLogin = await sessao.requisitar(`${BASE_URL}/inicio/index.php`, {
     method: "POST",
@@ -141,18 +142,26 @@ const abrirSessaoVipp = async () => {
     const motivo = pagina
       .match(/(?:Usu[aá]rio\/E-mail|Usu[aá]rio|Senha|Captcha|Texto da imagem|Acesso|Conta)[^.!:]{0,30}?(?:inv[aá]lid[oa]|incorret[oa]|bloquead[oa]|expirad[oa]|n[aã]o confere)(?: - Tente Novamente)?/i)?.[0]
       ?.trim();
-    throw new Error(
-      `Login no VIPP recusado${motivo ? ` (VIPP: "${motivo}")` : ""}. ` +
-        (/captcha/i.test(motivo || "")
-          ? "O VIPP passou a exigir captcha no login; a integração automática precisa do WebService do VIPP."
-          : "Confira VIPP_USUARIO e VIPP_SENHA no ambiente do backend (Render)."),
+    if (/captcha|imagem/i.test(motivo || "") || (captcha && !motivo)) {
+      throw erroHttp(400, `Código da imagem não confere${motivo ? ` (VIPP: "${motivo}")` : ""}. Tente com uma nova imagem.`);
+    }
+    throw erroHttp(
+      502,
+      `Login no VIPP recusado${motivo ? ` (VIPP: "${motivo}")` : ""}. Confira VIPP_USUARIO e VIPP_SENHA no ambiente do backend (Render).`,
     );
   }
   await sessao.requisitar(new URL(destino, `${BASE_URL}/inicio/`).toString());
+};
 
+// Lê da tela de digitação os dados fixos da conta: contrato, cartão,
+// remetente, agência postadora e se o contrato é PPN. Devolve null se a
+// sessão não está mais logada.
+const lerContexto = async (sessao) => {
   const respostaFormulario = await sessao.requisitar(URL_FORMULARIO);
+  if (respostaFormulario.status >= 300 && respostaFormulario.status < 400) return null;
   const html = await sessao.texto(respostaFormulario);
   if (!html.includes("frmEditarConhecimento")) {
+    if (/txtUsr|frmLogin/.test(html)) return null;
     throw new Error("Não foi possível abrir a tela de digitação do VIPP.");
   }
 
@@ -193,9 +202,90 @@ const abrirSessaoVipp = async () => {
   contexto.idPostadora = String(postadora.IdxPos).trim();
   contexto.cepPostadora = postadora.CepPos;
   contexto.nomePostadora = postadora.FanPos;
-
-  return { sessao, contexto };
+  return contexto;
 };
+
+// A sessão logada fica guardada e é reaproveitada enquanto o VIPP mantiver,
+// para o captcha aparecer só quando ela cair. loginPendente é a sessão da
+// imagem de captcha mostrada na tela, aguardando a pessoa digitar.
+let sessaoAtiva = null;
+let loginPendente = null;
+const CAPTCHA_VALIDADE_MS = 5 * 60 * 1000;
+
+const precisaCaptcha = () =>
+  erroHttp(428, "O VIPP pediu o código da imagem (captcha) para entrar.");
+
+const abrirSessaoVipp = async () => {
+  if (sessaoAtiva) {
+    const contexto = await lerContexto(sessaoAtiva.sessao);
+    if (contexto) {
+      sessaoAtiva.contexto = contexto;
+      return sessaoAtiva;
+    }
+    sessaoAtiva = null;
+  }
+
+  // Tela de login sem captcha: entra direto como antes.
+  const sessao = criarSessao();
+  const inicio = await sessao.texto(await sessao.requisitar(`${BASE_URL}/inicio/index.php`));
+  if (/exibeCap\s*=\s*'1'/.test(inicio)) {
+    throw precisaCaptcha();
+  }
+  await entrar(sessao);
+  const contexto = await lerContexto(sessao);
+  if (!contexto) throw precisaCaptcha();
+  sessaoAtiva = { sessao, contexto };
+  return sessaoAtiva;
+};
+
+// Abre uma sessão nova no VIPP e devolve a imagem do captcha dela.
+export const iniciarLoginVipp = async () => {
+  const sessao = criarSessao();
+  await sessao.requisitar(`${BASE_URL}/inicio/index.php`);
+  const resposta = await sessao.requisitar(
+    `${BASE_URL}/inicio/CaptchaVisualSet/GeraImagem.php?datax=${Date.now()}`,
+  );
+  const tipo = resposta.headers.get("content-type") || "image/jpeg";
+  if (!resposta.ok || !tipo.startsWith("image/")) {
+    throw erroHttp(502, "O VIPP não devolveu a imagem do captcha.");
+  }
+  const imagem = Buffer.from(await resposta.arrayBuffer()).toString("base64");
+  loginPendente = { sessao, criadoEm: Date.now() };
+  return { imagem: `data:${tipo};base64,${imagem}` };
+};
+
+// Termina o login com o código que a pessoa digitou.
+export const concluirLoginVipp = async (captcha) => {
+  const codigo = String(captcha || "").trim();
+  if (!codigo) throw erroHttp(400, "Digite o código da imagem.");
+  if (!loginPendente || Date.now() - loginPendente.criadoEm > CAPTCHA_VALIDADE_MS) {
+    loginPendente = null;
+    throw erroHttp(400, "A imagem expirou. Gere uma nova.");
+  }
+  const { sessao } = loginPendente;
+  loginPendente = null;
+  await entrar(sessao, codigo);
+  const contexto = await lerContexto(sessao);
+  if (!contexto) throw erroHttp(400, "O VIPP não abriu a sessão. Tente com uma nova imagem.");
+  sessaoAtiva = { sessao, contexto };
+  return { conectado: true, postadora: contexto.nomePostadora };
+};
+
+export const statusVipp = () => ({ conectado: Boolean(sessaoAtiva) });
+
+// Mantém a sessão logada viva (como uma aba aberta no VIPP); se cair, o
+// próximo uso pede o captcha de novo.
+const manterSessao = setInterval(async () => {
+  if (!sessaoAtiva) return;
+  try {
+    const resposta = await sessaoAtiva.sessao.requisitar(URL_FORMULARIO);
+    if (resposta.status >= 300 && resposta.status < 400) sessaoAtiva = null;
+    else await resposta.arrayBuffer();
+  } catch {
+    // Falha de rede: tenta de novo na próxima volta.
+  }
+}, 8 * 60 * 1000);
+manterSessao.unref?.();
 
 const listarServicos = async ({ sessao, contexto }, carga) => {
   const dados = await sessao.json(

@@ -4,6 +4,9 @@ import {
   cotarServicosVipp,
   criarPostagemVipp,
   baixarPdfsPostagemVipp,
+  iniciarLoginVipp,
+  concluirLoginVipp,
+  statusVipp,
 } from "../services/vippService.js";
 import { METODOS_ENVIO } from "../utils/formasPagamento.js";
 import { fimDoDia, inicioDoDia } from "../utils/helpers.js";
@@ -163,6 +166,25 @@ export const detalharPedido = async (req, res) => {
     res.json({ ...pedido, postagem: postagens.get(pedido.id) || null });
   } catch (error) {
     responderErro(res, error, "Erro ao abrir o pedido");
+  }
+};
+
+// Login no VIPP com captcha digitado na nossa tela.
+export const vippStatus = (req, res) => res.json(statusVipp());
+
+export const vippCaptcha = async (req, res) => {
+  try {
+    res.json(await iniciarLoginVipp());
+  } catch (error) {
+    responderErro(res, error, "Erro ao buscar a imagem do VIPP");
+  }
+};
+
+export const vippEntrar = async (req, res) => {
+  try {
+    res.json(await concluirLoginVipp(req.body?.captcha));
+  } catch (error) {
+    responderErro(res, error, "Erro ao entrar no VIPP");
   }
 };
 
