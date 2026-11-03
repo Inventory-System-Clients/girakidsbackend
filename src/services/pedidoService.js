@@ -28,6 +28,7 @@ import {
 } from "../utils/helpers.js";
 import { contem } from "../utils/busca.js";
 import { avisarPedido } from "./whatsappService.js";
+import { verificarEstoque } from "./estoqueService.js";
 
 // Itens trazem a capa atual do produto para quem não tem imagem própria
 // (itens antigos da loja anterior).
@@ -301,6 +302,8 @@ export const criarPedido = async (corpo, usuario, tipo = "PEDIDO") => {
       if (clienteCadastro) cliente.clienteId = clienteCadastro.usuario.id;
     }
     const itens = await montarItens(corpo.itens, usuario, transaction);
+    // Pedido só nasce com estoque para todos os itens (orçamento não reserva).
+    if (tipo === "PEDIDO") await verificarEstoque(itens, transaction);
     const subtotal = arredondar(itens.reduce((soma, item) => soma + item.total, 0));
     const pesoTotalGramas = itens.reduce((soma, item) => soma + item.pesoGramas, 0);
 
@@ -403,6 +406,9 @@ export const criarPedido = async (corpo, usuario, tipo = "PEDIDO") => {
   if (tipo === "PEDIDO" && FORMAS_PAGAMENTO[formaPagamento]?.online) {
     const provedor = provedorAtivo();
     try {
+      // Reconfere logo antes de gerar o PIX/link: outro pedido pode ter
+      // levado o estoque nesse meio tempo.
+      await verificarEstoque(pedido.itens);
       const cobranca = await provedor.criarCobranca({
         pedido,
         metodo: formaPagamento,

@@ -3,7 +3,7 @@ import { sequelize } from "../database/connection.js";
 import { Pedido, PedidoParcela, AlertaPagamento } from "../models/index.js";
 import { obterProvedor, provedorAtivo, provedorMaquininha, statusPagamentos } from "../services/pagamentos/index.js";
 import { configPagamentos } from "../services/pagamentos/config.js";
-import { baixarEstoquePedido } from "../services/estoqueService.js";
+import { baixarEstoquePedido, verificarEstoque } from "../services/estoqueService.js";
 import { INCLUDE_COMPLETO, serializarPedido } from "../services/pedidoService.js";
 import { arredondar, erroHttp, hojeISO, responderErro } from "../utils/helpers.js";
 
@@ -11,8 +11,9 @@ export const status = (req, res) => res.json(statusPagamentos());
 
 // Confirma um pedido pago pelo banco: registra o recebimento, quita e libera
 // para a expedição (mesmo efeito do "Confirmar pagamento" do Time Financeiro).
-const confirmarPagamentoOnline = async (pedido, valorPago, origem) =>
-  sequelize.transaction(async (transaction) => {
+const confirmarPagamentoOnline = async (pedido, valorPago, origem) => {
+  let semEstoque = null;
+  await sequelize.transaction(async (transaction) => {
     const atual = await Pedido.findByPk(pedido.id, { include: INCLUDE_COMPLETO, transaction });
     if (atual.statusFinanceiro === "PAGO") return;
     const sistema = { nome: origem, email: null };
@@ -30,21 +31,41 @@ const confirmarPagamentoOnline = async (pedido, valorPago, origem) =>
       },
       { transaction },
     );
-    if (atual.statusVendas === "AGUARDANDO") {
-      await baixarEstoquePedido(atual, sistema, transaction);
+    let liberar = atual.statusVendas === "AGUARDANDO";
+    if (liberar) {
+      try {
+        await baixarEstoquePedido(atual, sistema, transaction);
+      } catch (error) {
+        if (!error.semEstoque) throw error;
+        // Pago, mas o estoque acabou: fica aguardando no Time de Vendas.
+        liberar = false;
+        semEstoque = error.message;
+      }
     }
     await atual.update(
       {
         statusFinanceiro: "PAGO",
         pagoEm: new Date(),
         pagoPor: origem,
-        ...(atual.statusVendas === "AGUARDANDO"
+        ...(liberar
           ? { statusVendas: "LIBERADO", liberadoEm: new Date(), liberadoPor: `${origem} (banco)` }
           : {}),
       },
       { transaction },
     );
   });
+  if (semEstoque) {
+    await alertar({
+      pedidoId: pedido.id,
+      pedidoNumero: String(pedido.numero),
+      provedor: origem,
+      severidade: "critical",
+      motivo: "pago_sem_estoque",
+      mensagem: `Pedido ${pedido.numero} foi pago, mas não foi liberado. ${semEstoque}`,
+      valorRecebido: valorPago,
+    });
+  }
+};
 
 const alertar = (dados) => AlertaPagamento.create(dados).catch((e) => console.error(e));
 
@@ -163,6 +184,7 @@ export const gerarCobranca = async (req, res) => {
     if (!["PIX_ONLINE", "CREDITO_ONLINE", "DEBITO_ONLINE"].includes(pedido.formaPagamento)) throw erroHttp(400, "Este pedido não é de pagamento online.");
     const provedor = provedorAtivo();
     if (!provedor) throw erroHttp(400, "Pagamento online indisponível no momento.");
+    if (!pedido.estoqueBaixado) await verificarEstoque(pedido.itens);
     const cobranca = await provedor.criarCobranca({ pedido, metodo: pedido.formaPagamento, parcelas: pedido.parcelasCartao });
     await pedido.update({
       pagamentoProvedor: provedor.nome,
@@ -227,6 +249,7 @@ export const cobrarNaMaquininha = async (req, res) => {
     verificarAcesso(req, pedido);
     if (pedido.statusVendas === "CANCELADO") throw erroHttp(400, "Pedido cancelado.");
     if (pedido.statusFinanceiro === "PAGO") throw erroHttp(400, "Pedido já está pago.");
+    if (!pedido.estoqueBaixado) await verificarEstoque(pedido.itens);
     // Cobrança anterior ainda aberta em maquininha: tira da tela antes.
     const anterior = obterProvedor(pedido.pagamentoProvedor);
     if (anterior?.cancelarMaquininha && /^(point|reader|stone):/.test(pedido.pagamentoReferencia || "")) {

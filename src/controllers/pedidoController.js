@@ -24,6 +24,7 @@ import {
 import {
   baixarEstoquePedido,
   devolverEstoquePedido,
+  verificarEstoque,
 } from "../services/estoqueService.js";
 import { cotarFrete } from "../services/freteService.js";
 import { statusPagamentos } from "../services/pagamentos/index.js";
@@ -405,6 +406,7 @@ export const editar = async (req, res) => {
           await devolverEstoquePedido(pedido, req.usuario, transaction, `Edição do pedido ${pedido.numero}`);
         }
         const itens = await montarItens(corpo.itens, req.usuario, transaction);
+        if (!estavaBaixado && pedido.tipo === "PEDIDO") await verificarEstoque(itens, transaction);
         await PedidoItem.destroy({ where: { pedidoId: pedido.id }, transaction });
         await PedidoItem.bulkCreate(itens.map((i) => ({ ...i, pedidoId: pedido.id })), { transaction });
         subtotal = arredondar(itens.reduce((s, i) => s + i.total, 0));

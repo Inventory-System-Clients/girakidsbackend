@@ -80,14 +80,14 @@ const consumoDoPedido = async (itens, transaction) => {
   return consumo;
 };
 
-// Reserva (baixa) o estoque do pedido — feito ao liberar para expedição.
-export const baixarEstoquePedido = async (pedido, usuario, transaction) => {
-  if (pedido.estoqueBaixado) return;
-  const consumo = await consumoDoPedido(pedido.itens, transaction);
+// Confere se há estoque para os itens (por encomenda não precisa) e lança 409
+// listando o que falta. Devolve o consumo e os produtos lidos.
+export const verificarEstoque = async (itens, transaction, { travar = false } = {}) => {
+  const consumo = await consumoDoPedido(itens, transaction);
   const produtos = await Produto.findAll({
     where: { id: [...consumo.keys()] },
     transaction,
-    lock: transaction ? transaction.LOCK.UPDATE : undefined,
+    lock: travar && transaction ? transaction.LOCK.UPDATE : undefined,
   });
 
   const faltando = produtos.filter((produto) => {
@@ -95,13 +95,22 @@ export const baixarEstoquePedido = async (pedido, usuario, transaction) => {
     return !sobEncomenda && Number(produto.estoque) < unidades;
   });
   if (faltando.length) {
-    throw erroHttp(
+    const erro = erroHttp(
       409,
       `Estoque insuficiente: ${faltando
-        .map((p) => `${p.nome} (disponível ${p.estoque} un.)`)
+        .map((p) => `${p.nome} (disponível ${Math.max(0, Number(p.estoque))} un.)`)
         .join(", ")}`,
     );
+    erro.semEstoque = true;
+    throw erro;
   }
+  return { consumo, produtos };
+};
+
+// Reserva (baixa) o estoque do pedido — feito ao liberar para expedição.
+export const baixarEstoquePedido = async (pedido, usuario, transaction) => {
+  if (pedido.estoqueBaixado) return;
+  const { consumo, produtos } = await verificarEstoque(pedido.itens, transaction, { travar: true });
 
   for (const produto of produtos) {
     const { unidades, sobEncomenda } = consumo.get(produto.id);
