@@ -24,7 +24,7 @@ import {
   situacaoPedido,
 } from "./legado/mapeamento.js";
 import { devolverEstoquePedido, movimentar } from "./estoqueService.js";
-import { NUMERO_COLISAO_LEGADO } from "./pedidoService.js";
+import { NUMERO_COLISAO_LEGADO, proximoNumero } from "./pedidoService.js";
 import { avisarPedido } from "./whatsappService.js";
 
 // Sincronização contínua com a loja antiga (Krion/Firebase), só de lá para
@@ -294,7 +294,11 @@ const criarPedido = async (o, tipo, ctx) =>
 
     let numero = numeroLegado(o);
     let codigoLegado = null;
-    if (!numero) {
+    const numeroAntigo = numero || String(o.id).slice(0, 30);
+    if (tipo === "PEDIDO") {
+      // Pedido tirado lá por engano entra na sequência daqui (70000+).
+      numero = await proximoNumero(tipo, transaction);
+    } else if (!numero) {
       codigoLegado = String(o.id).slice(0, 30);
       numero = await numeroLivre(tipo, 0, transaction);
     } else if (await Pedido.count({ where: { tipo, numero }, transaction })) {
@@ -305,9 +309,13 @@ const criarPedido = async (o, tipo, ctx) =>
     const email = String(o.customer_email || "").trim().toLowerCase();
     const cliente = email ? await Usuario.findOne({ where: { email }, attributes: ["id"], transaction }) : null;
     const transportadora = o.carrier_id ? await Parceiro.findOne({ where: { legadoId: o.carrier_id }, attributes: ["id"], transaction }) : null;
+    const dados = dadosPedido(o, { tipo, numero, codigoLegado, clienteId: cliente?.id || null, transportadoraId: transportadora?.id || null });
+    if (tipo === "PEDIDO") {
+      dados.historico = [...(dados.historico || []), { tipo: "IMPORTADO_SISTEMA_ANTIGO", numeroAntigo, em: new Date().toISOString() }];
+    }
     const pedido = await Pedido.create(
       {
-        ...dadosPedido(o, { tipo, numero, codigoLegado, clienteId: cliente?.id || null, transportadoraId: transportadora?.id || null }),
+        ...dados,
         legadoAssinatura: assinaturaPedido(o),
       },
       { transaction },

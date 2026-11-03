@@ -55,6 +55,10 @@ export const formatarNumero = (pedido) =>
 // partir daqui (e mostra "63127-ANT"); a sequência normal ignora essa faixa.
 export const NUMERO_COLISAO_LEGADO = 900000;
 
+// Pedidos (daqui e os que ainda chegam do sistema antigo) seguem uma única
+// sequência a partir deste número.
+export const PEDIDO_NUMERO_INICIAL = 70000;
+
 // Próximo número sequencial do tipo, sob lock transacional.
 export const proximoNumero = async (tipo, transaction) => {
   await sequelize.query("SELECT pg_advisory_xact_lock(hashtext(:chave))", {
@@ -62,7 +66,7 @@ export const proximoNumero = async (tipo, transaction) => {
     transaction,
   });
   const maior = await Pedido.max("numero", { where: { tipo, numero: { [Op.lt]: NUMERO_COLISAO_LEGADO } }, transaction });
-  const inicial = tipo === "PEDIDO" ? Number(process.env.PEDIDO_NUMERO_INICIAL || 1) : 1;
+  const inicial = tipo === "PEDIDO" ? Math.max(PEDIDO_NUMERO_INICIAL, Number(process.env.PEDIDO_NUMERO_INICIAL || 1)) : 1;
   return Math.max(Number(maior || 0) + 1, inicial);
 };
 
