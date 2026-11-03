@@ -77,6 +77,7 @@ router.post("/pedidos", autenticar, (req, res, next) =>
 registrarLog("CRIAR_PEDIDO", "Pedido"), pedidos.criar);
 router.get("/pedidos/meus", autenticar, pedidos.meusPedidos);
 router.get("/pedidos/codigo/:codigo", autenticar, pedidos.obterPorCodigo);
+router.get("/pedidos/carregar", autenticar, pedidos.buscarParaCarregar);
 
 // Time de Vendas / Financeiro
 const vendasOuFinanceiro = exigirPermissao("VENDAS", "FINANCEIRO");

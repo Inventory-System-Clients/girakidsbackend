@@ -1,5 +1,6 @@
 import { Op } from "sequelize";
 import { sequelize } from "../database/connection.js";
+import { contem } from "../utils/busca.js";
 import {
   Pedido,
   PedidoItem,
@@ -14,6 +15,7 @@ import {
   criarPedido,
   ehInterno,
   ehShowroom,
+  formatarNumero,
   montarFiltroPedidos,
   montarItens,
   resolverTransportadora,
@@ -151,6 +153,39 @@ export const obterPorCodigo = async (req, res) => {
     res.json(serializarPedido(pedido));
   } catch (error) {
     responderErro(res, error, "Erro ao carregar pedido");
+  }
+};
+
+// "Carregar Pedido" pelo nome do cliente (ou número): lista curta para
+// escolher. Cliente só vê os próprios pedidos.
+export const buscarParaCarregar = async (req, res) => {
+  try {
+    const busca = String(req.query.busca || "").trim();
+    if (busca.length < 2) return res.json([]);
+    const ou = [contem("Pedido.clienteNome", busca), { codigoLegado: { [Op.iLike]: `%${busca}%` } }];
+    if (/^\d+$/.test(busca)) ou.push({ numero: Number(busca) });
+    const where = { [Op.or]: ou };
+    if (!ehInterno(req.usuario)) where.clienteId = req.usuario.id;
+    const pedidos = await Pedido.findAll({
+      where,
+      include: [{ model: PedidoItem, as: "itens", attributes: ["id"] }],
+      order: [["createdAt", "DESC"]],
+      limit: 15,
+    });
+    res.json(
+      pedidos.map((p) => ({
+        id: p.id,
+        tipo: p.tipo,
+        numeroFormatado: formatarNumero(p),
+        clienteNome: p.clienteNome,
+        total: Number(p.total),
+        createdAt: p.createdAt,
+        statusVendas: p.statusVendas,
+        quantidadeItens: p.itens.length,
+      })),
+    );
+  } catch (error) {
+    responderErro(res, error, "Erro ao buscar pedidos");
   }
 };
 
