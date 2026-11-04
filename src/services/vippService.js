@@ -75,13 +75,13 @@ const paramJquery = (dados) => {
 const criarSessao = () => {
   let cookies = "";
 
-  const requisitar = async (url, { method = "GET", corpo, ajax = false } = {}) => {
+  const requisitar = async (url, { method = "GET", corpo, ajax = false, referer = URL_FORMULARIO } = {}) => {
     const resposta = await fetch(url, {
       method,
       redirect: "manual",
       headers: {
         Cookie: cookies,
-        Referer: URL_FORMULARIO,
+        Referer: referer,
         ...(ajax ? { "X-Requested-With": "XMLHttpRequest", Accept: "application/json, text/javascript, */*" } : {}),
         ...(corpo
           ? { "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8" }
@@ -241,10 +241,10 @@ const abrirSessaoVipp = async () => {
 // Abre uma sessão nova no VIPP e devolve a imagem do captcha dela.
 export const iniciarLoginVipp = async () => {
   const sessao = criarSessao();
-  await sessao.requisitar(`${BASE_URL}/inicio/index.php`);
-  const resposta = await sessao.requisitar(
-    `${BASE_URL}/inicio/CaptchaVisualSet/GeraImagem.php?datax=${Date.now()}`,
-  );
+  const inicio = await sessao.texto(await sessao.requisitar(`${BASE_URL}/inicio/index.php`));
+  // Usa o endereço da imagem que a própria tela de login traz.
+  const src = atributo(inicio, /id="imgCaptchaVisualSet"[^>]*src="([^"]+)"/) || `./CaptchaVisualSet/GeraImagem.php?datax=${Date.now()}`;
+  const resposta = await sessao.requisitar(new URL(src, `${BASE_URL}/inicio/`).toString(), { referer: `${BASE_URL}/inicio/index.php` });
   const tipo = resposta.headers.get("content-type") || "image/jpeg";
   if (!resposta.ok || !tipo.startsWith("image/")) {
     const corpo = (await sessao.texto(resposta)).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 160);
