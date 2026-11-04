@@ -247,7 +247,11 @@ export const iniciarLoginVipp = async () => {
   );
   const tipo = resposta.headers.get("content-type") || "image/jpeg";
   if (!resposta.ok || !tipo.startsWith("image/")) {
-    throw erroHttp(502, "O VIPP não devolveu a imagem do captcha.");
+    const corpo = (await sessao.texto(resposta)).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 160);
+    throw erroHttp(
+      502,
+      `O VIPP não devolveu a imagem do captcha (${resposta.status} ${tipo}${resposta.headers.get("location") ? ` → ${resposta.headers.get("location")}` : ""}${corpo ? `: ${corpo}` : ""}).`,
+    );
   }
   const imagem = Buffer.from(await resposta.arrayBuffer()).toString("base64");
   loginPendente = { sessao, criadoEm: Date.now() };
