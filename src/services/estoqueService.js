@@ -51,16 +51,18 @@ export const movimentar = async ({
 };
 
 // Unidades que cada item consome por produto (produto composto consome os
-// componentes, não ele mesmo).
+// componentes, não ele mesmo). "liberado": algum item foi lançado sem estoque
+// por um admin e pode deixar o estoque negativo.
 const consumoDoPedido = async (itens, transaction) => {
   const ids = [...new Set(itens.map((item) => item.produtoId).filter(Boolean))];
   const produtos = await Produto.findAll({ where: { id: ids }, transaction });
   const porId = new Map(produtos.map((p) => [p.id, p]));
   const consumo = new Map();
-  const somar = (produtoId, unidades, sobEncomenda) => {
-    const atual = consumo.get(produtoId) || { unidades: 0, sobEncomenda: false };
+  const somar = (produtoId, unidades, sobEncomenda, liberado) => {
+    const atual = consumo.get(produtoId) || { unidades: 0, sobEncomenda: false, liberado: false };
     atual.unidades += unidades;
     atual.sobEncomenda = atual.sobEncomenda || sobEncomenda;
+    atual.liberado = atual.liberado || liberado;
     consumo.set(produtoId, atual);
   };
 
@@ -69,18 +71,20 @@ const consumoDoPedido = async (itens, transaction) => {
     if (!produto) continue;
     const unidades = Number(item.quantidade) * Number(item.unidadesPacote || 1);
     const sobEncomenda = produto.modoVenda === "ENCOMENDA";
+    const liberado = Boolean(item.liberadoSemEstoque);
     if (produto.tipo === "COMPOSTO" && produto.componentes?.length) {
       for (const componente of produto.componentes) {
-        somar(componente.produtoId, unidades * Number(componente.quantidade || 1), sobEncomenda);
+        somar(componente.produtoId, unidades * Number(componente.quantidade || 1), sobEncomenda, liberado);
       }
     } else {
-      somar(produto.id, unidades, sobEncomenda);
+      somar(produto.id, unidades, sobEncomenda, liberado);
     }
   }
   return consumo;
 };
 
-// Confere se há estoque para os itens (por encomenda não precisa) e lança 409
+// Confere se há estoque para os itens (por encomenda ou liberado sem estoque
+// pelo admin não precisa) e lança 409
 // listando o que falta. Devolve o consumo e os produtos lidos.
 export const verificarEstoque = async (itens, transaction, { travar = false } = {}) => {
   const consumo = await consumoDoPedido(itens, transaction);
@@ -91,8 +95,8 @@ export const verificarEstoque = async (itens, transaction, { travar = false } = 
   });
 
   const faltando = produtos.filter((produto) => {
-    const { unidades, sobEncomenda } = consumo.get(produto.id);
-    return !sobEncomenda && Number(produto.estoque) < unidades;
+    const { unidades, sobEncomenda, liberado } = consumo.get(produto.id);
+    return !sobEncomenda && !liberado && Number(produto.estoque) < unidades;
   });
   if (faltando.length) {
     const erro = erroHttp(
@@ -115,6 +119,8 @@ export const baixarEstoquePedido = async (pedido, usuario, transaction) => {
   for (const produto of produtos) {
     const { unidades, sobEncomenda } = consumo.get(produto.id);
     // Por encomenda: baixa só o que existe; o restante vai para a fila.
+    // Liberado sem estoque baixa tudo e o estoque fica negativo: a próxima
+    // entrada desconta o que ficou devendo.
     const baixa = sobEncomenda ? Math.min(unidades, Math.max(0, Number(produto.estoque))) : unidades;
     if (!baixa) continue;
     await movimentar({

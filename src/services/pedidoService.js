@@ -120,7 +120,9 @@ const validarFormaPagamento = (forma, usuario, cliente, metodoEnvio) => {
 
 // Monta itens a partir do catálogo atual. A equipe pode informar "novo
 // valor" (precoUnitario) por item; o cliente sempre paga o preço do cadastro.
-export const montarItens = async (itensEntrada, usuario, transaction) => {
+// manterLiberados: produtos que já estavam liberados sem estoque no pedido
+// (edição feita por quem não é admin não tira a liberação).
+export const montarItens = async (itensEntrada, usuario, transaction, { manterLiberados = new Set() } = {}) => {
   if (!Array.isArray(itensEntrada) || !itensEntrada.length) {
     throw erroHttp(400, "Adicione produtos ao carrinho.");
   }
@@ -159,6 +161,8 @@ export const montarItens = async (itensEntrada, usuario, transaction) => {
       total: arredondar(precoUnitario * unidadesPacote * quantidade),
       pesoGramas: quantidade * Number(produto.pesoPacoteGramas || 0),
       sobEncomenda: produto.modoVenda === "ENCOMENDA",
+      liberadoSemEstoque:
+        Boolean(entrada.liberadoSemEstoque) && (usuario?.role === "ADMIN" || manterLiberados.has(produto.id)),
     };
   });
 };

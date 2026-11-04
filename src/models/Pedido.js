@@ -228,6 +228,9 @@ export const PedidoItem = sequelize.define(
     total: { type: DataTypes.DECIMAL(12, 2), allowNull: false },
     pesoGramas: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
     sobEncomenda: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    // Admin lançou sem estoque (segurando o "+"): passa da conferência e o
+    // estoque fica negativo até a mercadoria chegar.
+    liberadoSemEstoque: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     // Checklist de montagem
     conferido: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     conferidoEm: { type: DataTypes.DATE, allowNull: true },

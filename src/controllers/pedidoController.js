@@ -305,6 +305,7 @@ export const gerarPedidoDoOrcamento = async (req, res) => {
         produtoId: item.produtoId,
         quantidade: item.quantidade,
         precoUnitario: item.precoUnitario,
+        liberadoSemEstoque: item.liberadoSemEstoque,
       })),
       metodoEnvio: orcamento.metodoEnvio,
       transportadora: orcamento.transportadoraId ? { id: orcamento.transportadoraId, nome: orcamento.transportadoraNome } : null,
@@ -440,7 +441,9 @@ export const editar = async (req, res) => {
         if (estavaBaixado) {
           await devolverEstoquePedido(pedido, req.usuario, transaction, `Edição do pedido ${pedido.numero}`);
         }
-        const itens = await montarItens(corpo.itens, req.usuario, transaction);
+        const manterLiberados = new Set(pedido.itens.filter((i) => i.liberadoSemEstoque).map((i) => i.produtoId));
+        const entrada = corpo.itens.map((i) => ({ ...i, liberadoSemEstoque: i.liberadoSemEstoque ?? manterLiberados.has(i.produtoId) }));
+        const itens = await montarItens(entrada, req.usuario, transaction, { manterLiberados });
         if (!estavaBaixado && pedido.tipo === "PEDIDO") await verificarEstoque(itens, transaction);
         await PedidoItem.destroy({ where: { pedidoId: pedido.id }, transaction });
         await PedidoItem.bulkCreate(itens.map((i) => ({ ...i, pedidoId: pedido.id })), { transaction });
