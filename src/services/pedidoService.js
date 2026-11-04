@@ -12,7 +12,8 @@ import {
 } from "../models/index.js";
 import { lerConfiguracao } from "../models/Configuracao.js";
 import { cotarFrete } from "./freteService.js";
-import { provedorAtivo } from "./pagamentos/index.js";
+import { provedorAtivo, provedorMaquininha } from "./pagamentos/index.js";
+import { configPagamentos } from "./pagamentos/config.js";
 import {
   FORMAS_PAGAMENTO,
   FORMAS_SHOWROOM,
@@ -278,6 +279,51 @@ const garantirClienteCadastrado = async (dados, transaction) => {
 };
 
 // Cria pedido ou orçamento a partir do checkout / geração de orçamentos.
+// Gera a cobrança (PIX/cartão online ou maquininha) ainda dentro da transação
+// do pedido: se o banco ou a maquininha recusar, nada é salvo e a tela do
+// checkout pergunta se tenta de novo ou troca a forma de pagamento (402).
+const cobrarAntesDeSalvar = async (pedidoId, { formaPagamento, maquininhaId, interno, usuario }, transaction) => {
+  const online = FORMAS_PAGAMENTO[formaPagamento]?.online;
+  const maquininhaEscolhida = interno && formaPagamento === "MAQUININHA" && maquininhaId;
+  if (!online && !maquininhaEscolhida) return;
+  const pedido = await Pedido.findByPk(pedidoId, { include: INCLUDE_COMPLETO, transaction });
+  try {
+    if (online) {
+      const provedor = provedorAtivo();
+      if (!provedor) throw new Error("Pagamento online indisponível no momento.");
+      const cobranca = await provedor.criarCobranca({ pedido, metodo: formaPagamento, parcelas: pedido.parcelasCartao });
+      await pedido.update(
+        {
+          pagamentoProvedor: provedor.nome,
+          pagamentoReferencia: cobranca.referencia,
+          pagamentoLink: cobranca.link || null,
+          pagamentoQrCode: cobranca.qrCode || cobranca.copiaECola || null,
+          pagamentoExpiraEm: cobranca.expiraEm || null,
+        },
+        { transaction },
+      );
+    } else {
+      const provedor = provedorMaquininha();
+      if (!provedor) throw new Error("Nenhum banco de maquininha configurado na aba Pagamentos.");
+      const maquininha = configPagamentos().maquininhas.find((m) => m.id === maquininhaId && m.ativa !== false);
+      if (!maquininha) throw new Error("Escolha uma maquininha cadastrada.");
+      if (maquininha.provedor !== provedor.nome) throw new Error(`Esta maquininha é ${maquininha.provedor}; o banco de maquininha ativo é ${provedor.rotulo}.`);
+      const { referencia } = await provedor.cobrarMaquininha({ pedido, maquininha });
+      await pedido.update(
+        {
+          pagamentoProvedor: provedor.nome,
+          pagamentoReferencia: referencia,
+          historico: [...(pedido.historico || []), { tipo: "COBRANCA_MAQUININHA", maquininha: maquininha.nome, por: usuario.nome, em: new Date().toISOString() }],
+        },
+        { transaction },
+      );
+    }
+  } catch (error) {
+    console.error("[Pagamentos] Falha ao criar cobrança:", error);
+    throw Object.assign(erroHttp(402, error.message || "O pagamento não foi gerado."), { erroPagamento: true });
+  }
+};
+
 export const criarPedido = async (corpo, usuario, tipo = "PEDIDO") => {
   const interno = ehInterno(usuario);
   const formaPagamento = corpo.formaPagamento || "A_DEFINIR";
@@ -401,41 +447,14 @@ export const criarPedido = async (corpo, usuario, tipo = "PEDIDO") => {
       );
     }
 
+    if (tipo === "PEDIDO") {
+      await cobrarAntesDeSalvar(pedido.id, { formaPagamento, maquininhaId: corpo.maquininhaId, interno, usuario }, transaction);
+    }
+
     return pedido;
   });
 
-  let pedido = await Pedido.findByPk(pedidoCriado.id, { include: INCLUDE_COMPLETO });
-
-  // Cobrança online no banco configurado.
-  if (tipo === "PEDIDO" && FORMAS_PAGAMENTO[formaPagamento]?.online) {
-    const provedor = provedorAtivo();
-    try {
-      // Reconfere logo antes de gerar o PIX/link: outro pedido pode ter
-      // levado o estoque nesse meio tempo.
-      await verificarEstoque(pedido.itens);
-      const cobranca = await provedor.criarCobranca({
-        pedido,
-        metodo: formaPagamento,
-        parcelas: pedido.parcelasCartao,
-      });
-      await pedido.update({
-        pagamentoProvedor: provedor.nome,
-        pagamentoReferencia: cobranca.referencia,
-        pagamentoLink: cobranca.link || null,
-        pagamentoQrCode: cobranca.qrCode || cobranca.copiaECola || null,
-        pagamentoExpiraEm: cobranca.expiraEm || null,
-      });
-    } catch (error) {
-      console.error("[Pagamentos] Falha ao criar cobrança:", error);
-      await pedido.update({
-        historico: [
-          ...pedido.historico,
-          { tipo: "ERRO_COBRANCA", mensagem: error.message, em: new Date() },
-        ],
-      });
-    }
-    pedido = await Pedido.findByPk(pedido.id, { include: INCLUDE_COMPLETO });
-  }
+  const pedido = await Pedido.findByPk(pedidoCriado.id, { include: INCLUDE_COMPLETO });
 
   // WhatsApp: "recebemos seu pedido" (cliente sozinho ou equipe tirando para ele).
   if (tipo === "PEDIDO") avisarPedido(pedido.id, "CRIADO");
