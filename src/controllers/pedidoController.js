@@ -258,6 +258,18 @@ export const cotar = async (req, res) => {
   }
 };
 
+// Pedido amarelo reaberto no carrinho: o checkout manda tudo de novo e o
+// mesmo pedido é atualizado.
+export const reabrir = async (req, res) => {
+  try {
+    const pedido = await criarPedido(req.body || {}, req.usuario, "PEDIDO", { reabrirId: req.params.id });
+    res.locals.entityId = pedido.id;
+    res.json({ ...serializarPedido(pedido), clienteCadastro: pedido.clienteCadastro || null });
+  } catch (error) {
+    responderErro(res, error, "Erro ao reabrir pedido");
+  }
+};
+
 export const criar = async (req, res) => {
   try {
     const pedido = await criarPedido(req.body || {}, req.usuario, "PEDIDO");

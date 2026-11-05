@@ -90,6 +90,7 @@ router.post("/orcamentos", autenticar, exigirPermissao("ORCAMENTOS", "VENDAS"), 
 router.post("/orcamentos/:id/gerar-pedido", autenticar, exigirPermissao("VENDAS"), registrarLog("GERAR_PEDIDO_ORCAMENTO", "Pedido"), pedidos.gerarPedidoDoOrcamento);
 router.get("/pedidos/:id", autenticar, pedidos.obter);
 router.put("/pedidos/:id", autenticar, exigirPermissao("VENDAS"), registrarLog("EDITAR_PEDIDO", "Pedido"), pedidos.editar);
+router.put("/pedidos/:id/reabrir", autenticar, exigirPermissao("VENDAS"), registrarLog("REABRIR_PEDIDO", "Pedido"), pedidos.reabrir);
 router.post("/pedidos/:id/liberar", autenticar, vendasOuFinanceiro, registrarLog("LIBERAR_PEDIDO", "Pedido"), pedidos.liberar);
 router.post("/pedidos/:id/cancelar", autenticar, exigirPermissao("VENDAS"), registrarLog("CANCELAR_PEDIDO", "Pedido"), pedidos.cancelar);
 router.put("/pedidos/:id/forma-pagamento", autenticar, vendasOuFinanceiro, registrarLog("ALTERAR_FORMA_PAGAMENTO", "Pedido"), pedidos.alterarFormaPagamento);

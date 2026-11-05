@@ -328,8 +328,11 @@ const cobrarAntesDeSalvar = async (pedidoId, { formaPagamento, maquininhaId, int
   }
 };
 
-export const criarPedido = async (corpo, usuario, tipo = "PEDIDO") => {
+// reabrirId: pedido ainda "Aguardando" que a equipe reabriu no carrinho. O
+// mesmo pedido (número, data, histórico) recebe o conteúdo novo do checkout.
+export const criarPedido = async (corpo, usuario, tipo = "PEDIDO", { reabrirId = null } = {}) => {
   const interno = ehInterno(usuario);
+  if (reabrirId && (!interno || tipo !== "PEDIDO")) throw erroHttp(403, "Só a equipe reabre pedidos.");
   const formaPagamento = corpo.formaPagamento || "A_DEFINIR";
   const showroom = ehShowroom(usuario);
   const { dados: cliente, cliente: cadastroCliente } = await dadosCliente(corpo, usuario);
@@ -351,11 +354,31 @@ export const criarPedido = async (corpo, usuario, tipo = "PEDIDO") => {
 
   let clienteCadastro = null;
   const pedidoCriado = await sequelize.transaction(async (transaction) => {
+    let reaberto = null;
+    if (reabrirId) {
+      const travado = await Pedido.findByPk(reabrirId, { transaction, lock: transaction.LOCK.UPDATE });
+      if (!travado || travado.tipo !== "PEDIDO") throw erroHttp(404, "Pedido não encontrado.");
+      reaberto = await Pedido.findByPk(reabrirId, { include: INCLUDE_COMPLETO, transaction });
+      if (reaberto.statusVendas !== "AGUARDANDO" || reaberto.estoqueBaixado) {
+        throw erroHttp(400, "Só dá para reabrir pedido que ainda está aguardando (amarelo).");
+      }
+      if (reaberto.statusFinanceiro === "PAGO" || (reaberto.parcelas || []).some((p) => p.status === "RECEBIDA")) {
+        throw erroHttp(400, "Este pedido já tem pagamento recebido; use a edição simples do pedido.");
+      }
+      // Devolve o crédito que o pedido tinha usado; o checkout usa de novo se marcado.
+      const creditoAnterior = Number(reaberto.creditoUsado || 0);
+      if (creditoAnterior > 0 && reaberto.clienteId) {
+        const dono = await Usuario.findByPk(reaberto.clienteId, { transaction });
+        if (dono) await dono.update({ credito: arredondar(Number(dono.credito || 0) + creditoAnterior) }, { transaction });
+        if (cadastroCliente?.id === reaberto.clienteId) cadastroCliente.credito = arredondar(Number(cadastroCliente.credito || 0) + creditoAnterior);
+      }
+    }
     if ((interno || showroom) && !cliente.clienteId) {
       clienteCadastro = await garantirClienteCadastrado(cliente, transaction);
       if (clienteCadastro) cliente.clienteId = clienteCadastro.usuario.id;
     }
-    const itens = await montarItens(corpo.itens, usuario, transaction);
+    const manterLiberados = new Set((reaberto?.itens || []).filter((i) => i.liberadoSemEstoque).map((i) => i.produtoId));
+    const itens = await montarItens(corpo.itens, usuario, transaction, { manterLiberados });
     // Pedido só nasce com estoque para todos os itens (orçamento não reserva).
     if (tipo === "PEDIDO") await verificarEstoque(itens, transaction);
     const subtotal = arredondar(itens.reduce((soma, item) => soma + item.total, 0));
@@ -390,10 +413,7 @@ export const criarPedido = async (corpo, usuario, tipo = "PEDIDO") => {
 
     const transportadora = interno && metodoEnvio === "TRANSPORTADORA" ? await resolverTransportadora(corpo.transportadora, usuario, transaction) : null;
 
-    const pedido = await Pedido.create(
-      {
-        tipo,
-        numero: await proximoNumero(tipo, transaction),
+    const dadosPedido = {
         transportadoraId: transportadora?.id || null,
         transportadoraNome: transportadora?.nome || null,
         transportadoraObs: transportadora ? corpo.transportadoraObs || null : null,
@@ -417,12 +437,44 @@ export const criarPedido = async (corpo, usuario, tipo = "PEDIDO") => {
         parcelasCartao,
         composicaoPagamento: formaPagamento === "MESCLA" ? corpo.composicaoPagamento || [] : null,
         orcamentoOrigemId: corpo.orcamentoOrigemId || null,
-        criadoPorId: usuario.id,
-        criadoPorNome: usuario.nome,
-        criadoPorRole: usuario.role,
-      },
-      { transaction },
-    );
+    };
+    let pedido;
+    if (reaberto) {
+      // Mantém número, data, quem criou e histórico; a cobrança antiga deixa
+      // de valer (a nova é gerada abaixo, se a forma for online).
+      await PedidoItem.destroy({ where: { pedidoId: reaberto.id }, transaction });
+      await PedidoParcela.destroy({ where: { pedidoId: reaberto.id }, transaction });
+      delete dadosPedido.origemCliente;
+      delete dadosPedido.alertaComercial;
+      delete dadosPedido.orcamentoOrigemId;
+      pedido = await reaberto.update(
+        {
+          ...dadosPedido,
+          pagamentoProvedor: null,
+          pagamentoReferencia: null,
+          pagamentoLink: null,
+          pagamentoQrCode: null,
+          pagamentoExpiraEm: null,
+          historico: [
+            ...(reaberto.historico || []),
+            { tipo: "REABERTO", por: usuario.nome, totalAnterior: Number(reaberto.total), totalNovo: total, em: new Date().toISOString() },
+          ],
+        },
+        { transaction },
+      );
+    } else {
+      pedido = await Pedido.create(
+        {
+          tipo,
+          numero: await proximoNumero(tipo, transaction),
+          ...dadosPedido,
+          criadoPorId: usuario.id,
+          criadoPorNome: usuario.nome,
+          criadoPorRole: usuario.role,
+        },
+        { transaction },
+      );
+    }
     await PedidoItem.bulkCreate(
       itens.map((item) => ({ ...item, pedidoId: pedido.id })),
       { transaction },
@@ -461,7 +513,7 @@ export const criarPedido = async (corpo, usuario, tipo = "PEDIDO") => {
   const pedido = await Pedido.findByPk(pedidoCriado.id, { include: INCLUDE_COMPLETO });
 
   // WhatsApp: "recebemos seu pedido" (cliente sozinho ou equipe tirando para ele).
-  if (tipo === "PEDIDO") avisarPedido(pedido.id, "CRIADO");
+  if (tipo === "PEDIDO" && !reabrirId) avisarPedido(pedido.id, "CRIADO");
 
   if (clienteCadastro) {
     pedido.clienteCadastro = {
