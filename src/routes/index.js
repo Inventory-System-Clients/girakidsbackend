@@ -102,7 +102,7 @@ router.get("/frete/braspress/diagnostico", autenticar, exigirPermissao("ADMIN"),
   try {
     // ?cep=...&peso=...&valor=... faz uma cotação de teste (CIF, 1 volume 30x30x35).
     if (req.query.cep) {
-      return res.json(await cotarBraspressSite({ cepDestino: req.query.cep, documentoDestino: req.query.doc, pesoKg: Number(req.query.peso || 5), valorMercadoria: Number(req.query.valor || 500), caixa: { comprimento: 35, largura: 30, altura: 30 } }));
+      return res.json(await cotarBraspressSite({ cepDestino: req.query.cep, documentoDestino: req.query.doc, pesoKg: Number(req.query.peso || 5), valorMercadoria: Number(req.query.valor || 500), caixas: [{ volumes: 1, comprimento: 35, largura: 30, altura: 30 }] }));
     }
     res.json(await diagnosticoBraspress());
   } catch (error) {

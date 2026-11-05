@@ -114,9 +114,11 @@ const ajaxJson = async (sessao, caminho, form) => {
   }
 };
 
-// Cotação rodoviária CIF (pagante = Gira Kids). caixa em cm; peso em kg.
+// Cotação rodoviária CIF (pagante = Gira Kids). caixas = [{ volumes, altura,
+// largura, comprimento (cm) }], uma linha de cubagem por tamanho; peso em kg.
 // Devolve o valor e o prazo do site, sem acréscimos, e o texto da resposta.
-export const cotarBraspressSite = async ({ cepDestino, documentoDestino, pesoKg, valorMercadoria, volumes = 1, caixa }) => {
+export const cotarBraspressSite = async ({ cepDestino, documentoDestino, pesoKg, valorMercadoria, caixas }) => {
+  const volumes = caixas.reduce((s, c) => s + c.volumes, 0);
   const { sessao, pagina } = await entrarBraspress();
   const html = pagina.texto;
   const cep = String(cepDestino).replace(/\D/g, "");
@@ -151,10 +153,12 @@ export const cotarBraspressSite = async ({ cepDestino, documentoDestino, pesoKg,
   form.append("volumes", String(volumes));
   form.append("peso", br(Math.max(0.1, pesoKg)));
   form.append("vlrMercadoria", br(valorMercadoria));
-  form.append("cubagem[0].comprimento", br(caixa.comprimento / 100));
-  form.append("cubagem[0].largura", br(caixa.largura / 100));
-  form.append("cubagem[0].altura", br(caixa.altura / 100));
-  form.append("cubagem[0].volumes", String(volumes));
+  caixas.forEach((c, n) => {
+    form.append(`cubagem[${n}].comprimento`, br(c.comprimento / 100));
+    form.append(`cubagem[${n}].largura`, br(c.largura / 100));
+    form.append(`cubagem[${n}].altura`, br(c.altura / 100));
+    form.append(`cubagem[${n}].volumes`, String(c.volumes));
+  });
   for (const m of html.matchAll(/<input type="hidden" name="(as_sfid|as_fid)" value="([^"]*)"/gi)) form.append(m[1], m[2]);
   const r = await sessao.pedir("/site/w/cotacao/calcular", {
     method: "POST",
@@ -180,14 +184,14 @@ export const ACRESCIMO_VALOR = 15;
 export const ACRESCIMO_PRAZO = 1;
 const cache = new Map();
 
-export const cotarBraspress = async ({ cep, documento: docInformado, pesoGramas, valorMercadoria, volumes, caixa }) => {
+export const cotarBraspress = async ({ cep, documento: docInformado, pesoGramas, valorMercadoria, caixas }) => {
   // CPF/CNPJ incompleto (cliente ainda digitando) não gera cotação nova.
   const documento = [11, 14].includes(String(docInformado || "").length) ? docInformado : "";
-  const chave = [cep, documento || "", Math.round(pesoGramas / 100), Math.round(valorMercadoria), volumes, caixa.comprimento, caixa.largura, caixa.altura].join("|");
+  const chave = [cep, documento || "", Math.round(pesoGramas / 100), Math.round(valorMercadoria), ...caixas.map((c) => [c.volumes, c.comprimento, c.largura, c.altura].join("x"))].join("|");
   const guardado = cache.get(chave);
   if (guardado && guardado.ate > Date.now()) return guardado.resultado;
   const site = await Promise.race([
-    cotarBraspressSite({ cepDestino: cep, documentoDestino: documento, pesoKg: pesoGramas / 1000, valorMercadoria, volumes, caixa }),
+    cotarBraspressSite({ cepDestino: cep, documentoDestino: documento, pesoKg: pesoGramas / 1000, valorMercadoria, caixas }),
     new Promise((_, rejeitar) => setTimeout(() => rejeitar(new Error("Braspress demorou para responder.")), 45000)),
   ]);
   if (!(site.valor > 0)) throw new Error(`Braspress não devolveu valor: ${site.texto.slice(0, 200)}`);

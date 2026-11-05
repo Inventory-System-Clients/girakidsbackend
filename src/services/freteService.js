@@ -78,43 +78,58 @@ const estimar = async (servico, pesoGramas, uf) => {
 
 // Braspress cotada no site deles (valor + R$ 15, prazo + 1 dia). Sem CEP ou
 // se a cotação falhar, a opção aparece indisponível e fica "Outra transportadora".
-// ajuste (só ADMIN): { volumes, pesoKg, altura, largura, comprimento (cm) }
-// digitados no checkout no lugar dos calculados.
+// Caixas = uma linha por tamanho { volumes, altura, largura, comprimento (cm) },
+// agrupando os volumes da Calculadora de Pedidos.
+// ajuste (só ADMIN): { pesoKg, caixas: [{ volumes, altura, largura, comprimento }] }
+// digitados no checkout; campo vazio usa o calculado.
 const opcaoBraspress = async (cepLimpo, documento, carga, ajuste) => {
   const base = { metodo: "BRASPRESS", nome: "Braspress - Transportadora", descricao: "Entrega por transportadora" };
   if (cepLimpo.length !== 8) return { ...base, disponivel: false, motivo: "Informe o CEP" };
   if (carga.freteIndisponivel) return { ...base, disponivel: false, motivo: "Frete indisponível para estes produtos — fale com o time de vendas" };
   try {
-    let volumes = 1;
+    let calculadas = [{ volumes: 1, ...carga.caixa }];
     try {
       if (Object.keys(carga.quantidades).length) {
         const calculo = await calcularPedidoCompleto({ quantidades: carga.quantidades, medidas: {}, avulsos: [] });
-        volumes = Math.max(1, calculo.resumo?.volumes || 1);
+        const grupos = new Map();
+        for (const v of calculo.volumes || []) {
+          if (!v.medidas) continue;
+          const chave = [v.medidas.altura, v.medidas.largura, v.medidas.comprimento].join("x");
+          const g = grupos.get(chave) || { volumes: 0, ...v.medidas };
+          g.volumes += 1;
+          grupos.set(chave, g);
+        }
+        if (grupos.size) calculadas = [...grupos.values()];
+        else if (calculo.resumo?.volumes > 1) calculadas[0].volumes = calculo.resumo.volumes;
       }
     } catch {
-      // Calculadora sem parâmetros: 1 volume.
+      // Calculadora sem parâmetros: 1 volume da caixa padrão.
     }
-    const volumesAjuste = Math.round(Number(ajuste?.volumes));
-    const pesoAjuste = Number(String(ajuste?.pesoKg ?? "").replace(",", "."));
-    if (volumesAjuste > 0) volumes = Math.min(9999, volumesAjuste);
-    const pesoGramas = pesoAjuste > 0 ? Math.round(pesoAjuste * 1000) : Math.max(100, carga.pesoGramas);
-    const medida = (campo) => {
-      const v = Number(String(ajuste?.[campo] ?? "").replace(",", "."));
-      return v > 0 ? Math.min(999, v) : null;
+    const numero = (v, max) => {
+      const n = Number(String(v ?? "").replace(",", "."));
+      return n > 0 ? Math.min(max, n) : null;
     };
-    const caixaAjustada = ["altura", "largura", "comprimento"].some((c) => medida(c));
-    const caixa = {
-      altura: medida("altura") ?? carga.caixa.altura,
-      largura: medida("largura") ?? carga.caixa.largura,
-      comprimento: medida("comprimento") ?? carga.caixa.comprimento,
-    };
+    const pesoAjuste = numero(ajuste?.pesoKg, 99999);
+    const pesoGramas = pesoAjuste ? Math.round(pesoAjuste * 1000) : Math.max(100, carga.pesoGramas);
+    const linhasAjuste = Array.isArray(ajuste?.caixas) ? ajuste.caixas.slice(0, 20) : [];
+    const caixas = linhasAjuste.length
+      ? linhasAjuste.map((l, n) => {
+          const padrao = calculadas[n] || calculadas[0];
+          return {
+            volumes: Math.round(numero(l?.volumes, 9999) || (calculadas[n] ? padrao.volumes : 1)),
+            altura: numero(l?.altura, 999) ?? padrao.altura,
+            largura: numero(l?.largura, 999) ?? padrao.largura,
+            comprimento: numero(l?.comprimento, 999) ?? padrao.comprimento,
+          };
+        })
+      : calculadas;
+    const volumes = caixas.reduce((s, c) => s + c.volumes, 0);
     const cotacao = await cotarBraspress({
       cep: cepLimpo,
       documento: somenteDigitos(documento),
       pesoGramas,
       valorMercadoria: Math.max(1, carga.valorMercadoria),
-      volumes,
-      caixa,
+      caixas,
     });
     return {
       ...base,
@@ -123,8 +138,9 @@ const opcaoBraspress = async (cepLimpo, documento, carga, ajuste) => {
       disponivel: true,
       volumes,
       pesoKg: pesoGramas / 1000,
-      caixa,
-      ajustado: volumesAjuste > 0 || pesoAjuste > 0 || caixaAjustada,
+      caixas,
+      calculadas,
+      ajustado: Boolean(pesoAjuste) || linhasAjuste.length > 0,
     };
   } catch (error) {
     console.warn("[Frete] Cotação Braspress falhou:", error.message);
