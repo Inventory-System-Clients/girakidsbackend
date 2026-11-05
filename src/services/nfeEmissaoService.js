@@ -132,11 +132,18 @@ export const prepararNota = async (pedidoId, opcoes = {}) => {
   const avisos = [];
   if (pedido.statusVendas === "CANCELADO") bloqueios.push("Pedido cancelado.");
 
-  // Destinatário
-  const documento = digitos(pedido.documento);
+  // Destinatário. "opcoes.cliente" traz o que a pessoa completou na tela
+  // quando faltava algo no pedido (vale por cima do pedido e é salvo nele ao emitir).
+  const corrigido = opcoes.cliente || {};
+  const doPedido = (campo, coluna) => {
+    const valor = corrigido[campo];
+    return valor != null && String(valor).trim() !== "" ? String(valor).trim() : pedido[coluna];
+  };
+  const documento = digitos(doPedido("documento", "documento"));
   const ehCnpj = documento.length === 14;
-  if (documento.length !== 11 && !ehCnpj) bloqueios.push("O pedido não tem CPF/CNPJ válido do cliente.");
-  const cadastro = documento ? await buscarClienteNFeMail(documento).catch(() => null) : null;
+  const faltando = [];
+  if (documento.length !== 11 && !ehCnpj) faltando.push("documento");
+  const cadastro = documento.length === 11 || ehCnpj ? await buscarClienteNFeMail(documento).catch(() => null) : null;
   const ie = digitos(cadastro?.num_inscricaoest);
   const isento = /isent/i.test(cadastro?.num_inscricaoest || "");
   if (ehCnpj && !cadastro) {
@@ -144,12 +151,12 @@ export const prepararNota = async (pedidoId, opcoes = {}) => {
   }
   const contribuinte = ehCnpj && Boolean(ie);
   const indIEDest = contribuinte ? "1" : isento ? "2" : "9";
-  const uf = String(pedido.estado || cadastro?.end_uf || "").toUpperCase();
-  const local = await codigoIbge(pedido.cep || cadastro?.end_cep);
-  const cMun = cadastro?.end_ibge || local?.ibge;
-  if (!cMun) bloqueios.push("Não achei o código IBGE da cidade pelo CEP do pedido. Confira o CEP.");
+  const cepInformado = digitos(doPedido("cep", "cep") || cadastro?.end_cep);
+  const local = cepInformado.length === 8 ? await codigoIbge(cepInformado) : null;
+  const uf = String(doPedido("uf", "estado") || local?.uf || cadastro?.end_uf || "").toUpperCase().slice(0, 2);
+  const cMun = (corrigido.cep ? null : cadastro?.end_ibge) || local?.ibge;
   const destino = {
-    nome: cadastro?.raz_social || pedido.clienteNome,
+    nome: cadastro?.raz_social || doPedido("nome", "clienteNome"),
     documento,
     ehCnpj,
     ie: contribuinte ? ie : "",
@@ -157,19 +164,21 @@ export const prepararNota = async (pedidoId, opcoes = {}) => {
     contribuinte,
     cadastradoNFeMail: Boolean(cadastro),
     email: pedido.clienteEmail || "",
-    logradouro: pedido.rua || cadastro?.end_logradouro,
-    numero: pedido.numeroEndereco || cadastro?.end_numero || "S/N",
-    complemento: pedido.complemento || "",
-    bairro: pedido.bairro || cadastro?.end_bairro,
+    logradouro: doPedido("logradouro", "rua") || cadastro?.end_logradouro,
+    numero: doPedido("numero", "numeroEndereco") || cadastro?.end_numero || "",
+    complemento: doPedido("complemento", "complemento") || "",
+    bairro: doPedido("bairro", "bairro") || cadastro?.end_bairro,
     cMun,
-    cidade: local?.cidade || pedido.cidade || cadastro?.end_municipio,
+    cidade: local?.cidade || doPedido("cidade", "cidade") || cadastro?.end_municipio,
     uf,
-    cep: digitos(pedido.cep || cadastro?.end_cep),
+    cep: cepInformado,
     fone: digitos(pedido.clienteTelefone).replace(/^55(?=\d{10,11}$)/, ""),
   };
-  for (const [chave, rotulo] of [["logradouro", "rua"], ["bairro", "bairro"], ["uf", "UF"], ["cep", "CEP"]]) {
-    if (!destino[chave]) bloqueios.push(`Falta ${rotulo} do cliente no pedido.`);
-  }
+  if (!destino.nome) faltando.push("nome");
+  if (destino.cep.length !== 8 || !cMun) faltando.push("cep");
+  for (const campo of ["logradouro", "numero", "bairro", "cidade", "uf"]) if (!destino[campo]) faltando.push(campo);
+  const ROTULOS = { documento: "CPF/CNPJ", nome: "nome", cep: "CEP válido", logradouro: "rua", numero: "número", bairro: "bairro", cidade: "cidade", uf: "UF" };
+  if (faltando.length) bloqueios.push(`Complete os dados do cliente: ${faltando.map((c) => ROTULOS[c]).join(", ")}.`);
 
   const dentroSP = uf === "SP";
   const cfop = dentroSP ? "5102" : ehCnpj ? "6102" : "6108";
@@ -255,6 +264,7 @@ export const prepararNota = async (pedidoId, opcoes = {}) => {
   return {
     pedido: { id: pedido.id, numero: pedido.numero, numeroFormatado: pedido.numeroFormatado || String(pedido.numero), total: Number(pedido.total), formaPagamento: pedido.formaPagamento, metodoEnvio: pedido.metodoEnvio, notaFiscalNumero: pedido.notaFiscalNumero },
     destino,
+    faltando,
     cfop,
     csosn,
     aliquota,
@@ -326,6 +336,18 @@ export const emitirNota = async (pedidoId, opcoes, usuario) => {
   for (const [produtoId, codigo] of Object.entries(opcoes.vinculos || {})) {
     if (codigo) await Produto.update({ nfeProdutoCodigo: String(codigo) }, { where: { id: produtoId } });
   }
+
+  const corrigido = opcoes.cliente || {};
+  const MAPA_PEDIDO = { documento: "documento", nome: "clienteNome", cep: "cep", logradouro: "rua", numero: "numeroEndereco", complemento: "complemento", bairro: "bairro", cidade: "cidade", uf: "estado" };
+  const atualizar = Object.fromEntries(
+    Object.entries(MAPA_PEDIDO)
+      .filter(([campo]) => corrigido[campo] != null && String(corrigido[campo]).trim() !== "")
+      .map(([campo, coluna]) => {
+        const valor = String(corrigido[campo]).trim();
+        return [coluna, campo === "documento" || campo === "cep" ? digitos(valor) : campo === "uf" ? valor.toUpperCase().slice(0, 2) : valor];
+      }),
+  );
+  if (Object.keys(atualizar).length) await Pedido.update(atualizar, { where: { id: pedidoId } });
 
   const emit = await emitenteDaUltimaNota();
   const txt = montarTxt(nota, emit);
