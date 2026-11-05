@@ -13,6 +13,8 @@
 //   (a prazo); a receber/a definir/outros = 21 crédito em loja (a prazo).
 // - Pedidos em aberto do mesmo cliente sem nota podem sair juntos numa nota só
 //   (opcoes.juntar = ids); o pedido aberto na tela é o principal (xPed, transporte).
+// - Valor dos produtos: o valor comercial cadastrado no produto da NFeMail
+//   (val_comercial) × quantidade. O valor real do site só com opcoes.usarValorReal.
 
 import { Op } from "sequelize";
 import { Arquivo, Parceiro, Pedido, Produto } from "../models/index.js";
@@ -292,20 +294,35 @@ export const prepararNota = async (pedidoId, opcoes = {}) => {
     }
   }
 
-  const linhasNota = [...grupos.values()].map((g) => ({
-    cProd: g.nfe.cod_alternativo || String(g.nfe.cod_produto),
-    xProd: g.nfe.dsc_produto,
-    ncm: digitos(g.nfe.ncm_produto),
-    unidade: g.nfe.cod_unidade || "UN",
-    qCom: g.qCom,
-    vProd: g.vProd,
-    vUnCom: g.qCom ? g.vProd / g.qCom : 0,
-    produtosSite: g.produtosSite,
-  }));
+  const usarValorReal = Boolean(opcoes.usarValorReal);
+  const semValorNFeMail = [];
+  const linhasNota = [...grupos.values()].map((g) => {
+    const valorCadastro = Number(g.nfe.val_comercial || 0);
+    // Sem valor no cadastro da NFeMail: fica o valor do site (com aviso).
+    const doCadastro = !usarValorReal && valorCadastro > 0;
+    if (!usarValorReal && !doCadastro) semValorNFeMail.push(g.nfe.dsc_produto);
+    const vProd = doCadastro ? arredondar(g.qCom * valorCadastro) : g.vProd;
+    return {
+      cProd: g.nfe.cod_alternativo || String(g.nfe.cod_produto),
+      xProd: g.nfe.dsc_produto,
+      ncm: digitos(g.nfe.ncm_produto),
+      unidade: g.nfe.cod_unidade || "UN",
+      qCom: g.qCom,
+      vProd,
+      vUnCom: doCadastro ? valorCadastro : g.qCom ? g.vProd / g.qCom : 0,
+      valorSite: g.vProd,
+      origemValor: doCadastro ? "NFEMAIL" : "SITE",
+      produtosSite: g.produtosSite,
+    };
+  });
+  if (semValorNFeMail.length) {
+    avisos.push(`Sem valor cadastrado na NFeMail (foi o valor do site): ${semValorNFeMail.join(", ")}. Cadastre o valor comercial desses produtos na NFeMail.`);
+  }
 
   // Totais iguais ao pedido: desconto (+ crédito usado), frete e taxas.
   const vProd = arredondar(linhasNota.reduce((s, l) => s + l.vProd, 0));
-  const vDesc = arredondar(somar("desconto") + somar("creditoUsado"));
+  // Desconto/crédito são sobre o valor do site: só entram com o valor real.
+  const vDesc = usarValorReal ? arredondar(somar("desconto") + somar("creditoUsado")) : 0;
   const vFrete = arredondar(somar("frete") + somar("freteAdicional"));
   const vOutro = somar("taxas");
   const descontos = ratear(vDesc, linhasNota);
@@ -319,7 +336,7 @@ export const prepararNota = async (pedidoId, opcoes = {}) => {
   });
   const vNF = arredondar(vProd - vDesc + vFrete + vOutro);
   const totalPedidos = somar("total");
-  if (semVinculo.length === 0 && Math.abs(vNF - totalPedidos) > 0.02) {
+  if (usarValorReal && semVinculo.length === 0 && Math.abs(vNF - totalPedidos) > 0.02) {
     avisos.push(`Total da nota (${dec(vNF)}) diferente do total ${juntos.length ? "dos pedidos" : "do pedido"} (${dec(totalPedidos)}).`);
   }
 
@@ -361,6 +378,7 @@ export const prepararNota = async (pedidoId, opcoes = {}) => {
     pedidosAbertos: abertos.map(resumoPedido),
     juntos: juntos.map(resumoPedido),
     totalPedidos,
+    usarValorReal,
     destino,
     faltando,
     cfop,
@@ -369,7 +387,7 @@ export const prepararNota = async (pedidoId, opcoes = {}) => {
     itens: linhasNota,
     semVinculo,
     notasExistentes: existentes.map((n) => ({ numero: n.numeroNota, chave: n.chaveAcessoNFe, situacao: descreverSituacao(n), autorizada: AUTORIZADA(n), valor: n.valorNota })),
-    produtosNFeMail: produtosNFe.filter((p) => !p.inf_inativo).map((p) => ({ codigo: String(p.cod_produto), nome: p.dsc_produto, ncm: p.ncm_produto, unidade: p.cod_unidade })),
+    produtosNFeMail: produtosNFe.filter((p) => !p.inf_inativo).map((p) => ({ codigo: String(p.cod_produto), nome: p.dsc_produto, ncm: p.ncm_produto, unidade: p.cod_unidade, valor: Number(p.val_comercial || 0) })),
     totais: { vProd, vDesc, vFrete, vOutro, vNF },
     transporte,
     pagamento,

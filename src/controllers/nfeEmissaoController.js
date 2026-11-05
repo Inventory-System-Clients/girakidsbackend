@@ -29,7 +29,7 @@ export const vinculosCategorias = async (req, res) => {
     const produtos = await listarProdutosNFeMail();
     res.json({
       vinculos: await lerVinculosCategorias(),
-      produtosNFeMail: produtos.map((p) => ({ codigo: String(p.cod_produto), alternativo: p.cod_alternativo, nome: p.dsc_produto, ncm: p.ncm_produto, unidade: p.cod_unidade, inativo: Boolean(p.inf_inativo) })),
+      produtosNFeMail: produtos.map((p) => ({ codigo: String(p.cod_produto), alternativo: p.cod_alternativo, nome: p.dsc_produto, ncm: p.ncm_produto, unidade: p.cod_unidade, valor: Number(p.val_comercial || 0), inativo: Boolean(p.inf_inativo) })),
     });
   } catch (error) {
     responderErro(res, error, "Erro ao carregar os vínculos da nota fiscal");
