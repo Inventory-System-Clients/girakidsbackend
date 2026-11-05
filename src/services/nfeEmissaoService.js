@@ -272,6 +272,11 @@ export const prepararNota = async (pedidoId, opcoes = {}) => {
 
   const existentes = await notasDoPedidoNaNFeMail(pedido.numero);
   for (const n of existentes) {
+    // Rejeitada pela SEFAZ não tem número nem valor fiscal: pode gerar de novo.
+    if (REJEITADA(n)) {
+      avisos.push(`Tentativa anterior rejeitada pela SEFAZ (${n.status}). Esta nova emissão substitui aquela.`);
+      continue;
+    }
     bloqueios.push(`O pedido já tem a nota ${n.numeroNota} na NFeMail (${descreverSituacao(n)}). ${AUTORIZADA(n) ? "Baixe a DANFE dela abaixo." : "Transmita ou exclua essa nota na NFeMail antes de gerar outra."}`);
   }
 
@@ -338,7 +343,8 @@ export const montarTxt = (nota, emit) => {
   }
   linhas.push(linha("X26", tr.qVol, tr.esp, "", "", dec(tr.pesoL, 3), dec(tr.pesoB, 3)));
   linhas.push(linha("YA", ""));
-  linhas.push(linha("YA01a", nota.pagamento.indPag, nota.pagamento.tPag, dec(nota.pagamento.vPag)));
+  // YA01a|indPag|tPag|xPag|vPag|: xPag (descrição) só é aceito com tPag 99.
+  linhas.push(linha("YA01a", nota.pagamento.indPag, nota.pagamento.tPag, "", dec(nota.pagamento.vPag)));
   // Sem ZB (compra): o conversor da NFeMail põe <compra> antes de <infAdic> e a
   // SEFAZ rejeita pelo schema. O número do pedido já vai no xPed de cada item.
   if (String(nota.infCpl || "").trim()) linhas.push(linha("Z", "", nota.infCpl));
@@ -348,6 +354,7 @@ export const montarTxt = (nota, emit) => {
 const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const AUTORIZADA = (n) => Number(n?.codigoStatus) === 100 && Boolean(n?.chaveAcessoNFe);
+const REJEITADA = (n) => Number(n?.codigoStatus) > 100 && !AUTORIZADA(n);
 const EXCLUIDA = (n) => /exclu/i.test(n?.status || "") || Number(n?.codigoStatus) === 0;
 
 // Notas que a NFeMail já tem para o pedido (sem as excluídas).
@@ -390,7 +397,9 @@ export const emitirNota = async (pedidoId, opcoes, usuario) => {
     return [...porPedido, ...porDocumento];
   };
   const identificar = (n) => String(n.idNFeMail ?? n.chaveAcessoNFe ?? n.numeroNota);
-  const antes = new Set((await notasDoCliente()).map(identificar));
+  // Guarda a situação também: reenvio de nota rejeitada pode reaproveitar o registro.
+  const assinatura = (n) => `${n.codigoStatus}|${n.status}|${n.chaveAcessoNFe || ""}`;
+  const antes = new Map((await notasDoCliente()).map((n) => [identificar(n), assinatura(n)]));
   const respostaEnvio = await enviarTxtNFeMail(txt);
 
   // A NFeMail processa e transmite em segundo plano: acompanha até autorizar.
@@ -399,12 +408,12 @@ export const emitirNota = async (pedidoId, opcoes, usuario) => {
   let ultimoStatus = "";
   for (let tentativa = 0; tentativa < 20 && !emitida; tentativa += 1) {
     await esperar(tentativa ? 3000 : 2000);
-    const nova = (await notasDoCliente()).find((n) => !antes.has(identificar(n)) && !EXCLUIDA(n)) || null;
+    const nova = (await notasDoCliente()).find((n) => antes.get(identificar(n)) !== assinatura(n) && !EXCLUIDA(n)) || null;
     if (nova) {
       criada = nova;
       ultimoStatus = nova.status || "";
       // Rejeição da SEFAZ (status com código e texto): não adianta esperar.
-      if (Number(nova.codigoStatus) > 100 && !AUTORIZADA(nova)) break;
+      if (REJEITADA(nova)) break;
     }
     if (AUTORIZADA(nova)) emitida = nova;
   }
@@ -416,7 +425,7 @@ export const emitirNota = async (pedidoId, opcoes, usuario) => {
     const status = criada
       ? Number(criada.codigoStatus) > 100
         ? `Nota ${criada.numeroNota} rejeitada pela SEFAZ: ${criada.status}`
-        : `Nota ${criada.numeroNota} criada na NFeMail, mas NÃO transmitida (ficou em digitação). A transmissão automática da API está desligada na conta: transmita a nota pela NFeMail e depois baixe a DANFE aqui.`
+        : `Nota ${criada.numeroNota} criada na NFeMail, mas ainda não transmitida (em digitação). Veja em Emissão › NFe se ela tem erro; depois de transmitir, baixe a DANFE aqui.`
       : "A NFeMail recebeu o arquivo, mas a nota não apareceu. Veja o histórico em Emissão › NFe › Importar.";
     return { emitida: false, status, numero: criada?.numeroNota || null, respostaEnvio };
   }
