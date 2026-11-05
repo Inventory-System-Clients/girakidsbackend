@@ -315,7 +315,7 @@ export const montarTxt = (nota, emit) => {
     linha("A", "4.00", ""),
     // B|cUF|cNF|natOp|mod|serie|nNF|dhEmi|dhSaiEnt|tpNF|idDest|cMunFG|tpImp|tpEmis|cDV|tpAmb|finNFe|indFinal|indPres|indIntermed|procEmi|verProc|dhCont|xJust|
     // (layout que o conversor da NFeMail informa; o manual web não traz indIntermed)
-    linha("B", "35", "", "Venda de mercadoria", "55", emit.serie || "1", "", agoraBrasilia(), "", "1", d.uf === "SP" ? "1" : "2", emit.cMun, "1", "1", "", "1", "1", d.contribuinte ? "0" : "1", "1", "", "0", "GiraKids", "", ""),
+    linha("B", "35", "", "Venda de mercadoria", "55", emit.serie || "1", "", agoraBrasilia(), "", "1", d.uf === "SP" ? "1" : "2", emit.cMun, "1", "1", "", "1", "1", d.contribuinte ? "0" : "1", "1", "0", "0", "GiraKids", "", ""),
     linha("C", emit.xNome, emit.xFant, emit.IE, "", "", "", emit.CRT || "1"),
     linha("C02", emit.CNPJ),
     linha("C05", emit.xLgr, emit.nro, emit.xCpl, emit.xBairro, emit.cMun, emit.xMun, emit.UF, emit.CEP, "1058", "BRASIL", emit.fone),
@@ -408,7 +408,11 @@ export const emitirNota = async (pedidoId, opcoes, usuario) => {
   let ultimoStatus = "";
   for (let tentativa = 0; tentativa < 20 && !emitida; tentativa += 1) {
     await esperar(tentativa ? 3000 : 2000);
-    const nova = (await notasDoCliente()).find((n) => antes.get(identificar(n)) !== assinatura(n) && !EXCLUIDA(n)) || null;
+    // Rejeição antiga que só mudou de texto não é a nota nova; autorizada tem prioridade.
+    const mudaram = (await notasDoCliente()).filter(
+      (n) => antes.get(identificar(n)) !== assinatura(n) && !EXCLUIDA(n) && !(antes.has(identificar(n)) && REJEITADA(n)),
+    );
+    const nova = mudaram.find(AUTORIZADA) || mudaram[0] || null;
     if (nova) {
       criada = nova;
       ultimoStatus = nova.status || "";
