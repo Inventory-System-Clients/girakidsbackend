@@ -288,7 +288,10 @@ const agoraBrasilia = () => {
 // Arquivo TXT (layout NFeMail) a partir da prévia.
 export const montarTxt = (nota, emit) => {
   const d = nota.destino;
+  // Cabeçalho do TXT padrão SEFAZ (quantidade de notas no arquivo): sem ele o
+  // conversor da NFeMail falha com "Object reference not set...".
   const linhas = [
+    linha("NOTAFISCAL", "1"),
     linha("A", "4.00", ""),
     linha("B", "35", "", "Venda de mercadoria", "55", emit.serie || "1", "", agoraBrasilia(), "", "1", d.uf === "SP" ? "1" : "2", emit.cMun, "1", "1", "", "1", "1", d.contribuinte ? "0" : "1", "1", "0", "GiraKids", "", ""),
     linha("C", emit.xNome, emit.xFant, emit.IE, "", "", "", emit.CRT || "1"),
