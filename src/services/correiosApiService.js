@@ -18,8 +18,11 @@ const erroHttp = (status, mensagem) => Object.assign(new Error(mensagem), { stat
 const env = (nome) => String(process.env[nome] || "").trim();
 const digitos = (valor) => String(valor || "").replace(/\D/g, "");
 
-export const apiCorreiosConfigurada = () =>
+const credenciaisConfiguradas = () =>
   Boolean(env("CORREIOS_USUARIO") && env("CORREIOS_CODIGO_ACESSO") && env("CORREIOS_CARTAO_POSTAGEM"));
+
+// Só troca o VIPP pela API quando também há o CEP do remetente.
+export const apiCorreiosConfigurada = () => credenciaisConfiguradas() && digitos(env("CORREIOS_REMETENTE_CEP")).length === 8;
 
 const servicosConfigurados = () =>
   (env("CORREIOS_SERVICOS") || SERVICOS_PADRAO)
@@ -59,7 +62,7 @@ let sessao = null;
 
 const autenticar = async () => {
   if (sessao && sessao.expiraEm - Date.now() > 10 * 60 * 1000) return sessao;
-  if (!apiCorreiosConfigurada()) {
+  if (!credenciaisConfiguradas()) {
     throw erroHttp(500, "Configure CORREIOS_USUARIO, CORREIOS_CODIGO_ACESSO e CORREIOS_CARTAO_POSTAGEM no ambiente do backend.");
   }
   const basic = Buffer.from(`${env("CORREIOS_USUARIO")}:${env("CORREIOS_CODIGO_ACESSO")}`).toString("base64");
@@ -386,7 +389,8 @@ export const statusApiCorreios = async () => {
   const variaveis = Object.fromEntries(
     ["CORREIOS_USUARIO", "CORREIOS_CODIGO_ACESSO", "CORREIOS_CARTAO_POSTAGEM", "CORREIOS_CONTRATO", "CORREIOS_REMETENTE_CEP", "CORREIOS_REMETENTE_NUMERO"].map((nome) => [nome, Boolean(env(nome))]),
   );
-  if (!apiCorreiosConfigurada()) return { configurada: false, variaveis };
+  if (!credenciaisConfiguradas()) return { configurada: false, variaveis };
+  const emUso = apiCorreiosConfigurada() ? "API" : "VIPP";
   try {
     const conta = await autenticar();
     let remetenteStatus;
@@ -398,6 +402,7 @@ export const statusApiCorreios = async () => {
     }
     return {
       configurada: true,
+      emUso,
       login: true,
       ambiente: conta.ambiente,
       contrato: conta.contrato,
