@@ -347,8 +347,15 @@ export const diagnosticoEmissaoNFeMail = async () => {
 // --- Emissão automática (usado por nfeEmissaoService) ----------------------
 
 export const buscarClienteNFeMail = async (cpfCnpj) => {
-  const payload = await chamarNFeMail("/api/Clientes", { cpfcnpj: String(cpfCnpj).replace(/\D/g, "") });
-  const lista = payload?.ListaCliente || extrairLista(payload);
+  let payload;
+  try {
+    payload = await chamarNFeMail("/api/Clientes", { cpfcnpj: String(cpfCnpj).replace(/\D/g, "") });
+  } catch (error) {
+    if (error.status === 404) return null;
+    throw error;
+  }
+  // Por CPF/CNPJ a NFeMail devolve o cliente sozinho (sem lista).
+  const lista = payload?.ListaCliente || (payload?.num_cpfcnpj ? [payload] : extrairLista(payload));
   return lista.find((c) => String(c.num_cpfcnpj || "").replace(/\D/g, "") === String(cpfCnpj).replace(/\D/g, "")) || lista[0] || null;
 };
 
