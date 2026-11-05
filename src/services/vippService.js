@@ -367,7 +367,7 @@ const semAcento = (texto, limite) =>
     .trim()
     .slice(0, limite);
 
-const validarCarga = (carga) => {
+export const validarCarga = (carga) => {
   const cep = somenteCep(carga.cep);
   const peso = Math.round(Number(carga.pesoGramas));
   const dimensoes = ["altura", "largura", "comprimento"].map((campo) =>

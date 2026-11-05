@@ -24,9 +24,15 @@ const CorreiosPostagem = sequelize.define(
       type: DataTypes.STRING(150),
       allowNull: true,
     },
+    // Id da postagem no VIPP ou da pré-postagem na API dos Correios (origem).
     vippIdConhecimento: {
       type: DataTypes.STRING(50),
       allowNull: false,
+    },
+    origem: {
+      type: DataTypes.STRING(10),
+      allowNull: false,
+      defaultValue: "VIPP",
     },
     etiqueta: {
       type: DataTypes.STRING(20),

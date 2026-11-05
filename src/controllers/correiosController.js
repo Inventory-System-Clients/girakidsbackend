@@ -8,6 +8,13 @@ import {
   concluirLoginVipp,
   statusVipp,
 } from "../services/vippService.js";
+import {
+  apiCorreiosConfigurada,
+  baixarPdfsPostagemApi,
+  cotarServicosApi,
+  criarPostagemApi,
+  statusApiCorreios,
+} from "../services/correiosApiService.js";
 import { METODOS_ENVIO } from "../utils/formasPagamento.js";
 import { fimDoDia, inicioDoDia } from "../utils/helpers.js";
 import { contem } from "../utils/busca.js";
@@ -87,6 +94,7 @@ const resumoPostagem = (postagem) =>
     servico: postagem.servico,
     valorFrete: postagem.valorFrete != null ? Number(postagem.valorFrete) : null,
     vippIdConhecimento: postagem.vippIdConhecimento,
+    origem: postagem.origem,
     criadoEm: postagem.createdAt,
     criadoPor: postagem.usuario?.nome || null,
   };
@@ -169,6 +177,16 @@ export const detalharPedido = async (req, res) => {
   }
 };
 
+// Com as credenciais da API dos Correios no ambiente, cotação e postagem
+// vão direto nos Correios; sem elas, continua pelo VIPP.
+export const apiStatus = async (req, res) => {
+  try {
+    res.json(await statusApiCorreios());
+  } catch (error) {
+    responderErro(res, error, "Erro ao consultar a API dos Correios");
+  }
+};
+
 // Login no VIPP com captcha digitado na nossa tela.
 export const vippStatus = (req, res) => res.json(statusVipp());
 
@@ -190,12 +208,12 @@ export const vippEntrar = async (req, res) => {
 
 export const cotar = async (req, res) => {
   try {
-    const resultado = await cotarServicosVipp(req.body || {});
+    const resultado = apiCorreiosConfigurada() ? await cotarServicosApi(req.body || {}) : await cotarServicosVipp(req.body || {});
     res.json(resultado);
   } catch (error) {
     const validacao = /inválido|Informe|Peso deve/.test(error.message || "");
     if (validacao) return res.status(400).json({ error: error.message });
-    responderErro(res, error, "Erro ao cotar no VIPP");
+    responderErro(res, error, apiCorreiosConfigurada() ? "Erro ao cotar nos Correios" : "Erro ao cotar no VIPP");
   }
 };
 
@@ -216,7 +234,7 @@ export const criarPostagem = async (req, res) => {
     const existentes = await buscarPostagensDosPedidos([pedidoId]);
     if (existentes.has(pedidoId) && forcar !== true) {
       return res.status(409).json({
-        error: "Este pedido já foi postado no VIPP.",
+        error: "Este pedido já foi postado.",
         postagem: existentes.get(pedidoId),
       });
     }
@@ -224,18 +242,18 @@ export const criarPostagem = async (req, res) => {
     // Número e cliente vêm do banco, não do navegador.
     const pedido = await obterPedido(pedidoId);
 
-    const resultado = await criarPostagemVipp({
-      destinatario,
-      carga,
-      servicoId,
-      observacao: `PEDIDO GIRA KIDS ${pedido.numero}`,
-    });
+    const usarApi = apiCorreiosConfigurada();
+    const dados = { destinatario, carga, servicoId, observacao: `PEDIDO GIRA KIDS ${pedido.numero}` };
+    const resultado = usarApi
+      ? await criarPostagemApi({ ...dados, valorDeclarado: Number(pedido.subtotal || pedido.total || 0) })
+      : await criarPostagemVipp(dados);
 
     const postagem = await CorreiosPostagem.create({
       pedidoId: pedido.id,
       numeroPedido: String(pedido.numero),
       cliente: pedido.clienteNome,
       vippIdConhecimento: resultado.idConhecimento,
+      origem: usarApi ? "API" : "VIPP",
       etiqueta: resultado.etiqueta || null,
       servico: resultado.servico.nome,
       valorFrete: resultado.servico.valor || null,
@@ -257,7 +275,7 @@ export const criarPostagem = async (req, res) => {
       error.message || "",
     );
     if (validacao) return res.status(400).json({ error: error.message });
-    responderErro(res, error, "Erro ao criar a postagem no VIPP");
+    responderErro(res, error, "Erro ao criar a postagem");
   } finally {
     gravacoesEmAndamento.delete(pedidoId);
   }
@@ -268,6 +286,9 @@ export const baixarPdfs = async (req, res) => {
     const postagem = await CorreiosPostagem.findByPk(req.params.id);
     if (!postagem) {
       return res.status(404).json({ error: "Postagem não encontrada." });
+    }
+    if (postagem.origem === "API") {
+      return res.json(await baixarPdfsPostagemApi(postagem.vippIdConhecimento, postagem.etiqueta));
     }
     const { arquivos } = await baixarPdfsPostagemVipp(postagem.vippIdConhecimento);
     res.json({
@@ -280,6 +301,6 @@ export const baixarPdfs = async (req, res) => {
       })),
     });
   } catch (error) {
-    responderErro(res, error, "Erro ao baixar os PDFs no VIPP");
+    responderErro(res, error, "Erro ao baixar os PDFs");
   }
 };
