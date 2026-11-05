@@ -1,15 +1,6 @@
 import { Op } from "sequelize";
 import { CorreiosPostagem, Usuario, Pedido } from "../models/index.js";
 import {
-  cotarServicosVipp,
-  criarPostagemVipp,
-  baixarPdfsPostagemVipp,
-  iniciarLoginVipp,
-  concluirLoginVipp,
-  statusVipp,
-} from "../services/vippService.js";
-import {
-  apiCorreiosConfigurada,
   baixarPdfsPostagemApi,
   cotarServicosApi,
   criarPostagemApi,
@@ -177,8 +168,7 @@ export const detalharPedido = async (req, res) => {
   }
 };
 
-// Com as credenciais da API dos Correios no ambiente, cotação e postagem
-// vão direto nos Correios; sem elas, continua pelo VIPP.
+// Cotação e postagem vão direto na API oficial dos Correios.
 export const apiStatus = async (req, res) => {
   try {
     res.json(await statusApiCorreios());
@@ -187,33 +177,14 @@ export const apiStatus = async (req, res) => {
   }
 };
 
-// Login no VIPP com captcha digitado na nossa tela.
-export const vippStatus = (req, res) => res.json(statusVipp());
-
-export const vippCaptcha = async (req, res) => {
-  try {
-    res.json(await iniciarLoginVipp());
-  } catch (error) {
-    responderErro(res, error, "Erro ao buscar a imagem do VIPP");
-  }
-};
-
-export const vippEntrar = async (req, res) => {
-  try {
-    res.json(await concluirLoginVipp(req.body?.captcha));
-  } catch (error) {
-    responderErro(res, error, "Erro ao entrar no VIPP");
-  }
-};
-
 export const cotar = async (req, res) => {
   try {
-    const resultado = apiCorreiosConfigurada() ? await cotarServicosApi(req.body || {}) : await cotarServicosVipp(req.body || {});
+    const resultado = await cotarServicosApi(req.body || {});
     res.json(resultado);
   } catch (error) {
     const validacao = /inválido|Informe|Peso deve/.test(error.message || "");
     if (validacao) return res.status(400).json({ error: error.message });
-    responderErro(res, error, apiCorreiosConfigurada() ? "Erro ao cotar nos Correios" : "Erro ao cotar no VIPP");
+    responderErro(res, error, "Erro ao cotar nos Correios");
   }
 };
 
@@ -242,18 +213,20 @@ export const criarPostagem = async (req, res) => {
     // Número e cliente vêm do banco, não do navegador.
     const pedido = await obterPedido(pedidoId);
 
-    const usarApi = apiCorreiosConfigurada();
-    const dados = { destinatario, carga, servicoId, observacao: `PEDIDO GIRA KIDS ${pedido.numero}` };
-    const resultado = usarApi
-      ? await criarPostagemApi({ ...dados, valorDeclarado: Number(pedido.subtotal || pedido.total || 0) })
-      : await criarPostagemVipp(dados);
+    const resultado = await criarPostagemApi({
+      destinatario,
+      carga,
+      servicoId,
+      observacao: `PEDIDO GIRA KIDS ${pedido.numero}`,
+      valorDeclarado: Number(pedido.subtotal || pedido.total || 0),
+    });
 
     const postagem = await CorreiosPostagem.create({
       pedidoId: pedido.id,
       numeroPedido: String(pedido.numero),
       cliente: pedido.clienteNome,
       vippIdConhecimento: resultado.idConhecimento,
-      origem: usarApi ? "API" : "VIPP",
+      origem: "API",
       etiqueta: resultado.etiqueta || null,
       servico: resultado.servico.nome,
       valorFrete: resultado.servico.valor || null,
@@ -287,19 +260,10 @@ export const baixarPdfs = async (req, res) => {
     if (!postagem) {
       return res.status(404).json({ error: "Postagem não encontrada." });
     }
-    if (postagem.origem === "API") {
-      return res.json(await baixarPdfsPostagemApi(postagem.vippIdConhecimento, postagem.etiqueta));
+    if (postagem.origem !== "API") {
+      return res.status(400).json({ error: "Esta postagem foi feita pelo VIPP, que foi desligado. Os PDFs dela não estão mais disponíveis aqui." });
     }
-    const { arquivos } = await baixarPdfsPostagemVipp(postagem.vippIdConhecimento);
-    res.json({
-      arquivos: arquivos.map((arquivo) => ({
-        ...arquivo,
-        nome: arquivo.nome.replace(
-          postagem.vippIdConhecimento,
-          postagem.etiqueta || postagem.vippIdConhecimento,
-        ),
-      })),
-    });
+    res.json(await baixarPdfsPostagemApi(postagem.vippIdConhecimento, postagem.etiqueta));
   } catch (error) {
     responderErro(res, error, "Erro ao baixar os PDFs");
   }

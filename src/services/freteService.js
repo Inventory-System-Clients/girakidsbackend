@@ -1,7 +1,7 @@
 import { Produto } from "../models/index.js";
 import { lerConfiguracao } from "../models/Configuracao.js";
 import { caixaParaFrete } from "./pedidoCalculoEngine.js";
-import { cotarServicosVipp } from "./vippService.js";
+import { apiCorreiosConfigurada, cotarServicosApi } from "./correiosApiService.js";
 import { arredondar, somenteDigitos } from "../utils/helpers.js";
 import { ENDERECO_LOJA_PADRAO } from "../utils/formasPagamento.js";
 
@@ -19,7 +19,7 @@ export const CAMPO_CALCULADORA_POR_EMBALAGEM = {
 
 const CAIXA_PADRAO = { altura: 30, largura: 30, comprimento: 35 };
 
-// Estimativa usada quando o VIPP não está configurado. Pode ser ajustada em
+// Estimativa usada quando a API dos Correios não está configurada. Pode ser ajustada em
 // Configurações (chave "freteEstimado").
 const ESTIMATIVA_PADRAO = {
   PAC: { base: 28, porKg: 4.2, prazoBase: 5 },
@@ -72,8 +72,6 @@ const estimar = async (servico, pesoGramas, uf) => {
   };
 };
 
-const vippConfigurado = () => Boolean(process.env.VIPP_USUARIO && process.env.VIPP_SENHA);
-
 // Opções de entrega do checkout. PAC/SEDEX só com CEP válido.
 export const cotarFrete = async ({ cep, uf, itens }) => {
   const carga = await resumirCarga(itens || []);
@@ -101,25 +99,25 @@ export const cotarFrete = async ({ cep, uf, itens }) => {
     return { opcoes, pesoGramas: carga.pesoGramas };
   }
 
-  let cotacaoVipp = null;
-  if (vippConfigurado()) {
+  let cotacaoCorreios = null;
+  if (apiCorreiosConfigurada()) {
     try {
-      cotacaoVipp = await cotarServicosVipp({
+      cotacaoCorreios = await cotarServicosApi({
         cep: cepLimpo,
         pesoGramas: Math.max(1, carga.pesoGramas),
         ...carga.caixa,
       });
     } catch (error) {
-      console.warn("[Frete] VIPP indisponível, usando estimativa:", error.message);
+      console.warn("[Frete] API dos Correios indisponível, usando estimativa:", error.message);
     }
   }
 
   for (const servico of correios) {
-    const doVipp = cotacaoVipp?.servicos?.find(
+    const doCorreios = cotacaoCorreios?.servicos?.find(
       (s) => s.disponivel && s.nome.toUpperCase().includes(servico.metodo),
     );
-    const cotacao = doVipp
-      ? { valor: arredondar(doVipp.valor), prazoDias: doVipp.prazoDias, estimado: false }
+    const cotacao = doCorreios
+      ? { valor: arredondar(doCorreios.valor), prazoDias: doCorreios.prazoDias, estimado: false }
       : await estimar(servico.metodo, carga.pesoGramas, String(uf || "").toUpperCase());
     opcoes.push({ ...servico, ...cotacao, disponivel: true });
   }

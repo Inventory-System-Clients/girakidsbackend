@@ -1,6 +1,6 @@
-// Integração direta com a API dos Correios (api.correios.com.br), no lugar do
-// VIPP: cotação (Preço + Prazo), pré-postagem, rótulo em PDF e declaração de
-// conteúdo. Credenciais só no ambiente (Render):
+// Integração direta com a API dos Correios (api.correios.com.br): cotação (Preço + Prazo), pré-postagem, rótulo em PDF e declaração de
+// conteúdo. É a única integração de postagem (o VIPP foi desligado).
+// Credenciais só no ambiente (Render):
 //   CORREIOS_USUARIO        usuário do Meu Correios (geralmente o CNPJ)
 //   CORREIOS_CODIGO_ACESSO  código de acesso à API gerado no CWS
 //   CORREIOS_CARTAO_POSTAGEM / CORREIOS_CONTRATO
@@ -9,7 +9,7 @@
 //   _BAIRRO, _CIDADE, _UF, _TELEFONE, _EMAIL
 // Serviços cotados: CORREIOS_SERVICOS="03298:PAC,03220:SEDEX" (padrão).
 
-import { CONTEUDO_PADRAO, validarCarga } from "./vippService.js";
+export const CONTEUDO_PADRAO = "BRINQUEDOS";
 
 const BASE_URL = (process.env.CORREIOS_API_URL || "https://api.correios.com.br").replace(/\/$/, "");
 const SERVICOS_PADRAO = "03298:PAC,03220:SEDEX";
@@ -21,7 +21,7 @@ const digitos = (valor) => String(valor || "").replace(/\D/g, "");
 const credenciaisConfiguradas = () =>
   Boolean(env("CORREIOS_USUARIO") && env("CORREIOS_CODIGO_ACESSO") && env("CORREIOS_CARTAO_POSTAGEM"));
 
-// Só troca o VIPP pela API quando também há o CEP do remetente.
+// Pronta para uso quando também há o CEP do remetente.
 export const apiCorreiosConfigurada = () => credenciaisConfiguradas() && digitos(env("CORREIOS_REMETENTE_CEP")).length === 8;
 
 const servicosConfigurados = () =>
@@ -115,6 +115,36 @@ const requisitarJson = async (caminho, opcoes, contexto) => {
     throw erroHttp(resposta.status >= 500 ? 502 : 400, `${contexto}: ${mensagemCorreios(dados)}`);
   }
   return dados;
+};
+
+const somenteCep = (cep) => String(cep || "").replace(/\D/g, "");
+const formatarCep = (cep) => {
+  const digitos = somenteCep(cep);
+  return digitos.length === 8 ? `${digitos.slice(0, 5)}-${digitos.slice(5)}` : digitos;
+};
+
+export const validarCarga = (carga) => {
+  const cep = somenteCep(carga.cep);
+  const peso = Math.round(Number(carga.pesoGramas));
+  const dimensoes = ["altura", "largura", "comprimento"].map((campo) =>
+    Math.round(Number(carga[campo])),
+  );
+
+  if (cep.length !== 8) throw new Error("CEP de destino inválido.");
+  if (!Number.isFinite(peso) || peso < 1 || peso > 30000) {
+    throw new Error("Peso deve estar entre 1 g e 30 kg.");
+  }
+  if (dimensoes.some((valor) => !Number.isFinite(valor) || valor < 1)) {
+    throw new Error("Informe altura, largura e comprimento em cm.");
+  }
+
+  return {
+    cep: formatarCep(cep),
+    pesoGramas: peso,
+    altura: dimensoes[0],
+    largura: dimensoes[1],
+    comprimento: dimensoes[2],
+  };
 };
 
 // --- Remetente -------------------------------------------------------------
@@ -390,7 +420,7 @@ export const statusApiCorreios = async () => {
     ["CORREIOS_USUARIO", "CORREIOS_CODIGO_ACESSO", "CORREIOS_CARTAO_POSTAGEM", "CORREIOS_CONTRATO", "CORREIOS_REMETENTE_CEP", "CORREIOS_REMETENTE_NUMERO"].map((nome) => [nome, Boolean(env(nome))]),
   );
   if (!credenciaisConfiguradas()) return { configurada: false, variaveis };
-  const emUso = apiCorreiosConfigurada() ? "API" : "VIPP";
+  const pronta = apiCorreiosConfigurada();
   try {
     const conta = await autenticar();
     let remetenteStatus;
@@ -402,7 +432,7 @@ export const statusApiCorreios = async () => {
     }
     return {
       configurada: true,
-      emUso,
+      pronta,
       login: true,
       ambiente: conta.ambiente,
       contrato: conta.contrato,

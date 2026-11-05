@@ -1,9 +1,9 @@
 import { DataTypes } from "sequelize";
 import { sequelize } from "../database/connection.js";
 
-// Postagem criada no VIPP a partir de um pedido da própria loja (aba
-// Comercial → Correios). Serve pra não gravar o mesmo pedido duas vezes no
-// VIPP (geraria duas pré-postagens nos Correios) e pra baixar os PDFs depois.
+// Postagem criada nos Correios a partir de um pedido da própria loja (aba
+// Comercial → Correios). Serve pra não gravar o mesmo pedido duas vezes
+// (geraria duas pré-postagens nos Correios) e pra baixar os PDFs depois.
 const CorreiosPostagem = sequelize.define(
   "CorreiosPostagem",
   {
@@ -24,7 +24,8 @@ const CorreiosPostagem = sequelize.define(
       type: DataTypes.STRING(150),
       allowNull: true,
     },
-    // Id da postagem no VIPP ou da pré-postagem na API dos Correios (origem).
+    // Id da pré-postagem na API dos Correios (origem "API"); postagens antigas
+    // guardam o id do VIPP (origem "VIPP").
     vippIdConhecimento: {
       type: DataTypes.STRING(50),
       allowNull: false,
@@ -32,7 +33,7 @@ const CorreiosPostagem = sequelize.define(
     origem: {
       type: DataTypes.STRING(10),
       allowNull: false,
-      defaultValue: "VIPP",
+      defaultValue: "API",
     },
     etiqueta: {
       type: DataTypes.STRING(20),
