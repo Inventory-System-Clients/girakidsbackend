@@ -29,6 +29,7 @@ import * as recebimentos from "../controllers/recebimentoController.js";
 import * as whatsapp from "../controllers/whatsappController.js";
 import * as legado from "../controllers/sincronizacaoLegadoController.js";
 import { limitarTaxa } from "../utils/linkSeguro.js";
+import { diagnosticoBraspress } from "../services/braspressService.js";
 import transportadoraRoutes from "./transportadora.routes.js";
 import calculoPedidoRoutes from "./calculoPedido.routes.js";
 import pedidoNotaFiscalRoutes from "./pedidoNotaFiscal.routes.js";
@@ -96,6 +97,14 @@ router.post("/pedidos/:id/liberar", autenticar, vendasOuFinanceiro, registrarLog
 router.post("/pedidos/:id/cancelar", autenticar, exigirPermissao("VENDAS"), registrarLog("CANCELAR_PEDIDO", "Pedido"), pedidos.cancelar);
 router.put("/pedidos/:id/forma-pagamento", autenticar, vendasOuFinanceiro, registrarLog("ALTERAR_FORMA_PAGAMENTO", "Pedido"), pedidos.alterarFormaPagamento);
 router.put("/pedidos/:id/transportadora", autenticar, exigirPermissao("VENDAS", "EXPEDICAO"), registrarLog("ALTERAR_TRANSPORTADORA", "Pedido"), pedidos.alterarTransportadora);
+// Diagnóstico da cotação Braspress (estrutura da tela depois do login).
+router.get("/frete/braspress/diagnostico", autenticar, exigirPermissao("ADMIN"), async (req, res) => {
+  try {
+    res.json(await diagnosticoBraspress());
+  } catch (error) {
+    res.status(502).json({ erro: error.message });
+  }
+});
 router.get("/nfe/vinculos-categorias", autenticar, exigirPermissao("VENDAS", "FINANCEIRO", "COMERCIAL"), nfeEmissao.vinculosCategorias);
 router.put("/nfe/vinculos-categorias", autenticar, exigirPermissao("ADMIN"), registrarLog("VINCULOS_NFE", "Configuracao"), nfeEmissao.salvarVinculos);
 router.post("/pedidos/:id/nfe/previa", autenticar, exigirPermissao("VENDAS", "FINANCEIRO", "COMERCIAL"), nfeEmissao.previa);
