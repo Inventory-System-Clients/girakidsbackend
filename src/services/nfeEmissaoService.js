@@ -187,7 +187,11 @@ export const prepararNota = async (pedidoId, opcoes = {}) => {
 
   // Itens: cada produto do site aponta para um produto da NFeMail; produtos
   // iguais na NFeMail somam numa linha (como as notas emitidas à mão).
-  const produtosNFe = await listarProdutosNFeMail();
+  let produtosNFe = await listarProdutosNFeMail();
+  // Produto com nome inválido no cache: busca de novo (pode ter sido corrigido agora).
+  if (produtosNFe.some((p) => !/[a-zA-Z]/.test(String(p.dsc_produto || "")))) {
+    produtosNFe = await listarProdutosNFeMail({ atualizar: true });
+  }
   const nfePorCodigo = new Map(produtosNFe.map((p) => [String(p.cod_produto), p]));
   const vinculos = { ...(opcoes.vinculos || {}) };
   const produtosSite = await Produto.findAll({ where: { id: pedido.itens.map((i) => i.produtoId).filter(Boolean) } });

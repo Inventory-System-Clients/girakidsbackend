@@ -365,8 +365,8 @@ export const buscarNotasPorDocumento = async (cpfCnpj) => {
 };
 
 let produtosCache = null;
-export const listarProdutosNFeMail = async () => {
-  if (produtosCache && Date.now() - produtosCache.em < 10 * 60 * 1000) return produtosCache.lista;
+export const listarProdutosNFeMail = async ({ atualizar = false } = {}) => {
+  if (!atualizar && produtosCache && Date.now() - produtosCache.em < 2 * 60 * 1000) return produtosCache.lista;
   // A NFeMail devolve no máximo 10 por página: segue até acabar.
   const lista = [];
   const vistos = new Set();
