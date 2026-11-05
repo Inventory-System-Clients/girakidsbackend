@@ -84,6 +84,8 @@ const Produto = sequelize.define(
       allowNull: true,
     },
     // Estoque em unidades.
+    // Produto do cadastro da NFeMail (cod_produto) usado na nota fiscal.
+    nfeProdutoCodigo: { type: DataTypes.STRING(30), allowNull: true },
     estoque: {
       type: DataTypes.INTEGER,
       allowNull: false,

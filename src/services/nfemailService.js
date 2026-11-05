@@ -182,6 +182,9 @@ export const normalizarNotaNFeMail = (raw) => {
     tipoFrete,
     valorNota,
     chaveAcessoNFe,
+    idNFeMail: raw.cod_nfemail ?? null,
+    status: raw.dsc_processo ?? null,
+    codigoStatus: raw.cod_processo ?? null,
   };
 };
 
@@ -338,4 +341,96 @@ export const diagnosticoEmissaoNFeMail = async () => {
   const produtos = (listaProdutos.ListaProduto || []).map((p) => [p.cod_produto, p.cod_alternativo, p.dsc_produto, p.ncm_produto, p.cod_unidade, p.num_cfop, p.inf_inativo ? "inativo" : ""].join(" | "));
   const clientes = await bruto("/api/Clientes", { page: 1, limit: 1 });
   return { notasRecentes: notas, amostras, produtos, clientes };
+};
+
+
+// --- Emissão automática (usado por nfeEmissaoService) ----------------------
+
+export const buscarClienteNFeMail = async (cpfCnpj) => {
+  const payload = await chamarNFeMail("/api/Clientes", { cpfcnpj: String(cpfCnpj).replace(/\D/g, "") });
+  const lista = payload?.ListaCliente || extrairLista(payload);
+  return lista.find((c) => String(c.num_cpfcnpj || "").replace(/\D/g, "") === String(cpfCnpj).replace(/\D/g, "")) || lista[0] || null;
+};
+
+export const buscarNotasPorDocumento = async (cpfCnpj) => {
+  const payload = await chamarNFeMail("/api/NotasFiscais", { cpfcnpj: String(cpfCnpj).replace(/\D/g, "") });
+  return extrairLista(payload).map(normalizarNotaNFeMail).filter(Boolean);
+};
+
+let produtosCache = null;
+export const listarProdutosNFeMail = async () => {
+  if (produtosCache && Date.now() - produtosCache.em < 10 * 60 * 1000) return produtosCache.lista;
+  const lista = [];
+  for (let page = 1; page <= 20; page += 1) {
+    const payload = await chamarNFeMail("/api/Produtos", { page, limit: 100 });
+    const parte = payload?.ListaProduto || extrairLista(payload);
+    lista.push(...parte);
+    if (parte.length < 100) break;
+  }
+  produtosCache = { em: Date.now(), lista };
+  return lista;
+};
+
+// Dados do emitente copiados da última nota autorizada (os mesmos que a
+// NFeMail usa nas notas emitidas pela tela).
+let emitenteCache = null;
+export const emitenteDaUltimaNota = async () => {
+  if (emitenteCache) return emitenteCache;
+  const notas = await buscarNotasEmitidas({ page: 1, limit: 10 });
+  const nota = notas.find((n) => n.chaveAcessoNFe);
+  if (!nota) throw Object.assign(new Error("Nenhuma nota autorizada na NFeMail para copiar os dados do emitente."), { status: 400 });
+  const xml = await buscarXmlBrutoPorChave(nota.chaveAcessoNFe);
+  const emit = xml?.match(/<emit>[^]*?<\/emit>/)?.[0] || "";
+  const serie = xml?.match(/<serie>(\d+)<\/serie>/)?.[1] || "1";
+  const valor = (t) => emit.match(new RegExp(`<${t}>([^<]*)</${t}>`))?.[1] || "";
+  if (!valor("CNPJ")) throw Object.assign(new Error("Não consegui ler os dados do emitente na NFeMail."), { status: 502 });
+  emitenteCache = {
+    CNPJ: valor("CNPJ"), xNome: valor("xNome"), xFant: valor("xFant"), IE: valor("IE"), CRT: valor("CRT"),
+    xLgr: valor("xLgr"), nro: valor("nro"), xCpl: valor("xCpl"), xBairro: valor("xBairro"), cMun: valor("cMun"),
+    xMun: valor("xMun"), UF: valor("UF"), CEP: valor("CEP"), fone: valor("fone"), serie,
+  };
+  return emitenteCache;
+};
+
+// POST api/NotasFiscais: corpo form-urlencoded "=<TXT>" (como o exemplo da NFeMail).
+export const enviarTxtNFeMail = async (txt) => {
+  const resposta = await fetch(new URL("/api/NotasFiscais", NFEMAIL_API_BASE_URL), {
+    method: "POST",
+    headers: { Authorization: montarAuthHeader(), "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
+    body: `=${encodeURIComponent(txt)}`,
+  });
+  const texto = await resposta.text();
+  console.log(`[nfemailService] POST /api/NotasFiscais -> status ${resposta.status}: ${texto.slice(0, 1000)}`);
+  let dados = texto;
+  try {
+    dados = JSON.parse(texto);
+  } catch {
+    // resposta em texto
+  }
+  if (!resposta.ok) {
+    const msg = (typeof dados === "object" && (dados?.Message || dados?.mensagem || dados?.message)) || String(texto).slice(0, 300);
+    throw Object.assign(new Error(`A NFeMail recusou a nota: ${msg}`), { status: 502 });
+  }
+  return dados;
+};
+
+// DANFE em PDF: pode vir como PDF puro ou JSON com base64.
+export const baixarDanfeNFeMail = async (chave) => {
+  const url = new URL("/api/DANFe", NFEMAIL_API_BASE_URL);
+  url.searchParams.set("chave", chave);
+  const resposta = await fetch(url, { headers: { Authorization: montarAuthHeader() } });
+  const bytes = Buffer.from(await resposta.arrayBuffer());
+  if (!resposta.ok) throw Object.assign(new Error(`DANFE indisponível (HTTP ${resposta.status}).`), { status: 502 });
+  if (bytes.subarray(0, 4).toString() === "%PDF") return bytes;
+  const texto = bytes.toString("utf8");
+  let base64 = texto.replace(/^"|"$/g, "");
+  try {
+    const json = JSON.parse(texto);
+    base64 = typeof json === "string" ? json : json?.pdf || json?.arquivo || json?.danfe || json?.conteudo || json?.data || "";
+  } catch {
+    // não era JSON
+  }
+  const pdf = Buffer.from(String(base64), "base64");
+  if (pdf.subarray(0, 4).toString() !== "%PDF") throw Object.assign(new Error("A NFeMail não devolveu o PDF da DANFE."), { status: 502 });
+  return pdf;
 };

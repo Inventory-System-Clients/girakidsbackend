@@ -20,6 +20,7 @@ import * as pagamentos from "../controllers/pagamentoController.js";
 import * as pagamentosConfig from "../controllers/pagamentoConfigController.js";
 import * as comercial from "../controllers/comercialController.js";
 import * as correios from "../controllers/correiosController.js";
+import * as nfeEmissao from "../controllers/nfeEmissaoController.js";
 import * as banners from "../controllers/bannerController.js";
 import * as custosExtras from "../controllers/custoExtraController.js";
 import * as giraldo from "../controllers/giraldoController.js";
@@ -95,6 +96,8 @@ router.post("/pedidos/:id/liberar", autenticar, vendasOuFinanceiro, registrarLog
 router.post("/pedidos/:id/cancelar", autenticar, exigirPermissao("VENDAS"), registrarLog("CANCELAR_PEDIDO", "Pedido"), pedidos.cancelar);
 router.put("/pedidos/:id/forma-pagamento", autenticar, vendasOuFinanceiro, registrarLog("ALTERAR_FORMA_PAGAMENTO", "Pedido"), pedidos.alterarFormaPagamento);
 router.put("/pedidos/:id/transportadora", autenticar, exigirPermissao("VENDAS", "EXPEDICAO"), registrarLog("ALTERAR_TRANSPORTADORA", "Pedido"), pedidos.alterarTransportadora);
+router.post("/pedidos/:id/nfe/previa", autenticar, exigirPermissao("VENDAS", "FINANCEIRO", "COMERCIAL"), nfeEmissao.previa);
+router.post("/pedidos/:id/nfe/emitir", autenticar, exigirPermissao("VENDAS", "FINANCEIRO", "COMERCIAL"), registrarLog("EMITIR_NFE", "Pedido"), nfeEmissao.emitir);
 router.put("/pedidos/:id/nota-fiscal", autenticar, exigirPermissao("VENDAS", "EXPEDICAO", "FINANCEIRO"), registrarLog("NOTA_FISCAL_PEDIDO", "Pedido"), pedidos.atualizarNotaFiscal);
 router.post("/pedidos/:id/confirmar-pagamento", autenticar, vendasOuFinanceiro, registrarLog("CONFIRMAR_PAGAMENTO", "Pedido"), pedidos.confirmarPagamento);
 router.post("/pedidos/:id/recebimentos", autenticar, vendasOuFinanceiro, registrarLog("REGISTRAR_RECEBIMENTO", "Pedido"), pedidos.registrarRecebimento);
