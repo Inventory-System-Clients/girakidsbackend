@@ -11,7 +11,10 @@
 // - Frete: Braspress = CIF; as demais = FOB.
 // - Pagamento: cartão de crédito = 03 (a prazo); PIX/à vista = 20; boleto = 15
 //   (a prazo); a receber/a definir/outros = 21 crédito em loja (a prazo).
+// - Pedidos em aberto do mesmo cliente sem nota podem sair juntos numa nota só
+//   (opcoes.juntar = ids); o pedido aberto na tela é o principal (xPed, transporte).
 
+import { Op } from "sequelize";
 import { Arquivo, Parceiro, Pedido, Produto } from "../models/index.js";
 import { lerConfiguracao, salvarConfiguracao } from "../models/Configuracao.js";
 import { INCLUDE_COMPLETO } from "./pedidoService.js";
@@ -124,6 +127,46 @@ const transporteDoPedido = async (pedido) => {
   return { modFrete: "9", transportadora: null };
 };
 
+// Pedido que já saiu numa nota junto com outro (registrado no histórico).
+const notaConjunta = (pedido) =>
+  [...(pedido.historico || [])].reverse().find((h) => h.tipo === "NFE_EMITIDA" && h.chave) || null;
+
+const semNota = (p) => !String(p.notaFiscalNumero || "").trim() && !notaConjunta(p);
+
+// Outros pedidos do mesmo cliente ainda em aberto (não cancelados, não
+// expedidos) e sem nota: candidatos a sair na mesma nota.
+export const pedidosAbertosDoCliente = async (pedido) => {
+  const documento = digitos(pedido.documento);
+  const doCliente = [];
+  if (pedido.clienteId) doCliente.push({ clienteId: pedido.clienteId });
+  if (documento.length === 11 || documento.length === 14) doCliente.push({ documento });
+  if (!doCliente.length) return [];
+  const candidatos = await Pedido.findAll({
+    where: {
+      tipo: "PEDIDO",
+      id: { [Op.ne]: pedido.id },
+      statusVendas: { [Op.ne]: "CANCELADO" },
+      statusExpedicao: { [Op.ne]: "EXPEDIDO" },
+      [Op.or]: doCliente,
+    },
+    order: [["numero", "ASC"]],
+    limit: 20,
+  });
+  return candidatos.filter(semNota);
+};
+
+const resumoPedido = (p) => ({
+  id: p.id,
+  numero: p.numero,
+  numeroFormatado: p.numeroFormatado || String(p.numero),
+  total: Number(p.total),
+  formaPagamento: p.formaPagamento,
+  metodoEnvio: p.metodoEnvio,
+  statusVendas: p.statusVendas,
+  criadoEm: p.createdAt,
+  observacoes: p.observacoes || "",
+});
+
 // Monta a prévia da nota (o que vai em cada campo) sem enviar nada.
 export const prepararNota = async (pedidoId, opcoes = {}) => {
   const pedido = await Pedido.findByPk(pedidoId, { include: INCLUDE_COMPLETO });
@@ -131,6 +174,25 @@ export const prepararNota = async (pedidoId, opcoes = {}) => {
   const bloqueios = [];
   const avisos = [];
   if (pedido.statusVendas === "CANCELADO") bloqueios.push("Pedido cancelado.");
+  const jaSaiu = notaConjunta(pedido);
+  if (jaSaiu?.juntoAoPedido) {
+    bloqueios.push(`Este pedido já saiu na nota ${jaSaiu.numero}, junto com o pedido ${jaSaiu.juntoAoPedido}.`);
+  }
+
+  // Pedidos do mesmo cliente que entram na mesma nota (escolhidos na tela).
+  const abertos = await pedidosAbertosDoCliente(pedido);
+  const idsJuntar = [...new Set((opcoes.juntar || []).map(String))].filter((id) => id !== String(pedido.id));
+  const juntos = [];
+  for (const id of idsJuntar) {
+    if (!abertos.some((p) => String(p.id) === id)) {
+      bloqueios.push("Um dos pedidos escolhidos para juntar não é deste cliente, já tem nota ou não está mais em aberto.");
+      continue;
+    }
+    juntos.push(await Pedido.findByPk(id, { include: INCLUDE_COMPLETO }));
+  }
+  const todos = [pedido, ...juntos];
+  const itensTodos = todos.flatMap((p) => p.itens || []);
+  const somar = (campo) => arredondar(todos.reduce((s, p) => s + Number(p[campo] || 0), 0));
 
   // Destinatário. "opcoes.cliente" traz o que a pessoa completou na tela
   // quando faltava algo no pedido (vale por cima do pedido e é salvo nele ao emitir).
@@ -194,7 +256,7 @@ export const prepararNota = async (pedidoId, opcoes = {}) => {
   }
   const nfePorCodigo = new Map(produtosNFe.map((p) => [String(p.cod_produto), p]));
   const vinculos = { ...(opcoes.vinculos || {}) };
-  const produtosSite = await Produto.findAll({ where: { id: pedido.itens.map((i) => i.produtoId).filter(Boolean) } });
+  const produtosSite = await Produto.findAll({ where: { id: itensTodos.map((i) => i.produtoId).filter(Boolean) } });
   // Vínculo do próprio produto; senão o da tabela: produto específico,
   // categoria + embalagem (ex.: cápsulas de 1" e 2") e por fim a categoria.
   const tabela = (await lerConfiguracao(CHAVE_VINCULO_CATEGORIAS)) || {};
@@ -207,11 +269,11 @@ export const prepararNota = async (pedidoId, opcoes = {}) => {
 
   const semVinculo = [];
   const grupos = new Map();
-  for (const item of pedido.itens) {
+  for (const item of itensTodos) {
     const codigo = vinculos[item.produtoId];
     const nfe = codigo && nfePorCodigo.get(String(codigo));
     if (!nfe) {
-      semVinculo.push({ produtoId: item.produtoId, nome: item.nome });
+      if (!semVinculo.some((s) => s.produtoId === item.produtoId)) semVinculo.push({ produtoId: item.produtoId, nome: item.nome });
       continue;
     }
     const unidades = item.quantidade * (item.unidadesPacote || 1);
@@ -243,9 +305,9 @@ export const prepararNota = async (pedidoId, opcoes = {}) => {
 
   // Totais iguais ao pedido: desconto (+ crédito usado), frete e taxas.
   const vProd = arredondar(linhasNota.reduce((s, l) => s + l.vProd, 0));
-  const vDesc = arredondar(Number(pedido.desconto || 0) + Number(pedido.creditoUsado || 0));
-  const vFrete = arredondar(Number(pedido.frete || 0) + Number(pedido.freteAdicional || 0));
-  const vOutro = arredondar(Number(pedido.taxas || 0));
+  const vDesc = arredondar(somar("desconto") + somar("creditoUsado"));
+  const vFrete = arredondar(somar("frete") + somar("freteAdicional"));
+  const vOutro = somar("taxas");
   const descontos = ratear(vDesc, linhasNota);
   const fretes = ratear(vFrete, linhasNota);
   const outros = ratear(vOutro, linhasNota);
@@ -256,32 +318,49 @@ export const prepararNota = async (pedidoId, opcoes = {}) => {
     l.vCredICMSSN = contribuinte ? arredondar((l.vProd * aliquota) / 100) : 0;
   });
   const vNF = arredondar(vProd - vDesc + vFrete + vOutro);
-  if (semVinculo.length === 0 && Math.abs(vNF - Number(pedido.total)) > 0.02) {
-    avisos.push(`Total da nota (${dec(vNF)}) diferente do total do pedido (${dec(pedido.total)}).`);
+  const totalPedidos = somar("total");
+  if (semVinculo.length === 0 && Math.abs(vNF - totalPedidos) > 0.02) {
+    avisos.push(`Total da nota (${dec(vNF)}) diferente do total ${juntos.length ? "dos pedidos" : "do pedido"} (${dec(totalPedidos)}).`);
   }
 
-  const transporte = { ...(await transporteDoPedido(pedido)), ...(await volumesDoPedido(pedido)), esp: "VOLUMES" };
+  const volumes = await volumesDoPedido({ itens: itensTodos, pesoTotalGramas: somar("pesoTotalGramas") });
+  const transporte = { ...(await transporteDoPedido(pedido)), ...volumes, esp: "VOLUMES" };
+  if (juntos.some((p) => p.metodoEnvio !== pedido.metodoEnvio)) {
+    avisos.push(`Os pedidos juntados têm formas de envio diferentes; a nota usa a do pedido ${pedido.numero} (${pedido.metodoEnvio}).`);
+  }
   if (opcoes.modFrete != null && opcoes.modFrete !== "") transporte.modFrete = String(opcoes.modFrete);
   if (Number(opcoes.qVol) > 0) transporte.qVol = Math.round(Number(opcoes.qVol));
   if (Number(opcoes.pesoKg) > 0) transporte.pesoL = transporte.pesoB = Number(opcoes.pesoKg);
 
   const tPag = String(opcoes.tPag || pagamentoPadrao(pedido.formaPagamento));
   const pagamento = { tPag, indPag: PAGAMENTOS_NF[tPag]?.indPag ?? "1", nome: PAGAMENTOS_NF[tPag]?.nome || tPag, vPag: vNF };
+  if (!opcoes.tPag && juntos.some((p) => pagamentoPadrao(p.formaPagamento) !== tPag)) {
+    avisos.push("Os pedidos juntados têm formas de pagamento diferentes; confira o pagamento da nota.");
+  }
 
-  const infCpl = opcoes.infCpl !== undefined ? String(opcoes.infCpl || "") : String(pedido.observacoes || "");
+  const infCplPadrao = [
+    juntos.length ? `Pedidos: ${todos.map((p) => p.numeroFormatado || p.numero).join(", ")}.` : "",
+    ...todos.map((p) => String(p.observacoes || "").trim()),
+  ].filter(Boolean).join(" ");
+  const infCpl = opcoes.infCpl !== undefined ? String(opcoes.infCpl || "") : infCplPadrao;
 
-  const existentes = await notasDoPedidoNaNFeMail(pedido.numero);
+  const existentes = (await Promise.all(todos.map((p) => notasDoPedidoNaNFeMail(p.numero)))).flat()
+    .filter((n, i, lista) => lista.findIndex((o) => String(o.idNFeMail ?? o.chaveAcessoNFe ?? o.numeroNota) === String(n.idNFeMail ?? n.chaveAcessoNFe ?? n.numeroNota)) === i);
   for (const n of existentes) {
     // Rejeitada pela SEFAZ não tem número nem valor fiscal: pode gerar de novo.
     if (REJEITADA(n)) {
       avisos.push(`Tentativa anterior rejeitada pela SEFAZ (${n.status}). Esta nova emissão substitui aquela.`);
       continue;
     }
-    bloqueios.push(`O pedido já tem a nota ${n.numeroNota} na NFeMail (${descreverSituacao(n)}). ${AUTORIZADA(n) ? "Baixe a DANFE dela abaixo." : "Transmita ou exclua essa nota na NFeMail antes de gerar outra."}`);
+    bloqueios.push(`${juntos.length ? "Um dos pedidos" : "O pedido"} já tem a nota ${n.numeroNota} na NFeMail (${descreverSituacao(n)}). ${AUTORIZADA(n) ? "Baixe a DANFE dela abaixo." : "Transmita ou exclua essa nota na NFeMail antes de gerar outra."}`);
   }
 
   return {
     pedido: { id: pedido.id, numero: pedido.numero, numeroFormatado: pedido.numeroFormatado || String(pedido.numero), total: Number(pedido.total), formaPagamento: pedido.formaPagamento, metodoEnvio: pedido.metodoEnvio, notaFiscalNumero: pedido.notaFiscalNumero },
+    // Sugestão: outros pedidos em aberto do cliente; "juntos" = os que entraram nesta nota.
+    pedidosAbertos: abertos.map(resumoPedido),
+    juntos: juntos.map(resumoPedido),
+    totalPedidos,
     destino,
     faltando,
     cfop,
@@ -384,7 +463,8 @@ export const emitirNota = async (pedidoId, opcoes, usuario) => {
         return [coluna, campo === "documento" || campo === "cep" ? digitos(valor) : campo === "uf" ? valor.toUpperCase().slice(0, 2) : valor];
       }),
   );
-  if (Object.keys(atualizar).length) await Pedido.update(atualizar, { where: { id: pedidoId } });
+  const idsPedidos = [pedidoId, ...nota.juntos.map((p) => p.id)];
+  if (Object.keys(atualizar).length) await Pedido.update(atualizar, { where: { id: idsPedidos } });
 
   const emit = await emitenteDaUltimaNota();
   const txt = montarTxt(nota, emit);
@@ -447,13 +527,20 @@ export const emitirNota = async (pedidoId, opcoes, usuario) => {
     const base = (process.env.PUBLIC_API_URL || "").replace(/\/$/, "");
     url = base ? `${base}/arquivos/${arquivo.id}` : `/api/arquivos/${arquivo.id}`;
   }
-  await pedido.update({
-    notaFiscalNumero: String(emitida.numeroNota),
-    notaFiscalUrl: url,
-    historico: [...(pedido.historico || []), { ...historico, numero: String(emitida.numeroNota), chave: emitida.chaveAcessoNFe }],
-  });
+  const registro = { ...historico, numero: String(emitida.numeroNota), chave: emitida.chaveAcessoNFe };
+  if (nota.juntos.length) registro.pedidosNaNota = [nota.pedido.numero, ...nota.juntos.map((p) => p.numero)];
+  await pedido.update({ notaFiscalNumero: String(emitida.numeroNota), notaFiscalUrl: url, historico: [...(pedido.historico || []), registro] });
+  for (const resumo of nota.juntos) {
+    const outro = await Pedido.findByPk(resumo.id);
+    await outro.update({
+      notaFiscalNumero: String(emitida.numeroNota),
+      notaFiscalUrl: url,
+      historico: [...(outro.historico || []), { ...registro, juntoAoPedido: nota.pedido.numero }],
+    });
+  }
   return {
     emitida: true,
+    pedidosNaNota: registro.pedidosNaNota || [nota.pedido.numero],
     numero: emitida.numeroNota,
     chave: emitida.chaveAcessoNFe,
     danfe: danfe ? danfe.toString("base64") : null,
@@ -473,7 +560,11 @@ const salvarDanfe = async (pedido, nota, danfe, usuario) => {
 export const baixarDanfeDoPedido = async (pedidoId, usuario) => {
   const pedido = await Pedido.findByPk(pedidoId);
   if (!pedido) throw erroHttp(404, "Pedido não encontrado.");
-  const nota = (await notasDoPedidoNaNFeMail(pedido.numero)).find(AUTORIZADA);
+  let nota = (await notasDoPedidoNaNFeMail(pedido.numero)).find(AUTORIZADA);
+  const conjunta = notaConjunta(pedido);
+  if (!nota && conjunta?.juntoAoPedido) {
+    nota = (await notasDoPedidoNaNFeMail(conjunta.juntoAoPedido)).find((n) => AUTORIZADA(n) && n.chaveAcessoNFe === conjunta.chave);
+  }
   if (!nota) throw erroHttp(400, "Ainda não há nota autorizada para este pedido na NFeMail. Transmita a nota por lá e tente de novo.");
   const danfe = await baixarDanfeNFeMail(nota.chaveAcessoNFe);
   const url = await salvarDanfe(pedido, nota, danfe, usuario);
