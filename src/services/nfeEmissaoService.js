@@ -218,6 +218,13 @@ export const prepararNota = async (pedidoId, opcoes = {}) => {
     grupos.set(nfe.cod_produto, grupo);
   }
   if (semVinculo.length) bloqueios.push("Escolha o produto da NFeMail para cada produto do pedido.");
+  // Descrição só com números = cadastro da NFeMail estragado (ex.: NCM gravado
+  // no lugar do nome por uma importação antiga).
+  for (const g of grupos.values()) {
+    if (!/[a-zA-Z]/.test(String(g.nfe.dsc_produto || ""))) {
+      bloqueios.push(`O produto "${g.nfe.cod_alternativo}" está sem descrição válida na NFeMail ("${g.nfe.dsc_produto}"). Corrija o nome dele no cadastro de produtos da NFeMail.`);
+    }
+  }
 
   const linhasNota = [...grupos.values()].map((g) => ({
     cProd: g.nfe.cod_alternativo || String(g.nfe.cod_produto),
