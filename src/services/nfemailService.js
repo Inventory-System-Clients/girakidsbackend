@@ -308,10 +308,10 @@ const todas = (xml, nome) => xml?.match(new RegExp(`<${nome}[^>]*>[^]*?</${nome}
 
 export const diagnosticoEmissaoNFeMail = async () => {
   const notas = await buscarNotasEmitidas({ page: 1, limit: 5 });
-  const comChave = notas.filter((n) => n.chave);
+  const comChave = notas.filter((n) => n.chaveAcessoNFe);
   const amostras = [];
   for (const nota of comChave.slice(0, 2)) {
-    const xml = await buscarXmlBrutoPorChave(nota.chave);
+    const xml = await buscarXmlBrutoPorChave(nota.chaveAcessoNFe);
     amostras.push({
       numero: nota.numeroNota,
       ide: tag(xml, "ide"),
@@ -334,7 +334,8 @@ export const diagnosticoEmissaoNFeMail = async () => {
       return { erro: error.message };
     }
   };
-  const produtos = await bruto("/api/Produtos", { page: 1, limit: 3 });
+  const listaProdutos = await bruto("/api/Produtos", { page: 1, limit: 500 });
+  const produtos = (listaProdutos.ListaProduto || []).map((p) => [p.cod_produto, p.cod_alternativo, p.dsc_produto, p.ncm_produto, p.cod_unidade, p.num_cfop, p.inf_inativo ? "inativo" : ""].join(" | "));
   const clientes = await bruto("/api/Clientes", { page: 1, limit: 1 });
   return { notasRecentes: notas, amostras, produtos, clientes };
 };
