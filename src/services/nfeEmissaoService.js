@@ -31,7 +31,8 @@ import { arredondar, erroHttp } from "../utils/helpers.js";
 export const ALIQUOTA_CREDITO_PADRAO = 2.73;
 export const CHAVE_VINCULO_CATEGORIAS = "nfeVinculoCategorias";
 
-// Categoria do site → produto da NFeMail (cod_produto).
+// Tabela de vínculo → produto da NFeMail (cod_produto). Chaves: "produto:<id>",
+// "<categoria>|<tipoEmbalagem>" ou "<categoria>".
 export const lerVinculosCategorias = async () => (await lerConfiguracao(CHAVE_VINCULO_CATEGORIAS)) || {};
 export const salvarVinculosCategorias = async (vinculos) => {
   const limpos = Object.fromEntries(Object.entries(vinculos || {}).filter(([c, v]) => c.trim() && v).map(([c, v]) => [c.trim(), String(v)]));
@@ -181,10 +182,14 @@ export const prepararNota = async (pedidoId, opcoes = {}) => {
   const nfePorCodigo = new Map(produtosNFe.map((p) => [String(p.cod_produto), p]));
   const vinculos = { ...(opcoes.vinculos || {}) };
   const produtosSite = await Produto.findAll({ where: { id: pedido.itens.map((i) => i.produtoId).filter(Boolean) } });
-  // Vínculo do próprio produto; senão, o da categoria dele.
-  const porCategoria = (await lerConfiguracao(CHAVE_VINCULO_CATEGORIAS)) || {};
+  // Vínculo do próprio produto; senão o da tabela: produto específico,
+  // categoria + embalagem (ex.: cápsulas de 1" e 2") e por fim a categoria.
+  const tabela = (await lerConfiguracao(CHAVE_VINCULO_CATEGORIAS)) || {};
   for (const p of produtosSite) {
-    if (!vinculos[p.id]) vinculos[p.id] = p.nfeProdutoCodigo || porCategoria[String(p.categoria || "").trim()] || "";
+    const categoria = String(p.categoria || "").trim();
+    if (!vinculos[p.id]) {
+      vinculos[p.id] = p.nfeProdutoCodigo || tabela[`produto:${p.id}`] || tabela[`${categoria}|${p.tipoEmbalagem || ""}`] || tabela[categoria] || "";
+    }
   }
 
   const semVinculo = [];
