@@ -339,8 +339,9 @@ export const montarTxt = (nota, emit) => {
   linhas.push(linha("X26", tr.qVol, tr.esp, "", "", dec(tr.pesoL, 3), dec(tr.pesoB, 3)));
   linhas.push(linha("YA", ""));
   linhas.push(linha("YA01a", nota.pagamento.indPag, nota.pagamento.tPag, dec(nota.pagamento.vPag)));
-  linhas.push(linha("Z", "", nota.infCpl));
-  linhas.push(linha("ZB", "", String(nota.pedido.numero), ""));
+  // Sem ZB (compra): o conversor da NFeMail põe <compra> antes de <infAdic> e a
+  // SEFAZ rejeita pelo schema. O número do pedido já vai no xPed de cada item.
+  if (String(nota.infCpl || "").trim()) linhas.push(linha("Z", "", nota.infCpl));
   return `${linhas.join("\r\n")}\r\n`;
 };
 
