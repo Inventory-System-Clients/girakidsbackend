@@ -293,7 +293,9 @@ export const montarTxt = (nota, emit) => {
   const linhas = [
     linha("NOTAFISCAL", "1"),
     linha("A", "4.00", ""),
-    linha("B", "35", "", "Venda de mercadoria", "55", emit.serie || "1", "", agoraBrasilia(), "", "1", d.uf === "SP" ? "1" : "2", emit.cMun, "1", "1", "", "1", "1", d.contribuinte ? "0" : "1", "1", "0", "GiraKids", "", ""),
+    // B|cUF|cNF|natOp|mod|serie|nNF|dhEmi|dhSaiEnt|tpNF|idDest|cMunFG|tpImp|tpEmis|cDV|tpAmb|finNFe|indFinal|indPres|indIntermed|procEmi|verProc|dhCont|xJust|
+    // (layout que o conversor da NFeMail informa; o manual web não traz indIntermed)
+    linha("B", "35", "", "Venda de mercadoria", "55", emit.serie || "1", "", agoraBrasilia(), "", "1", d.uf === "SP" ? "1" : "2", emit.cMun, "1", "1", "", "1", "1", d.contribuinte ? "0" : "1", "1", "", "0", "GiraKids", "", ""),
     linha("C", emit.xNome, emit.xFant, emit.IE, "", "", "", emit.CRT || "1"),
     linha("C02", emit.CNPJ),
     linha("C05", emit.xLgr, emit.nro, emit.xCpl, emit.xBairro, emit.cMun, emit.xMun, emit.UF, emit.CEP, "1058", "BRASIL", emit.fone),
@@ -303,7 +305,8 @@ export const montarTxt = (nota, emit) => {
   ];
   nota.itens.forEach((l, i) => {
     linhas.push(linha("H", i + 1, ""));
-    linhas.push(linha("I", l.cProd, "SEM GTIN", l.xProd, l.ncm, "", "", nota.cfop, l.unidade, dec(l.qCom, 4), dec(l.vUnCom, 10), dec(l.vProd), "SEM GTIN", l.unidade, dec(l.qCom, 4), dec(l.vUnCom, 10), l.vFrete ? dec(l.vFrete) : "", "", l.vDesc ? dec(l.vDesc) : "", l.vOutro ? dec(l.vOutro) : "", "1", String(nota.pedido.numero), "", ""));
+    // I|cProd|cEAN|cBarra|xProd|NCM|EXTIPI|CFOP|uCom|qCom|vUnCom|vProd|cEANTrib|cBarraTrib|uTrib|qTrib|vUnTrib|vFrete|vSeg|vDesc|vOutro|indTot|xPed|nItemPed|nFCI|indEscala|CNPJFab|cBenef|
+    linhas.push(linha("I", l.cProd, "SEM GTIN", "", l.xProd, l.ncm, "", nota.cfop, l.unidade, dec(l.qCom, 4), dec(l.vUnCom, 10), dec(l.vProd), "SEM GTIN", "", l.unidade, dec(l.qCom, 4), dec(l.vUnCom, 10), l.vFrete ? dec(l.vFrete) : "", "", l.vDesc ? dec(l.vDesc) : "", l.vOutro ? dec(l.vOutro) : "", "1", String(nota.pedido.numero), "", "", "", "", ""));
     linhas.push(linha("M", ""));
     linhas.push(nota.csosn === "101" ? linha("N10c", "0", "101", dec(nota.aliquota, 4), dec(l.vCredICMSSN)) : linha("N10d", "0", "102"));
     linhas.push(linha("Q05", "99", "0.00"), linha("Q07", "0.00", "0.0000"));
