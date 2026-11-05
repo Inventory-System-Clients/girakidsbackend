@@ -99,6 +99,7 @@ router.put("/pedidos/:id/transportadora", autenticar, exigirPermissao("VENDAS", 
 router.get("/nfe/vinculos-categorias", autenticar, exigirPermissao("VENDAS", "FINANCEIRO", "COMERCIAL"), nfeEmissao.vinculosCategorias);
 router.put("/nfe/vinculos-categorias", autenticar, exigirPermissao("ADMIN"), registrarLog("VINCULOS_NFE", "Configuracao"), nfeEmissao.salvarVinculos);
 router.post("/pedidos/:id/nfe/previa", autenticar, exigirPermissao("VENDAS", "FINANCEIRO", "COMERCIAL"), nfeEmissao.previa);
+router.post("/pedidos/:id/nfe/danfe", autenticar, exigirPermissao("VENDAS", "FINANCEIRO", "COMERCIAL", "EXPEDICAO"), nfeEmissao.danfe);
 router.post("/pedidos/:id/nfe/emitir", autenticar, exigirPermissao("VENDAS", "FINANCEIRO", "COMERCIAL"), registrarLog("EMITIR_NFE", "Pedido"), nfeEmissao.emitir);
 router.put("/pedidos/:id/nota-fiscal", autenticar, exigirPermissao("VENDAS", "EXPEDICAO", "FINANCEIRO"), registrarLog("NOTA_FISCAL_PEDIDO", "Pedido"), pedidos.atualizarNotaFiscal);
 router.post("/pedidos/:id/confirmar-pagamento", autenticar, vendasOuFinanceiro, registrarLog("CONFIRMAR_PAGAMENTO", "Pedido"), pedidos.confirmarPagamento);

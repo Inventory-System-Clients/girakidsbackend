@@ -270,7 +270,10 @@ export const prepararNota = async (pedidoId, opcoes = {}) => {
 
   const infCpl = opcoes.infCpl !== undefined ? String(opcoes.infCpl || "") : String(pedido.observacoes || "");
 
-  if (pedido.notaFiscalNumero) avisos.push(`Este pedido já tem a nota ${pedido.notaFiscalNumero} registrada. Emitir de novo gera outra nota.`);
+  const existentes = await notasDoPedidoNaNFeMail(pedido.numero);
+  for (const n of existentes) {
+    bloqueios.push(`O pedido já tem a nota ${n.numeroNota} na NFeMail (${descreverSituacao(n)}). ${AUTORIZADA(n) ? "Baixe a DANFE dela abaixo." : "Transmita ou exclua essa nota na NFeMail antes de gerar outra."}`);
+  }
 
   return {
     pedido: { id: pedido.id, numero: pedido.numero, numeroFormatado: pedido.numeroFormatado || String(pedido.numero), total: Number(pedido.total), formaPagamento: pedido.formaPagamento, metodoEnvio: pedido.metodoEnvio, notaFiscalNumero: pedido.notaFiscalNumero },
@@ -281,6 +284,7 @@ export const prepararNota = async (pedidoId, opcoes = {}) => {
     aliquota,
     itens: linhasNota,
     semVinculo,
+    notasExistentes: existentes.map((n) => ({ numero: n.numeroNota, chave: n.chaveAcessoNFe, situacao: descreverSituacao(n), autorizada: AUTORIZADA(n), valor: n.valorNota })),
     produtosNFeMail: produtosNFe.filter((p) => !p.inf_inativo).map((p) => ({ codigo: String(p.cod_produto), nome: p.dsc_produto, ncm: p.ncm_produto, unidade: p.cod_unidade })),
     totais: { vProd, vDesc, vFrete, vOutro, vNF },
     transporte,
@@ -342,7 +346,15 @@ export const montarTxt = (nota, emit) => {
 
 const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
 
-const AUTORIZADA = (n) => Boolean(n?.chaveAcessoNFe) && Number(n?.numeroNota) > 0;
+const AUTORIZADA = (n) => Number(n?.codigoStatus) === 100 && Boolean(n?.chaveAcessoNFe);
+const EXCLUIDA = (n) => /exclu/i.test(n?.status || "") || Number(n?.codigoStatus) === 0;
+
+// Notas que a NFeMail já tem para o pedido (sem as excluídas).
+export const notasDoPedidoNaNFeMail = async (numeroPedido) =>
+  (await buscarNotaPorPedido(numeroPedido).catch(() => [])).filter((n) => !EXCLUIDA(n));
+
+const descreverSituacao = (n) =>
+  AUTORIZADA(n) ? "autorizada" : n.status ? n.status : "em digitação (não transmitida)";
 
 // Emite a nota: envia o TXT, acompanha a autorização e baixa a DANFE.
 export const emitirNota = async (pedidoId, opcoes, usuario) => {
@@ -382,11 +394,17 @@ export const emitirNota = async (pedidoId, opcoes, usuario) => {
 
   // A NFeMail processa e transmite em segundo plano: acompanha até autorizar.
   let emitida = null;
+  let criada = null;
   let ultimoStatus = "";
   for (let tentativa = 0; tentativa < 20 && !emitida; tentativa += 1) {
     await esperar(tentativa ? 3000 : 2000);
-    const nova = (await notasDoCliente()).find((n) => !antes.has(identificar(n))) || null;
-    if (nova) ultimoStatus = nova.status || "";
+    const nova = (await notasDoCliente()).find((n) => !antes.has(identificar(n)) && !EXCLUIDA(n)) || null;
+    if (nova) {
+      criada = nova;
+      ultimoStatus = nova.status || "";
+      // Rejeição da SEFAZ (status com código e texto): não adianta esperar.
+      if (Number(nova.codigoStatus) > 100 && !AUTORIZADA(nova)) break;
+    }
     if (AUTORIZADA(nova)) emitida = nova;
   }
 
@@ -394,7 +412,12 @@ export const emitirNota = async (pedidoId, opcoes, usuario) => {
   const historico = { tipo: "NFE_EMITIDA", por: usuario?.nome, em: new Date().toISOString() };
   if (!emitida) {
     await pedido.update({ historico: [...(pedido.historico || []), { ...historico, tipo: "NFE_ENVIADA", status: ultimoStatus || null }] });
-    return { emitida: false, status: ultimoStatus || "Enviada; aguardando a NFeMail processar", respostaEnvio, txt };
+    const status = criada
+      ? Number(criada.codigoStatus) > 100
+        ? `Nota ${criada.numeroNota} rejeitada pela SEFAZ: ${criada.status}`
+        : `Nota ${criada.numeroNota} criada na NFeMail, mas NÃO transmitida (ficou em digitação). A transmissão automática da API está desligada na conta: transmita a nota pela NFeMail e depois baixe a DANFE aqui.`
+      : "A NFeMail recebeu o arquivo, mas a nota não apareceu. Veja o histórico em Emissão › NFe › Importar.";
+    return { emitida: false, status, numero: criada?.numeroNota || null, respostaEnvio };
   }
 
   let danfe = null;
@@ -423,4 +446,22 @@ export const emitirNota = async (pedidoId, opcoes, usuario) => {
     erroDanfe,
     url,
   };
+};
+
+const salvarDanfe = async (pedido, nota, danfe, usuario) => {
+  const arquivo = await Arquivo.create({ nome: `DANFE-${nota.numeroNota}.pdf`, mime: "application/pdf", tamanho: danfe.length, dados: danfe, enviadoPor: usuario?.nome || null });
+  const base = (process.env.PUBLIC_API_URL || "").replace(/\/$/, "");
+  const url = base ? `${base}/arquivos/${arquivo.id}` : `/api/arquivos/${arquivo.id}`;
+  await pedido.update({ notaFiscalNumero: String(nota.numeroNota), notaFiscalUrl: url });
+  return url;
+};
+
+export const baixarDanfeDoPedido = async (pedidoId, usuario) => {
+  const pedido = await Pedido.findByPk(pedidoId);
+  if (!pedido) throw erroHttp(404, "Pedido não encontrado.");
+  const nota = (await notasDoPedidoNaNFeMail(pedido.numero)).find(AUTORIZADA);
+  if (!nota) throw erroHttp(400, "Ainda não há nota autorizada para este pedido na NFeMail. Transmita a nota por lá e tente de novo.");
+  const danfe = await baixarDanfeNFeMail(nota.chaveAcessoNFe);
+  const url = await salvarDanfe(pedido, nota, danfe, usuario);
+  return { numero: nota.numeroNota, chave: nota.chaveAcessoNFe, danfe: danfe.toString("base64"), url };
 };

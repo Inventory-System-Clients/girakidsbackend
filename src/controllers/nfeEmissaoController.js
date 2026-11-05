@@ -1,4 +1,4 @@
-import { emitirNota, lerVinculosCategorias, montarTxt, prepararNota, salvarVinculosCategorias } from "../services/nfeEmissaoService.js";
+import { baixarDanfeDoPedido, emitirNota, lerVinculosCategorias, montarTxt, prepararNota, salvarVinculosCategorias } from "../services/nfeEmissaoService.js";
 import { emitenteDaUltimaNota, listarProdutosNFeMail } from "../services/nfemailService.js";
 import { responderErro } from "../utils/helpers.js";
 
@@ -41,5 +41,13 @@ export const salvarVinculos = async (req, res) => {
     res.json({ vinculos: await salvarVinculosCategorias(req.body?.vinculos) });
   } catch (error) {
     responderErro(res, error, "Erro ao salvar os vínculos da nota fiscal");
+  }
+};
+
+export const danfe = async (req, res) => {
+  try {
+    res.json(await baixarDanfeDoPedido(req.params.id, req.usuario));
+  } catch (error) {
+    responderErro(res, error, "Erro ao baixar a DANFE");
   }
 };
