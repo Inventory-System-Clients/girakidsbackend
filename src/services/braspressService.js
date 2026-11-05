@@ -121,15 +121,15 @@ export const cotarBraspressSite = async ({ cepDestino, documentoDestino, pesoKg,
   const html = pagina.texto;
   const cep = String(cepDestino).replace(/\D/g, "");
   const [filialOrigem, filialDestino] = await Promise.all([
-    ajaxJson(sessao, "/site/w/ajax/getFilialByCEP", { cep: REMETENTE.cep }),
-    ajaxJson(sessao, "/site/w/ajax/getFilialByCEP", { cep }),
+    ajaxJson(sessao, "/site/ajax/getFilialByCEP", { cep: REMETENTE.cep }),
+    ajaxJson(sessao, "/site/ajax/getFilialByCEP", { cep }),
   ]);
   if (!filialDestino?.idFilial) throw new Error("A Braspress não atende o CEP de destino.");
   let doc = String(documentoDestino || "").replace(/\D/g, "");
   if (doc.length !== 11 && doc.length !== 14) doc = REMETENTE.cnpj;
   const [remetente, destinatario] = await Promise.all([
-    ajaxJson(sessao, "/site/w/ajax/getCliente", { cnpj: REMETENTE.cnpj }),
-    ajaxJson(sessao, "/site/w/ajax/getCliente", { cnpj: doc }),
+    ajaxJson(sessao, "/site/ajax/getCliente", { cnpj: REMETENTE.cnpj }),
+    ajaxJson(sessao, "/site/ajax/getCliente", { cnpj: doc }),
   ]);
   const end = filialDestino.endereco || {};
   const form = new URLSearchParams();
