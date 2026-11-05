@@ -4,6 +4,7 @@ import {
   buscarNotaPorPedido,
   buscarNotasEmitidas,
   buscarFreteETransportadoraPorChave,
+  diagnosticoEmissaoNFeMail,
 } from "../services/nfemailService.js";
 import { contem } from "../utils/busca.js";
 
@@ -183,6 +184,14 @@ const pedidoNotaFiscalController = {
   // Busca CIF/FOB e transportadora de UMA nota específica (via XML completo
   // pela chave de acesso). Chamado quando o usuário escolhe uma nota no
   // buscador, já que a listagem resumida não traz esses dois campos.
+  async diagnosticoEmissao(req, res) {
+    try {
+      return res.json(await diagnosticoEmissaoNFeMail());
+    } catch (error) {
+      return res.status(error.status || 500).json({ error: error.message });
+    }
+  },
+
   async buscarDetalheFreteNFeMail(req, res) {
     try {
       const { chave } = req.query;

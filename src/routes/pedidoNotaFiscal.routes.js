@@ -17,6 +17,7 @@ router.post(
 );
 router.get("/", pedidoNotaFiscalController.listar);
 router.get("/nfemail/notas", pedidoNotaFiscalController.buscarNotasNFeMail);
+router.get("/nfemail/diagnostico-emissao", exigirPermissao("ADMIN"), pedidoNotaFiscalController.diagnosticoEmissao);
 router.get(
   "/nfemail/detalhe-frete",
   pedidoNotaFiscalController.buscarDetalheFreteNFeMail,

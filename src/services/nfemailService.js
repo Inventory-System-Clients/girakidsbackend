@@ -299,3 +299,42 @@ export const buscarFreteETransportadoraPorChave = async (chave) => {
 };
 
 export const nfemailCredenciaisConfiguradas = credenciaisConfiguradas;
+
+// Diagnóstico (só leitura) para montar a emissão automática no mesmo padrão
+// das notas que a empresa já emite: última nota (partes fiscais do XML) e
+// amostras de produtos e clientes cadastrados na NFeMail.
+const tag = (xml, nome) => xml?.match(new RegExp(`<${nome}[^>]*>[^]*?</${nome}>`, "i"))?.[0] || null;
+const todas = (xml, nome) => xml?.match(new RegExp(`<${nome}[^>]*>[^]*?</${nome}>`, "gi")) || [];
+
+export const diagnosticoEmissaoNFeMail = async () => {
+  const notas = await buscarNotasEmitidas({ page: 1, limit: 5 });
+  const comChave = notas.filter((n) => n.chave);
+  const amostras = [];
+  for (const nota of comChave.slice(0, 2)) {
+    const xml = await buscarXmlBrutoPorChave(nota.chave);
+    amostras.push({
+      numero: nota.numeroNota,
+      ide: tag(xml, "ide"),
+      emit: tag(xml, "emit"),
+      destUF: xml?.match(/<dest>[\s\S]*?<UF>([A-Z]{2})<\/UF>/)?.[1] || null,
+      destIndIEDest: xml?.match(/<indIEDest>(\d)<\/indIEDest>/)?.[1] || null,
+      itens: todas(xml, "det").slice(0, 2),
+      total: tag(xml, "total"),
+      transp: tag(xml, "transp"),
+      cobr: tag(xml, "cobr"),
+      pag: tag(xml, "pag"),
+      infAdic: tag(xml, "infAdic"),
+      compra: tag(xml, "compra"),
+    });
+  }
+  const bruto = async (path, params) => {
+    try {
+      return await chamarNFeMail(path, params);
+    } catch (error) {
+      return { erro: error.message };
+    }
+  };
+  const produtos = await bruto("/api/Produtos", { page: 1, limit: 3 });
+  const clientes = await bruto("/api/Clientes", { page: 1, limit: 1 });
+  return { notasRecentes: notas, amostras, produtos, clientes };
+};
