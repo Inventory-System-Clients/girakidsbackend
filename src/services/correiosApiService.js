@@ -270,30 +270,41 @@ export const cotarServicosApi = async (carga) => {
 
 const esperar = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// Pede o rótulo (assíncrono nos Correios) e espera o PDF ficar pronto.
+// Pede o rótulo (assíncrono nos Correios) e espera o PDF ficar pronto. Logo
+// depois de criar a pré-postagem os Correios às vezes ainda recusam o pedido
+// do rótulo ou demoram para gerar o PDF: tenta de novo por até ~1 minuto.
 const gerarRotulo = async (idPrePostagem) => {
   const conta = await autenticar();
-  const pedido = await requisitarJson(
-    "/prepostagem/v1/prepostagens/rotulo/assincrono/pdf",
-    {
-      method: "POST",
-      corpo: {
-        idsPrePostagem: [idPrePostagem],
-        numeroCartaoPostagem: conta.cartao,
-        tipoRotulo: "P",
-        formatoRotulo: "ET",
-        imprimeRemetente: "S",
-        layoutImpressao: "PADRAO",
-      },
-    },
-    "Rótulo",
-  );
+  let pedido;
+  for (let tentativa = 0; ; tentativa += 1) {
+    try {
+      pedido = await requisitarJson(
+        "/prepostagem/v1/prepostagens/rotulo/assincrono/pdf",
+        {
+          method: "POST",
+          corpo: {
+            idsPrePostagem: [idPrePostagem],
+            numeroCartaoPostagem: conta.cartao,
+            tipoRotulo: "P",
+            formatoRotulo: "ET",
+            imprimeRemetente: "S",
+            layoutImpressao: "PADRAO",
+          },
+        },
+        "Rótulo",
+      );
+      break;
+    } catch (error) {
+      if (tentativa >= 4) throw error;
+      await esperar(3000);
+    }
+  }
   const recibo = pedido.idRecibo || pedido.recibo || pedido.id;
   if (!recibo) throw erroHttp(502, `Os Correios não devolveram o recibo do rótulo: ${mensagemCorreios(pedido)}`);
 
   let ultimo = "";
-  for (let tentativa = 0; tentativa < 10; tentativa += 1) {
-    await esperar(tentativa ? 2000 : 1000);
+  for (let tentativa = 0; tentativa < 25; tentativa += 1) {
+    await esperar(tentativa ? 2500 : 1500);
     const resposta = await requisitar(`/prepostagem/v1/prepostagens/rotulo/download/assincrono/${encodeURIComponent(recibo)}`);
     const dados = await lerResposta(resposta);
     const base64 = dados.dados || dados.arquivo || dados.conteudo;
