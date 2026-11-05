@@ -78,7 +78,8 @@ const estimar = async (servico, pesoGramas, uf) => {
 
 // Braspress cotada no site deles (valor + R$ 15, prazo + 1 dia). Sem CEP ou
 // se a cotação falhar, a opção aparece indisponível e fica "Outra transportadora".
-// ajuste (só ADMIN): { volumes, pesoKg } digitados no checkout no lugar dos calculados.
+// ajuste (só ADMIN): { volumes, pesoKg, altura, largura, comprimento (cm) }
+// digitados no checkout no lugar dos calculados.
 const opcaoBraspress = async (cepLimpo, documento, carga, ajuste) => {
   const base = { metodo: "BRASPRESS", nome: "Braspress - Transportadora", descricao: "Entrega por transportadora" };
   if (cepLimpo.length !== 8) return { ...base, disponivel: false, motivo: "Informe o CEP" };
@@ -97,13 +98,23 @@ const opcaoBraspress = async (cepLimpo, documento, carga, ajuste) => {
     const pesoAjuste = Number(String(ajuste?.pesoKg ?? "").replace(",", "."));
     if (volumesAjuste > 0) volumes = Math.min(9999, volumesAjuste);
     const pesoGramas = pesoAjuste > 0 ? Math.round(pesoAjuste * 1000) : Math.max(100, carga.pesoGramas);
+    const medida = (campo) => {
+      const v = Number(String(ajuste?.[campo] ?? "").replace(",", "."));
+      return v > 0 ? Math.min(999, v) : null;
+    };
+    const caixaAjustada = ["altura", "largura", "comprimento"].some((c) => medida(c));
+    const caixa = {
+      altura: medida("altura") ?? carga.caixa.altura,
+      largura: medida("largura") ?? carga.caixa.largura,
+      comprimento: medida("comprimento") ?? carga.caixa.comprimento,
+    };
     const cotacao = await cotarBraspress({
       cep: cepLimpo,
       documento: somenteDigitos(documento),
       pesoGramas,
       valorMercadoria: Math.max(1, carga.valorMercadoria),
       volumes,
-      caixa: carga.caixa,
+      caixa,
     });
     return {
       ...base,
@@ -112,7 +123,8 @@ const opcaoBraspress = async (cepLimpo, documento, carga, ajuste) => {
       disponivel: true,
       volumes,
       pesoKg: pesoGramas / 1000,
-      ajustado: volumesAjuste > 0 || pesoAjuste > 0,
+      caixa,
+      ajustado: volumesAjuste > 0 || pesoAjuste > 0 || caixaAjustada,
     };
   } catch (error) {
     console.warn("[Frete] Cotação Braspress falhou:", error.message);
