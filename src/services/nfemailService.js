@@ -340,7 +340,8 @@ export const diagnosticoEmissaoNFeMail = async () => {
   const listaProdutos = await bruto("/api/Produtos", { page: 1, limit: 500 });
   const produtos = (listaProdutos.ListaProduto || []).map((p) => [p.cod_produto, p.cod_alternativo, p.dsc_produto, p.ncm_produto, p.cod_unidade, p.num_cfop, p.inf_inativo ? "inativo" : ""].join(" | "));
   const clientes = await bruto("/api/Clientes", { page: 1, limit: 1 });
-  return { notasRecentes: notas, amostras, produtos, clientes };
+  const produtoBruto = (listaProdutos.ListaProduto || []).slice(0, 2);
+  return { notasRecentes: notas, amostras, produtos, produtoBruto, clientes };
 };
 
 
