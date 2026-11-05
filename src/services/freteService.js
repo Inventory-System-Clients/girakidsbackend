@@ -2,6 +2,8 @@ import { Produto } from "../models/index.js";
 import { lerConfiguracao } from "../models/Configuracao.js";
 import { caixaParaFrete } from "./pedidoCalculoEngine.js";
 import { apiCorreiosConfigurada, cotarServicosApi } from "./correiosApiService.js";
+import { braspressConfigurada, cotarBraspress } from "./braspressService.js";
+import { calcularPedidoCompleto } from "./pedidoCalculoEngine.js";
 import { arredondar, somenteDigitos } from "../utils/helpers.js";
 import { ENDERECO_LOJA_PADRAO } from "../utils/formasPagamento.js";
 
@@ -40,6 +42,7 @@ export const resumirCarga = async (itens) => {
   const porId = new Map(produtos.map((p) => [p.id, p]));
 
   let pesoGramas = 0;
+  let valorMercadoria = 0;
   let freteIndisponivel = false;
   const quantidades = {};
   for (const item of itens) {
@@ -47,6 +50,7 @@ export const resumirCarga = async (itens) => {
     if (!produto) continue;
     const pacotes = Number(item.quantidade) || 0;
     pesoGramas += pacotes * Number(produto.pesoPacoteGramas || 0);
+    valorMercadoria += pacotes * Number(produto.unidadesPacote || 1) * Number(produto.precoVenda || 0);
     if (produto.tipoEmbalagem === "frete_indisponivel") freteIndisponivel = true;
     const campo = CAMPO_CALCULADORA_POR_EMBALAGEM[produto.tipoEmbalagem];
     if (campo) {
@@ -57,7 +61,7 @@ export const resumirCarga = async (itens) => {
   // Caixa do primeiro volume pela Calculadora de Pedidos (base 70x50x60).
   const caixa = (Object.keys(quantidades).length && (await caixaParaFrete(quantidades))) || CAIXA_PADRAO;
 
-  return { pesoGramas, freteIndisponivel, quantidades, caixa };
+  return { pesoGramas, valorMercadoria: arredondar(valorMercadoria), freteIndisponivel, quantidades, caixa };
 };
 
 const estimar = async (servico, pesoGramas, uf) => {
@@ -72,15 +76,54 @@ const estimar = async (servico, pesoGramas, uf) => {
   };
 };
 
-// Opções de entrega do checkout. PAC/SEDEX só com CEP válido.
-export const cotarFrete = async ({ cep, uf, itens }) => {
+// Braspress cotada no site deles (valor + R$ 15, prazo + 1 dia). Sem CEP ou
+// se a cotação falhar, a opção aparece indisponível e fica "Outra transportadora".
+const opcaoBraspress = async (cepLimpo, documento, carga) => {
+  const base = { metodo: "BRASPRESS", nome: "Braspress - Transportadora", descricao: "Entrega por transportadora" };
+  if (cepLimpo.length !== 8) return { ...base, disponivel: false, motivo: "Informe o CEP" };
+  if (carga.freteIndisponivel) return { ...base, disponivel: false, motivo: "Frete indisponível para estes produtos — fale com o time de vendas" };
+  try {
+    let volumes = 1;
+    try {
+      if (Object.keys(carga.quantidades).length) {
+        const calculo = await calcularPedidoCompleto({ quantidades: carga.quantidades, medidas: {}, avulsos: [] });
+        volumes = Math.max(1, calculo.resumo?.volumes || 1);
+      }
+    } catch {
+      // Calculadora sem parâmetros: 1 volume.
+    }
+    const cotacao = await cotarBraspress({
+      cep: cepLimpo,
+      documento: somenteDigitos(documento),
+      pesoGramas: Math.max(100, carga.pesoGramas),
+      valorMercadoria: Math.max(1, carga.valorMercadoria),
+      volumes,
+      caixa: carga.caixa,
+    });
+    return { ...base, valor: cotacao.valor, prazoDias: cotacao.prazoDias, disponivel: true };
+  } catch (error) {
+    console.warn("[Frete] Cotação Braspress falhou:", error.message);
+    return { ...base, disponivel: false, motivo: "Cotação indisponível agora — escolha Outra transportadora" };
+  }
+};
+
+// Opções de entrega do checkout. PAC/SEDEX só com CEP válido; Braspress em
+// paralelo (semBraspress quando só interessa Correios).
+export const cotarFrete = async ({ cep, uf, itens, documento, semBraspress = false }) => {
   const carga = await resumirCarga(itens || []);
+  const cepLimpo = somenteDigitos(cep);
+  const braspress = braspressConfigurada() && !semBraspress ? opcaoBraspress(cepLimpo, documento, carga) : null;
+  const resposta = await cotarCorreios({ uf, carga, cepLimpo });
+  if (braspress) resposta.opcoes.splice(2, 0, await braspress);
+  return resposta;
+};
+
+const cotarCorreios = async ({ uf, carga, cepLimpo }) => {
   const opcoes = [
     { metodo: "RETIRAR_LOCAL", nome: "Retirar no local", descricao: `Retire em nossa loja: ${(await lerConfiguracao("enderecoLoja")) || ENDERECO_LOJA_PADRAO}`, valor: 0, prazoDias: 0, disponivel: true },
-    { metodo: "TRANSPORTADORA", nome: "Transportadora", descricao: "O time de vendas entrará em contato", valor: 0, prazoDias: null, disponivel: true },
+    { metodo: "TRANSPORTADORA", nome: "Outra transportadora", descricao: "O time de vendas entrará em contato", valor: 0, prazoDias: null, disponivel: true },
   ];
 
-  const cepLimpo = somenteDigitos(cep);
   const correios = [
     { metodo: "PAC", nome: "PAC - Correios", descricao: "Entrega econômica" },
     { metodo: "SEDEX", nome: "SEDEX - Correios", descricao: "Entrega expressa" },

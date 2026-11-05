@@ -101,7 +101,7 @@ export const calcularTotais = async ({
 // Cliente pode "combinar com o comercial" (A_DEFINIR) quando a entrega é por
 // transportadora ou retirada, ou quando não há pagamento online configurado.
 export const clientePodeCombinar = (metodoEnvio) =>
-  !["PAC", "SEDEX"].includes(metodoEnvio) || !provedorAtivo();
+  !["PAC", "SEDEX", "BRASPRESS"].includes(metodoEnvio) || !provedorAtivo();
 
 const validarFormaPagamento = (forma, usuario, cliente, metodoEnvio) => {
   const config = FORMAS_PAGAMENTO[forma];
@@ -346,7 +346,9 @@ export const criarPedido = async (corpo, usuario, tipo = "PEDIDO", { reabrirId =
     }
   }
 
-  const metodoEnvio = corpo.metodoEnvio || (interno ? null : "");
+  // Braspress cotada no checkout vira "Transportadora" com a Braspress escolhida.
+  const viaBraspress = corpo.metodoEnvio === "BRASPRESS";
+  const metodoEnvio = viaBraspress ? "TRANSPORTADORA" : corpo.metodoEnvio || (interno ? null : "");
   if (!interno && !metodoEnvio) throw erroHttp(400, "Selecione uma opção de entrega.");
   if (tipo === "PEDIDO" && !interno && !cliente.documento) {
     throw erroHttp(400, "Informe o CPF/CNPJ.");
@@ -387,9 +389,16 @@ export const criarPedido = async (corpo, usuario, tipo = "PEDIDO", { reabrirId =
     let frete = 0;
     let prazoEntregaDias = null;
     if (metodoEnvio === "PAC" || metodoEnvio === "SEDEX") {
-      const { opcoes } = await cotarFrete({ cep: cliente.cep, uf: cliente.estado, itens: corpo.itens });
+      const { opcoes } = await cotarFrete({ cep: cliente.cep, uf: cliente.estado, itens: corpo.itens, semBraspress: true });
       const opcao = opcoes.find((o) => o.metodo === metodoEnvio);
       if (!opcao?.disponivel) throw erroHttp(400, opcao?.motivo || "Frete indisponível.");
+      frete = opcao.valor;
+      prazoEntregaDias = opcao.prazoDias;
+    }
+    if (viaBraspress) {
+      const { opcoes } = await cotarFrete({ cep: cliente.cep, uf: cliente.estado, itens: corpo.itens, documento: cliente.documento });
+      const opcao = opcoes.find((o) => o.metodo === "BRASPRESS");
+      if (!opcao?.disponivel) throw erroHttp(400, opcao?.motivo || "Cotação Braspress indisponível; escolha outra entrega.");
       frete = opcao.valor;
       prazoEntregaDias = opcao.prazoDias;
     }
@@ -411,7 +420,9 @@ export const criarPedido = async (corpo, usuario, tipo = "PEDIDO", { reabrirId =
       parcelasCartao,
     });
 
-    const transportadora = interno && metodoEnvio === "TRANSPORTADORA" ? await resolverTransportadora(corpo.transportadora, usuario, transaction) : null;
+    const transportadora = viaBraspress
+      ? await resolverTransportadora({ nome: "Braspress" }, usuario, transaction)
+      : interno && metodoEnvio === "TRANSPORTADORA" ? await resolverTransportadora(corpo.transportadora, usuario, transaction) : null;
 
     const dadosPedido = {
         transportadoraId: transportadora?.id || null,

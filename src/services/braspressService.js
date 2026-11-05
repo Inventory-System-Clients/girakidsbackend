@@ -133,7 +133,8 @@ export const cotarBraspressSite = async ({ cepDestino, documentoDestino, pesoKg,
   ]);
   const end = filialDestino.endereco || {};
   const form = new URLSearchParams();
-  form.append("email", valorCampo(html, "email") || "");
+  // O site manda o comprovante de cada cotação para este e-mail.
+  form.append("email", process.env.BRASPRESS_EMAIL || valorCampo(html, "email") || "");
   form.append("modal", "R");
   form.append("tipoFrete", "1");
   form.append("cnpjRemetenteStr", formatarDoc(REMETENTE.cnpj));
@@ -161,12 +162,36 @@ export const cotarBraspressSite = async ({ cepDestino, documentoDestino, pesoKg,
     corpoBruto: form.toString(),
   });
   const texto = textoPuro(r.texto);
-  const valor = texto.match(/(?:total|valor)[^R$]{0,60}R\$\s*([\d.]+,\d{2})/i)?.[1];
-  const prazo = texto.match(/prazo[^\d]{0,60}(\d{1,3})\s*dia/i)?.[1];
+  // Resposta: "... Dias úteis / Horas 1 Valor Total Frete 124.85 ..."
+  const valor = texto.match(/Valor Total Frete\s*R?\$?\s*([\d.,]+)/i)?.[1];
+  const prazo = texto.match(/Dias úteis \/ Horas\s*(\d{1,3})\b/i)?.[1];
+  const numeroBr = (v) => Number(/,\d{2}$/.test(v) ? v.replace(/\./g, "").replace(",", ".") : v.replace(/,/g, ""));
   return {
-    valor: valor ? Number(valor.replace(/\./g, "").replace(",", ".")) : null,
+    valor: valor ? numeroBr(valor) : null,
     prazoDias: prazo ? Number(prazo) : null,
     status: r.status,
     texto: texto.slice(0, 3000),
   };
+};
+
+// Cotação para o checkout: valor do site + R$ 15 e prazo + 1 dia útil.
+// Cache de 30 min por destino/carga (cada cotação no site leva alguns segundos).
+export const ACRESCIMO_VALOR = 15;
+export const ACRESCIMO_PRAZO = 1;
+const cache = new Map();
+
+export const cotarBraspress = async ({ cep, documento: docInformado, pesoGramas, valorMercadoria, volumes, caixa }) => {
+  // CPF/CNPJ incompleto (cliente ainda digitando) não gera cotação nova.
+  const documento = [11, 14].includes(String(docInformado || "").length) ? docInformado : "";
+  const chave = [cep, documento || "", Math.round(pesoGramas / 100), Math.round(valorMercadoria), volumes, caixa.comprimento, caixa.largura, caixa.altura].join("|");
+  const guardado = cache.get(chave);
+  if (guardado && guardado.ate > Date.now()) return guardado.resultado;
+  const site = await Promise.race([
+    cotarBraspressSite({ cepDestino: cep, documentoDestino: documento, pesoKg: pesoGramas / 1000, valorMercadoria, volumes, caixa }),
+    new Promise((_, rejeitar) => setTimeout(() => rejeitar(new Error("Braspress demorou para responder.")), 45000)),
+  ]);
+  if (!(site.valor > 0)) throw new Error(`Braspress não devolveu valor: ${site.texto.slice(0, 200)}`);
+  const resultado = { valor: Math.round((site.valor + ACRESCIMO_VALOR) * 100) / 100, prazoDias: (site.prazoDias || 0) + ACRESCIMO_PRAZO, valorSite: site.valor, prazoSite: site.prazoDias };
+  cache.set(chave, { resultado, ate: Date.now() + 30 * 60 * 1000 });
+  return resultado;
 };
