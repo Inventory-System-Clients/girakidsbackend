@@ -1,5 +1,5 @@
-import { emitirNota, montarTxt, prepararNota } from "../services/nfeEmissaoService.js";
-import { emitenteDaUltimaNota } from "../services/nfemailService.js";
+import { emitirNota, lerVinculosCategorias, montarTxt, prepararNota, salvarVinculosCategorias } from "../services/nfeEmissaoService.js";
+import { emitenteDaUltimaNota, listarProdutosNFeMail } from "../services/nfemailService.js";
 import { responderErro } from "../utils/helpers.js";
 
 // Prévia da NF-e do pedido (CFOP, ICMS, itens, transporte, pagamento) com as
@@ -20,5 +20,26 @@ export const emitir = async (req, res) => {
     res.json(await emitirNota(req.params.id, req.body || {}, req.usuario));
   } catch (error) {
     responderErro(res, error, "Erro ao emitir a nota fiscal");
+  }
+};
+
+// Vínculo categoria do site → produto da NFeMail.
+export const vinculosCategorias = async (req, res) => {
+  try {
+    const produtos = await listarProdutosNFeMail();
+    res.json({
+      vinculos: await lerVinculosCategorias(),
+      produtosNFeMail: produtos.map((p) => ({ codigo: String(p.cod_produto), alternativo: p.cod_alternativo, nome: p.dsc_produto, ncm: p.ncm_produto, unidade: p.cod_unidade, inativo: Boolean(p.inf_inativo) })),
+    });
+  } catch (error) {
+    responderErro(res, error, "Erro ao carregar os vínculos da nota fiscal");
+  }
+};
+
+export const salvarVinculos = async (req, res) => {
+  try {
+    res.json({ vinculos: await salvarVinculosCategorias(req.body?.vinculos) });
+  } catch (error) {
+    responderErro(res, error, "Erro ao salvar os vínculos da nota fiscal");
   }
 };

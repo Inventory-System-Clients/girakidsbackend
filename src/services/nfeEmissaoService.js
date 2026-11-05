@@ -13,6 +13,7 @@
 //   (a prazo); a receber/a definir/outros = 21 crédito em loja (a prazo).
 
 import { Arquivo, Parceiro, Pedido, Produto } from "../models/index.js";
+import { lerConfiguracao, salvarConfiguracao } from "../models/Configuracao.js";
 import { INCLUDE_COMPLETO } from "./pedidoService.js";
 import { CAMPO_CALCULADORA_POR_EMBALAGEM } from "./freteService.js";
 import { calcularPedidoCompleto } from "./pedidoCalculoEngine.js";
@@ -28,6 +29,15 @@ import {
 import { arredondar, erroHttp } from "../utils/helpers.js";
 
 export const ALIQUOTA_CREDITO_PADRAO = 2.73;
+export const CHAVE_VINCULO_CATEGORIAS = "nfeVinculoCategorias";
+
+// Categoria do site → produto da NFeMail (cod_produto).
+export const lerVinculosCategorias = async () => (await lerConfiguracao(CHAVE_VINCULO_CATEGORIAS)) || {};
+export const salvarVinculosCategorias = async (vinculos) => {
+  const limpos = Object.fromEntries(Object.entries(vinculos || {}).filter(([c, v]) => c.trim() && v).map(([c, v]) => [c.trim(), String(v)]));
+  await salvarConfiguracao(CHAVE_VINCULO_CATEGORIAS, limpos);
+  return limpos;
+};
 
 const CORREIOS = { nome: "EMPRESA BRASILEIRA DE CORREIOS E TELEGRAFOS", cnpj: "34028316000103", endereco: "ST SBN QUADRA 1 BLOCO A, S/N, ASA NORTE", cidade: "BRASILIA", uf: "DF" };
 
@@ -171,7 +181,11 @@ export const prepararNota = async (pedidoId, opcoes = {}) => {
   const nfePorCodigo = new Map(produtosNFe.map((p) => [String(p.cod_produto), p]));
   const vinculos = { ...(opcoes.vinculos || {}) };
   const produtosSite = await Produto.findAll({ where: { id: pedido.itens.map((i) => i.produtoId).filter(Boolean) } });
-  for (const p of produtosSite) if (!vinculos[p.id] && p.nfeProdutoCodigo) vinculos[p.id] = p.nfeProdutoCodigo;
+  // Vínculo do próprio produto; senão, o da categoria dele.
+  const porCategoria = (await lerConfiguracao(CHAVE_VINCULO_CATEGORIAS)) || {};
+  for (const p of produtosSite) {
+    if (!vinculos[p.id]) vinculos[p.id] = p.nfeProdutoCodigo || porCategoria[String(p.categoria || "").trim()] || "";
+  }
 
   const semVinculo = [];
   const grupos = new Map();

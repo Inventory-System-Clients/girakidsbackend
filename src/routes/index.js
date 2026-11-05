@@ -96,6 +96,8 @@ router.post("/pedidos/:id/liberar", autenticar, vendasOuFinanceiro, registrarLog
 router.post("/pedidos/:id/cancelar", autenticar, exigirPermissao("VENDAS"), registrarLog("CANCELAR_PEDIDO", "Pedido"), pedidos.cancelar);
 router.put("/pedidos/:id/forma-pagamento", autenticar, vendasOuFinanceiro, registrarLog("ALTERAR_FORMA_PAGAMENTO", "Pedido"), pedidos.alterarFormaPagamento);
 router.put("/pedidos/:id/transportadora", autenticar, exigirPermissao("VENDAS", "EXPEDICAO"), registrarLog("ALTERAR_TRANSPORTADORA", "Pedido"), pedidos.alterarTransportadora);
+router.get("/nfe/vinculos-categorias", autenticar, exigirPermissao("VENDAS", "FINANCEIRO", "COMERCIAL"), nfeEmissao.vinculosCategorias);
+router.put("/nfe/vinculos-categorias", autenticar, exigirPermissao("ADMIN"), registrarLog("VINCULOS_NFE", "Configuracao"), nfeEmissao.salvarVinculos);
 router.post("/pedidos/:id/nfe/previa", autenticar, exigirPermissao("VENDAS", "FINANCEIRO", "COMERCIAL"), nfeEmissao.previa);
 router.post("/pedidos/:id/nfe/emitir", autenticar, exigirPermissao("VENDAS", "FINANCEIRO", "COMERCIAL"), registrarLog("EMITIR_NFE", "Pedido"), nfeEmissao.emitir);
 router.put("/pedidos/:id/nota-fiscal", autenticar, exigirPermissao("VENDAS", "EXPEDICAO", "FINANCEIRO"), registrarLog("NOTA_FISCAL_PEDIDO", "Pedido"), pedidos.atualizarNotaFiscal);

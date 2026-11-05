@@ -360,12 +360,15 @@ export const buscarNotasPorDocumento = async (cpfCnpj) => {
 let produtosCache = null;
 export const listarProdutosNFeMail = async () => {
   if (produtosCache && Date.now() - produtosCache.em < 10 * 60 * 1000) return produtosCache.lista;
+  // A NFeMail devolve no máximo 10 por página: segue até acabar.
   const lista = [];
-  for (let page = 1; page <= 20; page += 1) {
-    const payload = await chamarNFeMail("/api/Produtos", { page, limit: 100 });
-    const parte = payload?.ListaProduto || extrairLista(payload);
+  const vistos = new Set();
+  for (let page = 1; page <= 50; page += 1) {
+    const payload = await chamarNFeMail("/api/Produtos", { page, limit: 10 });
+    const parte = (payload?.ListaProduto || extrairLista(payload)).filter((p) => !vistos.has(p.cod_produto));
+    if (!parte.length) break;
+    parte.forEach((p) => vistos.add(p.cod_produto));
     lista.push(...parte);
-    if (parte.length < 100) break;
   }
   produtosCache = { em: Date.now(), lista };
   return lista;
