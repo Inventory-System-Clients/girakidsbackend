@@ -29,7 +29,7 @@ import * as recebimentos from "../controllers/recebimentoController.js";
 import * as whatsapp from "../controllers/whatsappController.js";
 import * as legado from "../controllers/sincronizacaoLegadoController.js";
 import { limitarTaxa } from "../utils/linkSeguro.js";
-import { diagnosticoBraspress } from "../services/braspressService.js";
+import { cotarBraspressSite, diagnosticoBraspress } from "../services/braspressService.js";
 import transportadoraRoutes from "./transportadora.routes.js";
 import calculoPedidoRoutes from "./calculoPedido.routes.js";
 import pedidoNotaFiscalRoutes from "./pedidoNotaFiscal.routes.js";
@@ -100,6 +100,10 @@ router.put("/pedidos/:id/transportadora", autenticar, exigirPermissao("VENDAS", 
 // Diagnóstico da cotação Braspress (estrutura da tela depois do login).
 router.get("/frete/braspress/diagnostico", autenticar, exigirPermissao("ADMIN"), async (req, res) => {
   try {
+    // ?cep=...&peso=...&valor=... faz uma cotação de teste (CIF, 1 volume 30x30x35).
+    if (req.query.cep) {
+      return res.json(await cotarBraspressSite({ cepDestino: req.query.cep, documentoDestino: req.query.doc, pesoKg: Number(req.query.peso || 5), valorMercadoria: Number(req.query.valor || 500), caixa: { comprimento: 35, largura: 30, altura: 30 } }));
+    }
     res.json(await diagnosticoBraspress());
   } catch (error) {
     res.status(502).json({ erro: error.message });
