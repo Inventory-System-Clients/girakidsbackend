@@ -396,7 +396,13 @@ export const criarPedido = async (corpo, usuario, tipo = "PEDIDO", { reabrirId =
       prazoEntregaDias = opcao.prazoDias;
     }
     if (viaBraspress) {
-      const { opcoes } = await cotarFrete({ cep: cliente.cep, uf: cliente.estado, itens: corpo.itens, documento: cliente.documento });
+      const { opcoes } = await cotarFrete({
+        cep: cliente.cep,
+        uf: cliente.estado,
+        itens: corpo.itens,
+        documento: cliente.documento,
+        braspressAjuste: usuario?.role === "ADMIN" ? corpo.braspressAjuste : null,
+      });
       const opcao = opcoes.find((o) => o.metodo === "BRASPRESS");
       if (!opcao?.disponivel) throw erroHttp(400, opcao?.motivo || "Cotação Braspress indisponível; escolha outra entrega.");
       frete = opcao.valor;

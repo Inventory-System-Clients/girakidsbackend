@@ -252,7 +252,9 @@ export const opcoesCheckout = async (req, res) => {
 
 export const cotar = async (req, res) => {
   try {
-    res.json(await cotarFrete(req.body || {}));
+    const corpo = req.body || {};
+    // Volumes/peso da Braspress digitados à mão: só ADMIN.
+    res.json(await cotarFrete({ ...corpo, braspressAjuste: req.usuario?.role === "ADMIN" ? corpo.braspressAjuste : null }));
   } catch (error) {
     responderErro(res, error, "Erro ao calcular frete");
   }

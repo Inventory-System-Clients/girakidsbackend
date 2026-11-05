@@ -78,7 +78,8 @@ const estimar = async (servico, pesoGramas, uf) => {
 
 // Braspress cotada no site deles (valor + R$ 15, prazo + 1 dia). Sem CEP ou
 // se a cotação falhar, a opção aparece indisponível e fica "Outra transportadora".
-const opcaoBraspress = async (cepLimpo, documento, carga) => {
+// ajuste (só ADMIN): { volumes, pesoKg } digitados no checkout no lugar dos calculados.
+const opcaoBraspress = async (cepLimpo, documento, carga, ajuste) => {
   const base = { metodo: "BRASPRESS", nome: "Braspress - Transportadora", descricao: "Entrega por transportadora" };
   if (cepLimpo.length !== 8) return { ...base, disponivel: false, motivo: "Informe o CEP" };
   if (carga.freteIndisponivel) return { ...base, disponivel: false, motivo: "Frete indisponível para estes produtos — fale com o time de vendas" };
@@ -92,15 +93,27 @@ const opcaoBraspress = async (cepLimpo, documento, carga) => {
     } catch {
       // Calculadora sem parâmetros: 1 volume.
     }
+    const volumesAjuste = Math.round(Number(ajuste?.volumes));
+    const pesoAjuste = Number(String(ajuste?.pesoKg ?? "").replace(",", "."));
+    if (volumesAjuste > 0) volumes = Math.min(9999, volumesAjuste);
+    const pesoGramas = pesoAjuste > 0 ? Math.round(pesoAjuste * 1000) : Math.max(100, carga.pesoGramas);
     const cotacao = await cotarBraspress({
       cep: cepLimpo,
       documento: somenteDigitos(documento),
-      pesoGramas: Math.max(100, carga.pesoGramas),
+      pesoGramas,
       valorMercadoria: Math.max(1, carga.valorMercadoria),
       volumes,
       caixa: carga.caixa,
     });
-    return { ...base, valor: cotacao.valor, prazoDias: cotacao.prazoDias, disponivel: true };
+    return {
+      ...base,
+      valor: cotacao.valor,
+      prazoDias: cotacao.prazoDias,
+      disponivel: true,
+      volumes,
+      pesoKg: pesoGramas / 1000,
+      ajustado: volumesAjuste > 0 || pesoAjuste > 0,
+    };
   } catch (error) {
     console.warn("[Frete] Cotação Braspress falhou:", error.message);
     return { ...base, disponivel: false, motivo: "Cotação indisponível agora — escolha Outra transportadora" };
@@ -109,10 +122,10 @@ const opcaoBraspress = async (cepLimpo, documento, carga) => {
 
 // Opções de entrega do checkout. PAC/SEDEX só com CEP válido; Braspress em
 // paralelo (semBraspress quando só interessa Correios).
-export const cotarFrete = async ({ cep, uf, itens, documento, semBraspress = false }) => {
+export const cotarFrete = async ({ cep, uf, itens, documento, semBraspress = false, braspressAjuste = null }) => {
   const carga = await resumirCarga(itens || []);
   const cepLimpo = somenteDigitos(cep);
-  const braspress = braspressConfigurada() && !semBraspress ? opcaoBraspress(cepLimpo, documento, carga) : null;
+  const braspress = braspressConfigurada() && !semBraspress ? opcaoBraspress(cepLimpo, documento, carga, braspressAjuste) : null;
   const resposta = await cotarCorreios({ uf, carga, cepLimpo });
   if (braspress) resposta.opcoes.splice(2, 0, await braspress);
   return resposta;
