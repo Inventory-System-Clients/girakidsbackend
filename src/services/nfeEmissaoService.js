@@ -39,15 +39,16 @@ export const CHAVE_VINCULO_CATEGORIAS = "nfeVinculoCategorias";
 
 // Tabela de vínculo → produto da NFeMail (cod_produto). Chaves: "produto:<id>",
 // "<categoria>|<tipoEmbalagem>" ou "<categoria>".
-// Valor baixo padrão por produto da NFeMail (código), usado quando a NFeMail
-// não tem valor comercial e nunca teve um guardado.
+// Valor baixo padrão POR UNIDADE de cada produto da NFeMail (código), usado
+// quando a NFeMail não tem valor comercial e nunca teve um guardado.
+// Brinquedos: R$ 5 (1") e R$ 14 (2") por pacote de 100.
 export const VALORES_BAIXOS_PADRAO = {
   1: 0.08, // BOL DE BORRACHA 27MM
   2: 0.16, // BOL DE BORRACHA 32MM
-  4: 5, // BRINQUEDOS 1 POL ENCAPSULADOS
-  9: 5, // BRINQUEDOS 1 POL S/ CAPSULAS
-  5: 14, // BRINQUEDOS 2 POL ENCAPSULADOS
-  22: 14, // BRINQUEDOS 2 POL S/ CAPSULAS
+  4: 0.05, // BRINQUEDOS 1 POL ENCAPSULADOS
+  9: 0.05, // BRINQUEDOS 1 POL S/ CAPSULAS
+  5: 0.14, // BRINQUEDOS 2 POL ENCAPSULADOS
+  22: 0.14, // BRINQUEDOS 2 POL S/ CAPSULAS
 };
 
 export const lerVinculosCategorias = async () => (await lerConfiguracao(CHAVE_VINCULO_CATEGORIAS)) || {};
