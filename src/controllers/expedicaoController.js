@@ -18,7 +18,10 @@ const FILTRO_ABA = {
   TODOS: {},
 };
 
-const BASE = { tipo: "PEDIDO", statusVendas: "LIBERADO" };
+// Só pedidos do sistema novo (a partir do nº 70000): os antigos importados
+// não aparecem na expedição.
+export const PRIMEIRO_PEDIDO_EXPEDICAO = 70000;
+const BASE = { tipo: "PEDIDO", statusVendas: "LIBERADO", numero: { [Op.gte]: PRIMEIRO_PEDIDO_EXPEDICAO } };
 
 export const listar = async (req, res) => {
   try {
@@ -44,7 +47,8 @@ export const listar = async (req, res) => {
         where,
         include: INCLUDE_COMPLETO,
         distinct: true,
-        order: [["liberadoEm", "DESC"], ["numero", "DESC"]],
+        // O último pedido tirado primeiro.
+        order: [["createdAt", "DESC"], ["numero", "DESC"]],
         limit: limite,
         offset: (pagina - 1) * limite,
       }),

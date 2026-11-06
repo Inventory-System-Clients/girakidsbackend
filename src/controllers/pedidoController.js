@@ -1,3 +1,4 @@
+import { PRIMEIRO_PEDIDO_EXPEDICAO } from "./expedicaoController.js";
 import { Op } from "sequelize";
 import { sequelize } from "../database/connection.js";
 import { contem } from "../utils/busca.js";
@@ -200,7 +201,7 @@ export const contadores = async (req, res) => {
     const [aguardandoLiberacao, aguardandoExpedicao, alertas] = await Promise.all([
       Pedido.count({ where: { tipo: "PEDIDO", statusVendas: "AGUARDANDO" } }),
       Pedido.count({
-        where: { tipo: "PEDIDO", statusVendas: "LIBERADO", statusExpedicao: { [Op.ne]: "EXPEDIDO" } },
+        where: { tipo: "PEDIDO", statusVendas: "LIBERADO", statusExpedicao: { [Op.ne]: "EXPEDIDO" }, numero: { [Op.gte]: PRIMEIRO_PEDIDO_EXPEDICAO } },
       }),
       AlertaPagamento.count({ where: { status: "ATIVO" } }),
     ]);
