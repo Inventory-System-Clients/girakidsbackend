@@ -1,4 +1,4 @@
-import { baixarDanfeDoPedido, emitirNota, lerVinculosCategorias, montarTxt, prepararNota, salvarVinculosCategorias } from "../services/nfeEmissaoService.js";
+import { baixarDanfeDoPedido, emitirNota, fixarVinculoProduto, lerVinculosCategorias, montarTxt, prepararNota, salvarVinculosCategorias } from "../services/nfeEmissaoService.js";
 import { emitenteDaUltimaNota, listarProdutosNFeMail } from "../services/nfemailService.js";
 import { responderErro } from "../utils/helpers.js";
 
@@ -33,6 +33,14 @@ export const vinculosCategorias = async (req, res) => {
     });
   } catch (error) {
     responderErro(res, error, "Erro ao carregar os vínculos da nota fiscal");
+  }
+};
+
+export const fixarVinculo = async (req, res) => {
+  try {
+    res.json(await fixarVinculoProduto(req.params.produtoId, req.body?.codigo));
+  } catch (error) {
+    responderErro(res, error, "Erro ao salvar a categoria da NF-e do produto");
   }
 };
 

@@ -114,6 +114,7 @@ router.get("/frete/braspress/diagnostico", autenticar, exigirPermissao("ADMIN"),
 });
 router.get("/nfe/vinculos-categorias", autenticar, exigirPermissao("VENDAS", "FINANCEIRO", "COMERCIAL"), nfeEmissao.vinculosCategorias);
 router.put("/nfe/vinculos-categorias", autenticar, exigirPermissao("ADMIN"), registrarLog("VINCULOS_NFE", "Configuracao"), nfeEmissao.salvarVinculos);
+router.put("/nfe/produtos/:produtoId/vinculo", autenticar, exigirPermissao("VENDAS", "FINANCEIRO", "COMERCIAL"), registrarLog("VINCULO_NFE_PRODUTO", "Produto"), nfeEmissao.fixarVinculo);
 router.post("/pedidos/:id/nfe/previa", autenticar, exigirPermissao("VENDAS", "FINANCEIRO", "COMERCIAL"), nfeEmissao.previa);
 router.post("/pedidos/:id/nfe/danfe", autenticar, exigirPermissao("VENDAS", "FINANCEIRO", "COMERCIAL", "EXPEDICAO"), nfeEmissao.danfe);
 router.post("/pedidos/:id/nfe/emitir", autenticar, exigirPermissao("VENDAS", "FINANCEIRO", "COMERCIAL"), registrarLog("EMITIR_NFE", "Pedido"), nfeEmissao.emitir);

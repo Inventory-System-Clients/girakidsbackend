@@ -51,6 +51,20 @@ export const VALORES_BAIXOS_PADRAO = {
   22: 0.14, // BRINQUEDOS 2 POL S/ CAPSULAS
 };
 
+// Fixa (ou solta, codigo vazio) a categoria da NF-e de um produto do site.
+// Fixado, vale para todas as notas até trocar de novo.
+export const fixarVinculoProduto = async (produtoId, codigo) => {
+  const produto = await Produto.findByPk(produtoId);
+  if (!produto) throw erroHttp(404, "Produto não encontrado.");
+  const valor = String(codigo || "").trim();
+  if (valor) {
+    const existe = (await listarProdutosNFeMail()).some((p) => String(p.cod_produto) === valor);
+    if (!existe) throw erroHttp(400, "Produto da NFeMail não encontrado.");
+  }
+  await produto.update({ nfeProdutoCodigo: valor || null });
+  return { produtoId: produto.id, codigo: produto.nfeProdutoCodigo };
+};
+
 export const lerVinculosCategorias = async () => (await lerConfiguracao(CHAVE_VINCULO_CATEGORIAS)) || {};
 export const salvarVinculosCategorias = async (vinculos) => {
   const limpos = Object.fromEntries(Object.entries(vinculos || {}).filter(([c, v]) => c.trim() && v).map(([c, v]) => [c.trim(), String(v)]));
@@ -280,12 +294,34 @@ export const prepararNota = async (pedidoId, opcoes = {}) => {
   // Vínculo do próprio produto; senão o da tabela: produto específico,
   // categoria + embalagem (ex.: cápsulas de 1" e 2") e por fim a categoria.
   const tabela = (await lerConfiguracao(CHAVE_VINCULO_CATEGORIAS)) || {};
+  // De onde veio o vínculo de cada produto (mostrado no form da nota):
+  // FIXO = escolhido para o próprio produto (fica até trocar de novo);
+  // AUTOMATICO = pela tabela de categorias; NENHUM = falta escolher.
+  const origemVinculo = {};
   for (const p of produtosSite) {
     const categoria = String(p.categoria || "").trim();
-    if (!vinculos[p.id]) {
-      vinculos[p.id] = p.nfeProdutoCodigo || tabela[`produto:${p.id}`] || tabela[`${categoria}|${p.tipoEmbalagem || ""}`] || tabela[categoria] || "";
+    if (vinculos[p.id]) {
+      origemVinculo[p.id] = "ESCOLHA";
+      continue;
     }
+    const automatico = tabela[`produto:${p.id}`] || tabela[`${categoria}|${p.tipoEmbalagem || ""}`] || tabela[categoria] || "";
+    vinculos[p.id] = p.nfeProdutoCodigo || automatico;
+    origemVinculo[p.id] = p.nfeProdutoCodigo ? "FIXO" : automatico ? "AUTOMATICO" : "NENHUM";
   }
+  // Um por produto do pedido (ou dos pedidos juntados), com a categoria da NF-e.
+  const porProduto = new Map(produtosSite.map((p) => [p.id, p]));
+  const vinculosItens = [...new Map(itensTodos.filter((i) => i.produtoId).map((i) => [i.produtoId, i])).values()].map((i) => {
+    const codigo = String(vinculos[i.produtoId] || "");
+    const nfe = codigo ? nfePorCodigo.get(codigo) : null;
+    return {
+      produtoId: i.produtoId,
+      nome: i.nome,
+      categoriaSite: porProduto.get(i.produtoId)?.categoria || i.categoria || null,
+      codigo: nfe ? codigo : "",
+      nomeNFe: nfe?.dsc_produto || null,
+      origem: nfe ? origemVinculo[i.produtoId] || "AUTOMATICO" : "NENHUM",
+    };
+  });
 
   const semVinculo = [];
   const grupos = new Map();
@@ -405,6 +441,7 @@ export const prepararNota = async (pedidoId, opcoes = {}) => {
     // Sugestão: outros pedidos em aberto do cliente; "juntos" = os que entraram nesta nota.
     pedidosAbertos: abertos.map(resumoPedido),
     bloqueiosDanfe,
+    vinculosItens,
     juntos: juntos.map(resumoPedido),
     totalPedidos,
     usarValorReal,
