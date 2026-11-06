@@ -161,6 +161,7 @@ export default {
       }
     }
     if (!dataId) return { ignorar: true };
+    if (!/^[A-Za-z0-9_-]{1,64}$/.test(dataId)) throw new Error("Identificador inválido na notificação.");
     if (tipo === "order") {
       const ordem = await chamar("GET", `/v1/orders/${dataId}`);
       const st = String(ordem.status || "").toLowerCase();
@@ -168,7 +169,7 @@ export default {
         pedidoId: ordem.external_reference,
         referencia: `point:${ordem.id}`,
         status: st === "processed" ? "PAGO" : ["canceled", "expired", "failed"].includes(st) ? "RECUSADO" : "PENDENTE",
-        valorPago: Number(ordem.total_paid_amount || ordem.total_amount || 0) || undefined,
+        valorPago: Number(ordem.total_paid_amount ?? ordem.total_amount ?? 0),
         eventoId: ordem.id,
         bruto: { id: ordem.id, status: ordem.status },
       };

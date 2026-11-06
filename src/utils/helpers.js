@@ -56,8 +56,13 @@ export const erroHttp = (status, mensagem) => {
 };
 
 export const responderErro = (res, error, padrao = "Erro interno") => {
-  if (!error.status || error.status >= 500) console.error(padrao, error);
-  res.status(error.status || 500).json({ error: error.message || padrao });
+  const status = error.status || error.statusCode || 500;
+  if (status >= 500) console.error(padrao, error);
+  // Erros do banco de dados (SQL, nomes de tabelas/colunas) e falhas de
+  // programação não vão para o navegador; mensagens nossas (erroHttp) e de
+  // integrações (NFeMail, Correios, bancos) continuam.
+  const interno = /^Sequelize/.test(error.name || "") || error.sql || error.original || ["TypeError", "ReferenceError", "SyntaxError", "RangeError"].includes(error.name);
+  res.status(status).json({ error: interno && !error.status ? padrao : error.message || padrao });
 };
 
 // Datas no fuso de Brasília. "AAAA-MM-DD" → início/fim do dia em -03:00.

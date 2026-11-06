@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import { Op } from "sequelize";
 import { sequelize } from "../database/connection.js";
 import {
@@ -230,8 +231,10 @@ export const resolverTransportadora = async (escolha, usuario, transaction) => {
   );
 };
 
-// Senha inicial das contas criadas pela equipe ao tirar pedido.
-export const SENHA_PADRAO_CLIENTE = () => process.env.SENHA_PADRAO_CLIENTE || "12345678";
+// Senha provisória das contas criadas pela equipe ao tirar pedido: aleatória
+// para cada conta (nunca uma senha fixa) e trocada no primeiro acesso.
+const LETRAS_SENHA = "abcdefghjkmnpqrstuvwxyz23456789";
+const gerarSenhaProvisoria = () => Array.from({ length: 10 }, () => LETRAS_SENHA[crypto.randomInt(LETRAS_SENHA.length)]).join("");
 
 const CAMPOS_ENDERECO = {
   telefone: "clienteTelefone",
@@ -250,7 +253,7 @@ const CAMPOS_ENDERECO = {
 // existe (mesmo e-mail ou CPF/CNPJ), completando o que estiver vazio, ou cria
 // a conta com os dados do pedido e a senha padrão. Assim, da próxima vez o
 // cliente aparece na busca e os dados são preenchidos sozinhos.
-const garantirClienteCadastrado = async (dados, transaction) => {
+const garantirClienteCadastrado = async (dados, transaction, { showroom = false } = {}) => {
   const emailInformado = /^\S+@\S+\.\S+$/.test(dados.clienteEmail || "") ? dados.clienteEmail : null;
   const identificador = dados.documento || somenteDigitos(dados.clienteTelefone);
   if (!emailInformado && !identificador) return null;
@@ -258,7 +261,11 @@ const garantirClienteCadastrado = async (dados, transaction) => {
   const ou = [];
   if (emailInformado) ou.push({ email: emailInformado });
   if (dados.documento) ou.push({ documento: dados.documento });
-  const existente = await Usuario.findOne({ where: { [Op.or]: ou }, transaction });
+  // Só vincula a contas de cliente (nunca a contas da equipe). No totem não
+  // completa o cadastro existente: quem está na frente da tela não prova que
+  // é o dono daquele CPF/e-mail.
+  const existente = await Usuario.findOne({ where: { [Op.or]: ou, role: "CLIENTE" }, transaction });
+  if (existente && showroom) return { usuario: existente, criado: false };
   if (existente) {
     const faltando = {};
     for (const [campoUsuario, campoPedido] of Object.entries(CAMPOS_ENDERECO)) {
@@ -268,18 +275,20 @@ const garantirClienteCadastrado = async (dados, transaction) => {
     return { usuario: existente, criado: false };
   }
 
+  const senhaProvisoria = gerarSenhaProvisoria();
   const novo = await Usuario.create(
     {
       nome: dados.clienteNome,
       // Sem e-mail informado, gera um interno só para guardar o cadastro.
       email: emailInformado || `cliente.${identificador}@sememail.girakids.com.br`,
-      senha: SENHA_PADRAO_CLIENTE(),
+      senha: senhaProvisoria,
+      trocarSenha: true,
       role: "CLIENTE",
       ...Object.fromEntries(Object.entries(CAMPOS_ENDERECO).map(([campoUsuario, campoPedido]) => [campoUsuario, dados[campoPedido] || null])),
     },
     { transaction },
   );
-  return { usuario: novo, criado: true, emailGerado: !emailInformado };
+  return { usuario: novo, criado: true, emailGerado: !emailInformado, senhaProvisoria };
 };
 
 // Cria pedido ou orçamento a partir do checkout / geração de orçamentos.
@@ -347,6 +356,9 @@ export const criarPedido = async (corpo, usuario, tipo = "PEDIDO", { reabrirId =
   }
 
   // Braspress cotada no checkout vira "Transportadora" com a Braspress escolhida.
+  if (corpo.metodoEnvio && !["RETIRAR_LOCAL", "TRANSPORTADORA", "PAC", "SEDEX", "BRASPRESS"].includes(corpo.metodoEnvio)) {
+    throw erroHttp(400, "Opção de entrega inválida.");
+  }
   const viaBraspress = corpo.metodoEnvio === "BRASPRESS";
   const metodoEnvio = viaBraspress ? "TRANSPORTADORA" : corpo.metodoEnvio || (interno ? null : "");
   if (!interno && !metodoEnvio) throw erroHttp(400, "Selecione uma opção de entrega.");
@@ -376,7 +388,7 @@ export const criarPedido = async (corpo, usuario, tipo = "PEDIDO", { reabrirId =
       }
     }
     if ((interno || showroom) && !cliente.clienteId) {
-      clienteCadastro = await garantirClienteCadastrado(cliente, transaction);
+      clienteCadastro = await garantirClienteCadastrado(cliente, transaction, { showroom });
       if (clienteCadastro) cliente.clienteId = clienteCadastro.usuario.id;
     }
     const manterLiberados = new Set((reaberto?.itens || []).filter((i) => i.liberadoSemEstoque).map((i) => i.produtoId));
@@ -532,13 +544,14 @@ export const criarPedido = async (corpo, usuario, tipo = "PEDIDO", { reabrirId =
   // WhatsApp: "recebemos seu pedido" (cliente sozinho ou equipe tirando para ele).
   if (tipo === "PEDIDO" && !reabrirId) avisarPedido(pedido.id, "CRIADO");
 
-  if (clienteCadastro) {
+  if (clienteCadastro && !(showroom && !clienteCadastro.criado)) {
     pedido.clienteCadastro = {
       criado: clienteCadastro.criado,
       email: clienteCadastro.usuario.email,
       emailGerado: Boolean(clienteCadastro.emailGerado),
-      // No totem a senha padrão não aparece na tela.
-      senhaPadrao: clienteCadastro.criado && !showroom ? SENHA_PADRAO_CLIENTE() : null,
+      // Senha provisória (só desta conta): aparece uma vez para a equipe
+      // passar ao cliente; no totem não aparece.
+      senhaPadrao: clienteCadastro.criado && !showroom && !clienteCadastro.emailGerado ? clienteCadastro.senhaProvisoria : null,
     };
   }
   return pedido;
@@ -564,7 +577,31 @@ export const totalRecebido = (pedido) =>
       .reduce((soma, p) => soma + Number(p.valor), 0),
   );
 
-export const serializarPedido = (pedido, { completo = true } = {}) => {
+// Campos só da equipe: custos, anotações internas, quem fez o quê,
+// integração com bancos e sistema antigo.
+const CAMPOS_INTERNOS = [
+  "historico", "custosExtras", "custoExtraTotal", "pagoPor", "pendenciaAbertaPor", "pendenciaQuitadaPor",
+  "observacaoQuitacao", "liberadoPor", "observacaoLiberacao", "expedidoPor", "montagemConcluidaPor",
+  "observacoesExpedicao", "transportadoraObs", "transportadoraCotacao", "transportadoraCotacaoCom", "canceladoPor",
+  "criadoPorId", "criadoPorNome", "criadoPorRole", "legadoId", "legadoAssinatura", "alertaComercial", "alertaVistoEm",
+  "alertaVistoPor", "origemCliente", "estoqueBaixado", "cliente",
+];
+const CAMPOS_INTERNOS_ITEM = ["custoUnitario", "conferido", "conferidoEm", "conferidoPor", "liberadoSemEstoque"];
+
+export const serializarPedido = (pedido, { completo = true, usuario = null } = {}) => {
+  const dados = serializarPedidoInterno(pedido, { completo });
+  if (!usuario || ehInterno(usuario)) return dados;
+  for (const campo of CAMPOS_INTERNOS) delete dados[campo];
+  dados.itens = dados.itens.map((item) => {
+    const limpo = { ...item };
+    for (const campo of CAMPOS_INTERNOS_ITEM) delete limpo[campo];
+    return limpo;
+  });
+  dados.parcelas = (dados.parcelas || []).map(({ usuarioNome, observacao, ...p }) => p);
+  return dados;
+};
+
+const serializarPedidoInterno = (pedido, { completo = true } = {}) => {
   const json = pedido.toJSON();
   const itens = (json.itens || []).map(({ produto, ...item }) => ({
     ...item,

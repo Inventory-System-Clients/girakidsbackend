@@ -1,12 +1,28 @@
+import crypto from "crypto";
 import jwt from "jsonwebtoken";
 import { Usuario, LogAtividade } from "../models/index.js";
+
+// Selo da senha atual dentro do token: trocar (ou resetar) a senha derruba
+// todas as sessões abertas com a senha antiga.
+export const seloSenha = (usuario) =>
+  crypto.createHmac("sha256", process.env.JWT_SECRET).update(`sessao:${usuario.id}:${usuario.senha}`).digest("base64url").slice(0, 22);
+
+export const gerarToken = (usuario) =>
+  jwt.sign({ id: usuario.id, role: usuario.role, sv: seloSenha(usuario) }, process.env.JWT_SECRET, {
+    algorithm: "HS256",
+    expiresIn: process.env.JWT_EXPIRES_IN || "7d",
+  });
 
 const lerUsuarioDoToken = async (req) => {
   const token = req.headers.authorization?.replace("Bearer ", "");
   if (!token) return null;
-  const decoded = jwt.verify(token, process.env.JWT_SECRET);
+  const decoded = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ["HS256"] });
   const usuario = await Usuario.findByPk(decoded.id);
-  return usuario && usuario.ativo ? usuario : null;
+  if (!usuario || !usuario.ativo) return null;
+  const sv = String(decoded.sv || "");
+  const esperado = seloSenha(usuario);
+  if (sv.length !== esperado.length || !crypto.timingSafeEqual(Buffer.from(sv), Buffer.from(esperado))) return null;
+  return usuario;
 };
 
 export const autenticar = async (req, res, next) => {

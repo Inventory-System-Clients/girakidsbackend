@@ -180,6 +180,9 @@ export default {
     return {
       pedidoId: dados.order_id,
       referencia: `pix:${pagamentoId}`,
+      // A Getnet não permite reler o PIX: só confirma se o payment_id for o
+      // da cobrança gerada para este pedido.
+      exigirReferencia: true,
       status,
       eventoId: pagamentoId,
       bruto: { payment_id: pagamentoId, status: dados.status, payment_type: dados.payment_type },

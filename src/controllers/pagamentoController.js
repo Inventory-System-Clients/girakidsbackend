@@ -16,6 +16,11 @@ const confirmarPagamentoOnline = async (pedido, valorPago, origem) => {
   await sequelize.transaction(async (transaction) => {
     const atual = await Pedido.findByPk(pedido.id, { include: INCLUDE_COMPLETO, transaction });
     if (atual.statusFinanceiro === "PAGO") return;
+    // Pedido cancelado não volta a andar sozinho: vira alerta (devolver o dinheiro).
+    if (atual.statusVendas === "CANCELADO") {
+      semEstoque = "O pedido está cancelado — confira e devolva o pagamento se for o caso.";
+      return;
+    }
     const sistema = { nome: origem, email: null };
     await PedidoParcela.create(
       {
@@ -124,6 +129,25 @@ export const webhook = async (req, res) => {
       where: ehUuid ? { id: evento.pedidoId } : { pagamentoReferencia: evento.referencia },
       include: INCLUDE_COMPLETO,
     });
+    // O retorno só vale para a cobrança que este banco gerou para o pedido
+    // (e, quando o banco não permite reler a cobrança, com a mesma referência).
+    const deOutroBanco = pedido && pedido.pagamentoProvedor && pedido.pagamentoProvedor !== provedor.nome;
+    const referenciaDiferente = pedido && evento.exigirReferencia && pedido.pagamentoReferencia !== evento.referencia;
+    if (deOutroBanco || referenciaDiferente) {
+      if (evento.status === "PAGO") {
+        await alertar({
+          pedidoId: pedido.id,
+          pedidoNumero: String(pedido.numero),
+          provedor: provedor.nome,
+          severidade: "critical",
+          motivo: "retorno_nao_confere",
+          mensagem: `Retorno de pagamento do ${provedor.rotulo || provedor.nome} não confere com a cobrança do pedido ${pedido.numero} — confira no banco antes de liberar.`,
+          valorRecebido: evento.valorPago ?? null,
+          detalhes: evento.bruto,
+        });
+      }
+      return res.json({ ok: true });
+    }
     if (!pedido) {
       if (evento.status === "PAGO") {
         await alertar({
@@ -153,6 +177,9 @@ export const webhook = async (req, res) => {
 
 const verificarAcesso = (req, pedido) => {
   if (!pedido) throw erroHttp(404, "Pedido não encontrado.");
+  if (req.usuario.role === "FUNCIONARIO" && !req.usuario.temPermissao("VENDAS", "FINANCEIRO", "CHECKOUT", "ORCAMENTOS", "COMERCIAL")) {
+    throw erroHttp(403, "Você não tem permissão para cobranças de pedidos.");
+  }
   if (req.usuario.role === "CLIENTE" && pedido.clienteId !== req.usuario.id) throw erroHttp(403, "Este pedido não pertence à sua conta.");
   if (req.usuario.role === "SHOWROOM" && pedido.criadoPorId !== req.usuario.id) throw erroHttp(403, "Este pedido não foi tirado neste showroom.");
 };
@@ -168,7 +195,7 @@ export const consultar = async (req, res) => {
       await aplicarResultado(pedido, resultado, provedor);
     }
     const atualizado = await Pedido.findByPk(pedido.id, { include: INCLUDE_COMPLETO });
-    res.json(serializarPedido(atualizado));
+    res.json(serializarPedido(atualizado, { usuario: req.usuario }));
   } catch (error) {
     responderErro(res, error, "Erro ao consultar pagamento");
   }
@@ -194,7 +221,7 @@ export const gerarCobranca = async (req, res) => {
       pagamentoExpiraEm: cobranca.expiraEm || null,
     });
     const atualizado = await Pedido.findByPk(pedido.id, { include: INCLUDE_COMPLETO });
-    res.json(serializarPedido(atualizado));
+    res.json(serializarPedido(atualizado, { usuario: req.usuario }));
   } catch (error) {
     responderErro(res, error, "Erro ao gerar a cobrança");
   }
@@ -262,7 +289,7 @@ export const cobrarNaMaquininha = async (req, res) => {
       historico: [...(pedido.historico || []), { tipo: "COBRANCA_MAQUININHA", maquininha: maquininha.nome, por: req.usuario.nome, em: new Date().toISOString() }],
     });
     const atualizado = await Pedido.findByPk(pedido.id, { include: INCLUDE_COMPLETO });
-    res.json(serializarPedido(atualizado));
+    res.json(serializarPedido(atualizado, { usuario: req.usuario }));
   } catch (error) {
     responderErro(res, error, "Erro ao enviar para a maquininha");
   }
@@ -278,7 +305,7 @@ export const cancelarNaMaquininha = async (req, res) => {
       await pedido.update({ pagamentoReferencia: null, pagamentoProvedor: null });
     }
     const atualizado = await Pedido.findByPk(pedido.id, { include: INCLUDE_COMPLETO });
-    res.json(serializarPedido(atualizado));
+    res.json(serializarPedido(atualizado, { usuario: req.usuario }));
   } catch (error) {
     responderErro(res, error, "Erro ao cancelar a cobrança na maquininha");
   }

@@ -23,6 +23,11 @@ const MAX_HISTORICO = 24;
 // ---------------------------------------------------------------------------
 
 const acessos = new Map();
+// Limpa IPs antigos (o mapa não cresce sem limite).
+setInterval(() => {
+  const agora = Date.now();
+  for (const [ip, lista] of acessos) if (!lista.some((t) => agora - t < 10 * 60 * 1000)) acessos.delete(ip);
+}, 10 * 60 * 1000).unref?.();
 const limitar = (ip) => {
   const agora = Date.now();
   const janela = (acessos.get(ip) || []).filter((t) => agora - t < 10 * 60 * 1000);

@@ -12,6 +12,15 @@ const { sequelize } = await import("./database/connection.js");
 const { sincronizarBanco } = await import("./database/migrate.js");
 const { default: routes } = await import("./routes/index.js");
 
+// Sem chave secreta o servidor nem sobe (tokens e cofres dependem dela).
+if (!process.env.JWT_SECRET) {
+  console.error("Defina JWT_SECRET no ambiente do backend.");
+  process.exit(1);
+}
+if (process.env.JWT_SECRET.length < 32 || /troque-por/.test(process.env.JWT_SECRET)) {
+  console.warn("[Segurança] JWT_SECRET fraca: use pelo menos 32 caracteres aleatórios.");
+}
+
 const app = express();
 const PORT = process.env.PORT || 3001;
 
@@ -54,7 +63,12 @@ app.use(
   }),
 );
 app.use(express.urlencoded({ extended: true }));
-if (process.env.NODE_ENV !== "test") app.use(morgan("dev"));
+morgan.token("url-segura", (req) =>
+  String(req.originalUrl || req.url)
+    .split("?")[0]
+    .replace(/(\/whatsapp\/webhook\/)[^/]+/, "$1***"),
+);
+if (process.env.NODE_ENV !== "test") app.use(morgan(":method :url-segura :status :response-time ms"));
 
 app.use("/api", routes);
 
@@ -62,7 +76,8 @@ app.use((req, res) => res.status(404).json({ error: "Rota não encontrada" }));
 // eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
   console.error(err);
-  res.status(err.status || 500).json({ error: err.message || "Erro interno" });
+  const status = err.status || err.statusCode || 500;
+  res.status(status).json({ error: status < 500 ? err.message || "Requisição inválida" : "Erro interno" });
 });
 
 try {

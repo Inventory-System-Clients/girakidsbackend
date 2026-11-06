@@ -9,7 +9,7 @@ import crypto from "crypto";
 const chave = () =>
   crypto
     .createHash("sha256")
-    .update(`girakids-links:${process.env.LINK_SECRET || process.env.JWT_SECRET || "dev"}`)
+    .update(`girakids-links:${process.env.LINK_SECRET || process.env.JWT_SECRET}`)
     .digest();
 
 export const FORMATO_TOKEN = /^[A-Za-z0-9_-]{43}$/;
@@ -38,8 +38,9 @@ export const decifrar = (valor) => {
 
 // Limite de requisições por IP, em memória (uma instância na Render).
 // Erros de token contam em dobro e bloqueiam o IP por um tempo.
-const janelas = new Map();
 export const limitarTaxa = ({ janelaMs = 60_000, maximo = 40, bloqueioMs = 15 * 60_000 } = {}) => {
+  // Contagem própria de cada limite (login não divide contador com links).
+  const janelas = new Map();
   const limpar = setInterval(() => {
     const agora = Date.now();
     for (const [ip, j] of janelas) if (j.fim < agora && (!j.bloqueadoAte || j.bloqueadoAte < agora)) janelas.delete(ip);

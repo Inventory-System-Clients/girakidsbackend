@@ -84,7 +84,11 @@ export const catalogo = async (req, res) => {
     });
 
     const where = { ...base };
-    if (req.query.categoria) where.categoria = req.query.categoria;
+    // Categoria oculta não aparece nem pedida pelo nome.
+    if (req.query.categoria) {
+      const categoria = String(req.query.categoria);
+      where.categoria = ocultas.includes(categoria) ? { [Op.in]: [] } : categoria;
+    }
     const busca = String(req.query.busca || "").trim();
     if (busca) {
       where[Op.or] = [
@@ -140,7 +144,9 @@ export const buscar = async (req, res) => {
       order: [["nome", "ASC"]],
       limit: Math.min(Number(req.query.limite) || 30, 200),
     });
-    res.json(produtos.map((p) => (ehInterno(req.usuario) ? serializarAdmin(p) : serializarCatalogo(p))));
+    // Custo e margem só para quem cuida de produtos, compras ou financeiro.
+    const veCusto = req.usuario?.temPermissao("PRODUTOS", "ENTRADAS", "RECEBIMENTOS", "FINANCEIRO", "COMERCIAL");
+    res.json(produtos.map((p) => (veCusto ? serializarAdmin(p) : serializarCatalogo(p))));
   } catch (error) {
     responderErro(res, error, "Erro ao buscar produtos");
   }
@@ -148,8 +154,9 @@ export const buscar = async (req, res) => {
 
 export const obterPublico = async (req, res) => {
   try {
+    if (!/^[0-9a-f-]{36}$/i.test(String(req.params.id))) throw erroHttp(404, "Produto não encontrado.");
     const produto = await Produto.findByPk(req.params.id);
-    if (!produto || produto.arquivado) throw erroHttp(404, "Produto não encontrado.");
+    if (!produto || produto.arquivado || (await categoriasOcultas()).includes(produto.categoria)) throw erroHttp(404, "Produto não encontrado.");
     res.json(serializarCatalogo(produto));
   } catch (error) {
     responderErro(res, error, "Erro ao abrir produto");

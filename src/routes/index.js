@@ -40,8 +40,9 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 
 router.get("/health", (req, res) => res.json({ status: "ok", servico: "girakids-backend" }));
 
 // Autenticação e perfil
-router.post("/auth/login", auth.login);
-router.post("/auth/registrar", auth.registrar);
+// Limite por IP contra robôs testando senhas e criando contas em massa.
+router.post("/auth/login", limitarTaxa({ janelaMs: 60_000, maximo: 10 }), auth.login);
+router.post("/auth/registrar", limitarTaxa({ janelaMs: 60 * 60_000, maximo: 10 }), auth.registrar);
 router.get("/auth/perfil", autenticar, auth.perfil);
 router.put("/auth/perfil", autenticar, auth.atualizarPerfil);
 router.put("/auth/senha", autenticar, auth.alterarSenha);
@@ -73,7 +74,8 @@ router.get("/checkout/opcoes", autenticar, pedidos.opcoesCheckout);
 const tiraPedido = [autenticar, exigirPermissao("CHECKOUT", "VENDAS", "ORCAMENTOS", "COMERCIAL", "EXPEDICAO")];
 router.get("/checkout/transportadoras", ...tiraPedido, transportadoras.sugestoesCheckout);
 router.post("/checkout/transportadoras/ia", ...tiraPedido, registrarLog("BUSCAR_TRANSPORTADORAS", "Transportadora"), transportadoras.buscarTransportadoras);
-router.post("/checkout/frete", autenticar, pedidos.cotar);
+// Cada cotação consulta Correios e o site da Braspress: limite por IP.
+router.post("/checkout/frete", limitarTaxa({ janelaMs: 60_000, maximo: 40 }), autenticar, pedidos.cotar);
 router.post("/pedidos", autenticar, (req, res, next) =>
   ["CLIENTE", "SHOWROOM"].includes(req.usuario.role) ? next() : exigirPermissao("CHECKOUT", "VENDAS")(req, res, next),
 registrarLog("CRIAR_PEDIDO", "Pedido"), pedidos.criar);

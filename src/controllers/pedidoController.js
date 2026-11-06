@@ -69,6 +69,11 @@ const garantirNaoCancelado = (pedido) => {
   if (pedido.statusVendas === "CANCELADO") throw erroHttp(400, "Pedido cancelado.");
 };
 
+// Equipe que lida com pedidos vê qualquer pedido; outros funcionários
+// (ex.: só Produtos ou Recebimentos) e clientes veem só os próprios.
+const veTodosPedidos = (usuario) =>
+  ehInterno(usuario) && usuario.temPermissao("VENDAS", "FINANCEIRO", "EXPEDICAO", "CHECKOUT", "ORCAMENTOS", "COMERCIAL");
+
 const responderPedido = async (res, id, status = 200) => {
   const pedido = await carregar(id);
   res.status(status).json(serializarPedido(pedido));
@@ -115,7 +120,7 @@ export const meusPedidos = async (req, res) => {
       limit: Math.min(Number(req.query.limite) || 20, 100),
       offset: Number(req.query.offset) || 0,
     });
-    res.json(pedidos.map((p) => serializarPedido(p, { completo: false })));
+    res.json(pedidos.map((p) => serializarPedido(p, { completo: false, usuario: req.usuario })));
   } catch (error) {
     responderErro(res, error, "Erro ao listar seus pedidos");
   }
@@ -125,14 +130,15 @@ export const obter = async (req, res) => {
   try {
     const pedido = await Pedido.findByPk(req.params.id, { include: [...INCLUDE_COMPLETO, INCLUDE_CLIENTE] });
     if (!pedido) throw erroHttp(404, "Pedido não encontrado.");
-    if (!ehInterno(req.usuario) && pedido.clienteId !== req.usuario.id && !(ehShowroom(req.usuario) && pedido.criadoPorId === req.usuario.id)) {
+    if (ehInterno(req.usuario) ? !veTodosPedidos(req.usuario) : pedido.clienteId !== req.usuario.id && !(ehShowroom(req.usuario) && pedido.criadoPorId === req.usuario.id)) {
       return res.status(403).json({ error: "Este pedido não pertence à sua conta." });
     }
-    const dados = serializarPedido(pedido);
-    if (!ehInterno(req.usuario)) delete dados.cliente;
+    const dados = serializarPedido(pedido, { usuario: req.usuario });
     if (pedido.transportadoraId) {
       const transportadora = await Parceiro.findByPk(pedido.transportadoraId);
-      dados.transportadora = transportadora?.toJSON() || null;
+      // Cliente vê só o contato público da transportadora.
+      const t = transportadora?.toJSON() || null;
+      dados.transportadora = t && !ehInterno(req.usuario) ? { id: t.id, nome: t.nome, telefone: t.telefone || null, site: t.site || null } : t;
     }
     res.json(dados);
   } catch (error) {
@@ -147,10 +153,10 @@ export const obterPorCodigo = async (req, res) => {
     const tipo = codigo.length <= 4 && codigo.startsWith("0") ? "ORCAMENTO" : req.query.tipo;
     const where = { numero: Number(codigo) };
     if (tipo) where.tipo = tipo;
-    if (!ehInterno(req.usuario)) where.clienteId = req.usuario.id;
+    if (!veTodosPedidos(req.usuario)) where.clienteId = req.usuario.id;
     const pedido = await Pedido.findOne({ where, include: INCLUDE_COMPLETO, order: [["tipo", "ASC"]] });
     if (!pedido) return res.status(404).json({ error: "Não foi possível encontrar um pedido com este código." });
-    res.json(serializarPedido(pedido));
+    res.json(serializarPedido(pedido, { usuario: req.usuario }));
   } catch (error) {
     responderErro(res, error, "Erro ao carregar pedido");
   }
@@ -165,7 +171,7 @@ export const buscarParaCarregar = async (req, res) => {
     const ou = [contem("Pedido.clienteNome", busca), { codigoLegado: { [Op.iLike]: `%${busca}%` } }];
     if (/^\d+$/.test(busca)) ou.push({ numero: Number(busca) });
     const where = { [Op.or]: ou };
-    if (!ehInterno(req.usuario)) where.clienteId = req.usuario.id;
+    if (!veTodosPedidos(req.usuario)) where.clienteId = req.usuario.id;
     const pedidos = await Pedido.findAll({
       where,
       include: [{ model: PedidoItem, as: "itens", attributes: ["id"] }],
@@ -266,7 +272,7 @@ export const reabrir = async (req, res) => {
   try {
     const pedido = await criarPedido(req.body || {}, req.usuario, "PEDIDO", { reabrirId: req.params.id });
     res.locals.entityId = pedido.id;
-    res.json({ ...serializarPedido(pedido), clienteCadastro: pedido.clienteCadastro || null });
+    res.json({ ...serializarPedido(pedido, { usuario: req.usuario }), clienteCadastro: pedido.clienteCadastro || null });
   } catch (error) {
     responderErro(res, error, "Erro ao reabrir pedido");
   }
@@ -276,7 +282,7 @@ export const criar = async (req, res) => {
   try {
     const pedido = await criarPedido(req.body || {}, req.usuario, "PEDIDO");
     res.locals.entityId = pedido.id;
-    res.status(201).json({ ...serializarPedido(pedido), clienteCadastro: pedido.clienteCadastro || null });
+    res.status(201).json({ ...serializarPedido(pedido, { usuario: req.usuario }), clienteCadastro: pedido.clienteCadastro || null });
   } catch (error) {
     responderErro(res, error, "Erro ao criar pedido");
   }
@@ -286,7 +292,7 @@ export const criarOrcamento = async (req, res) => {
   try {
     const pedido = await criarPedido(req.body || {}, req.usuario, "ORCAMENTO");
     res.locals.entityId = pedido.id;
-    res.status(201).json({ ...serializarPedido(pedido), clienteCadastro: pedido.clienteCadastro || null });
+    res.status(201).json({ ...serializarPedido(pedido, { usuario: req.usuario }), clienteCadastro: pedido.clienteCadastro || null });
   } catch (error) {
     responderErro(res, error, "Erro ao criar orçamento");
   }
@@ -589,6 +595,7 @@ export const alterarTransportadora = async (req, res) => {
 export const atualizarNotaFiscal = async (req, res) => {
   try {
     const pedido = await carregar(req.params.id);
+    if (req.body?.url && !/^https?:\/\//i.test(String(req.body.url))) throw erroHttp(400, "O link da nota precisa começar com https://");
     await pedido.update({
       notaFiscalNumero: req.body?.numero || null,
       notaFiscalUrl: req.body?.url || null,

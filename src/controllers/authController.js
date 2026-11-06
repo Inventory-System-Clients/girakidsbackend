@@ -1,22 +1,44 @@
-import jwt from "jsonwebtoken";
+import bcrypt from "bcryptjs";
 import { Usuario } from "../models/index.js";
+import { gerarToken } from "../middlewares/auth.js";
 import { documentoValido, erroHttp, responderErro, somenteDigitos } from "../utils/helpers.js";
 import { definirAvisosCliente } from "../services/whatsappService.js";
 
-const gerarToken = (usuario) =>
-  jwt.sign({ id: usuario.id, role: usuario.role }, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRES_IN || "7d",
-  });
+// Contra adivinhação de senha: 5 erros seguidos no mesmo e-mail bloqueiam
+// esse e-mail por 15 min (em memória; uma instância na Render).
+const ERROS_MAXIMOS = 5;
+const BLOQUEIO_MS = 15 * 60_000;
+const errosLogin = new Map();
+const bloqueadoAte = (email) => {
+  const e = errosLogin.get(email);
+  return e && e.ate > Date.now() ? e.ate : 0;
+};
+const registrarErroLogin = (email) => {
+  const agora = Date.now();
+  const e = errosLogin.get(email);
+  const atual = e && e.expira > agora ? e : { erros: 0, ate: 0, expira: agora + BLOQUEIO_MS };
+  atual.erros += 1;
+  if (atual.erros >= ERROS_MAXIMOS) atual.ate = agora + BLOQUEIO_MS;
+  errosLogin.set(email, atual);
+  if (errosLogin.size > 10_000) errosLogin.delete(errosLogin.keys().next().value);
+};
+// Compara com um hash qualquer quando o e-mail não existe (mesmo tempo de
+// resposta: não dá para descobrir quais e-mails têm conta).
+const HASH_FALSO = bcrypt.hashSync("girakids-senha-inexistente", 10);
 
 export const login = async (req, res) => {
   try {
-    const email = String(req.body?.email || "").trim().toLowerCase();
-    const senha = String(req.body?.senha || "");
+    const email = String(req.body?.email || "").trim().toLowerCase().slice(0, 150);
+    const senha = String(req.body?.senha || "").slice(0, 200);
     if (!email || !senha) throw erroHttp(400, "Informe e-mail e senha.");
+    if (bloqueadoAte(email)) throw erroHttp(429, "Muitas tentativas erradas. Aguarde 15 minutos e tente de novo.");
     const usuario = await Usuario.findOne({ where: { email } });
-    if (!usuario || !usuario.ativo || !(await usuario.verificarSenha(senha))) {
+    const senhaOk = usuario ? await usuario.verificarSenha(senha) : await bcrypt.compare(senha, HASH_FALSO);
+    if (!usuario || !usuario.ativo || !senhaOk) {
+      registrarErroLogin(email);
       throw erroHttp(401, "E-mail ou senha inválidos.");
     }
+    errosLogin.delete(email);
     res.json({ token: gerarToken(usuario), usuario });
   } catch (error) {
     responderErro(res, error, "Erro ao fazer login");
@@ -45,6 +67,7 @@ export const registrar = async (req, res) => {
     const corpo = req.body || {};
     validarCadastro(corpo);
     if (String(corpo.senha || "").length < 8) throw erroHttp(400, "Senha deve ter no mínimo 8 caracteres.");
+    if (String(corpo.senha).length > 200) throw erroHttp(400, "Senha muito longa.");
     const existente = await Usuario.findOne({ where: { email: String(corpo.email).trim().toLowerCase() } });
     if (existente) throw erroHttp(409, "Já existe uma conta com este e-mail.");
     const documento = somenteDigitos(corpo.documento);
@@ -71,6 +94,12 @@ export const atualizarPerfil = async (req, res) => {
   try {
     if (req.usuario.role === "SHOWROOM") throw erroHttp(403, "A conta do showroom só pode ser alterada pelo administrador.");
     const corpo = { ...req.usuario.toJSON(), ...req.body };
+    const novoEmail = String(corpo.email || "").trim().toLowerCase();
+    if (novoEmail !== String(req.usuario.email || "").toLowerCase() && !req.usuario.trocarSenha) {
+      if (!(await req.usuario.verificarSenha(String(req.body?.senhaAtual || "")))) {
+        throw erroHttp(400, "Para trocar o e-mail, informe sua senha atual.");
+      }
+    }
     validarCadastro(corpo, { exigirEndereco: req.usuario.role === "CLIENTE" });
     const documento = somenteDigitos(corpo.documento);
     await req.usuario.update({
@@ -101,11 +130,13 @@ export const alterarSenha = async (req, res) => {
       throw erroHttp(403, "A senha do showroom só pode ser alterada pelo administrador.");
     }
     if (String(novaSenha || "").length < 8) throw erroHttp(400, "A nova senha deve ter no mínimo 8 caracteres.");
+    if (String(novaSenha).length > 200) throw erroHttp(400, "Senha muito longa.");
     if (!req.usuario.trocarSenha && !(await req.usuario.verificarSenha(String(senhaAtual || "")))) {
       throw erroHttp(400, "Senha atual incorreta.");
     }
     await req.usuario.update({ senha: novaSenha, trocarSenha: false });
-    res.json({ message: "Senha alterada com sucesso." });
+    // As outras sessões caem; esta recebe um token novo.
+    res.json({ message: "Senha alterada com sucesso.", token: gerarToken(req.usuario) });
   } catch (error) {
     responderErro(res, error, "Erro ao alterar senha");
   }
