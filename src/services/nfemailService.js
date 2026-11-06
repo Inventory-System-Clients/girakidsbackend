@@ -1,3 +1,5 @@
+import { lerConfiguracao, salvarConfiguracao } from "../models/Configuracao.js";
+
 // Integração com a API REST da NFeMail (https://dev.nfemail.com.br).
 // Autenticação: HTTP Basic com o CNPJ da empresa (sem formatação) + API key
 // gerada no painel NFeMail (Conta > Empresas > gerar chave de API).
@@ -366,6 +368,25 @@ export const buscarNotasPorDocumento = async (cpfCnpj) => {
 };
 
 let produtosCache = null;
+// Valor comercial ("valor baixo") de cada produto da NFeMail: sempre que vem
+// preenchido, fica guardado aqui. Se depois sumir da NFeMail, a nota usa o
+// último valor guardado.
+export const CHAVE_VALORES_BAIXOS = "nfe.valoresBaixosSalvos";
+export const lerValoresBaixosSalvos = async () => (await lerConfiguracao(CHAVE_VALORES_BAIXOS)) || {};
+const lembrarValoresBaixos = async (lista) => {
+  const salvos = await lerValoresBaixosSalvos();
+  let mudou = false;
+  for (const p of lista) {
+    const valor = Number(p.val_comercial || 0);
+    const codigo = String(p.cod_produto);
+    if (valor > 0 && salvos[codigo]?.valor !== valor) {
+      salvos[codigo] = { valor, nome: p.dsc_produto, em: new Date().toISOString() };
+      mudou = true;
+    }
+  }
+  if (mudou) await salvarConfiguracao(CHAVE_VALORES_BAIXOS, salvos);
+};
+
 export const listarProdutosNFeMail = async ({ atualizar = false } = {}) => {
   if (!atualizar && produtosCache && Date.now() - produtosCache.em < 2 * 60 * 1000) return produtosCache.lista;
   // A NFeMail devolve no máximo 10 por página: segue até acabar.
@@ -379,6 +400,7 @@ export const listarProdutosNFeMail = async ({ atualizar = false } = {}) => {
     lista.push(...parte);
   }
   produtosCache = { em: Date.now(), lista };
+  lembrarValoresBaixos(lista).catch((erro) => console.warn("[NFeMail] Valores salvos:", erro.message));
   return lista;
 };
 

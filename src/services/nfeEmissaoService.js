@@ -29,6 +29,7 @@ import {
   buscarNotasPorDocumento,
   emitenteDaUltimaNota,
   enviarTxtNFeMail,
+  lerValoresBaixosSalvos,
   listarProdutosNFeMail,
 } from "./nfemailService.js";
 import { arredondar, erroHttp } from "../utils/helpers.js";
@@ -38,6 +39,17 @@ export const CHAVE_VINCULO_CATEGORIAS = "nfeVinculoCategorias";
 
 // Tabela de vínculo → produto da NFeMail (cod_produto). Chaves: "produto:<id>",
 // "<categoria>|<tipoEmbalagem>" ou "<categoria>".
+// Valor baixo padrão por produto da NFeMail (código), usado quando a NFeMail
+// não tem valor comercial e nunca teve um guardado.
+export const VALORES_BAIXOS_PADRAO = {
+  1: 0.08, // BOL DE BORRACHA 27MM
+  2: 0.16, // BOL DE BORRACHA 32MM
+  4: 5, // BRINQUEDOS 1 POL ENCAPSULADOS
+  9: 5, // BRINQUEDOS 1 POL S/ CAPSULAS
+  5: 14, // BRINQUEDOS 2 POL ENCAPSULADOS
+  22: 14, // BRINQUEDOS 2 POL S/ CAPSULAS
+};
+
 export const lerVinculosCategorias = async () => (await lerConfiguracao(CHAVE_VINCULO_CATEGORIAS)) || {};
 export const salvarVinculosCategorias = async (vinculos) => {
   const limpos = Object.fromEntries(Object.entries(vinculos || {}).filter(([c, v]) => c.trim() && v).map(([c, v]) => [c.trim(), String(v)]));
@@ -296,9 +308,16 @@ export const prepararNota = async (pedidoId, opcoes = {}) => {
 
   const usarValorReal = Boolean(opcoes.usarValorReal);
   const semValorNFeMail = [];
+  const valoresSalvos = await lerValoresBaixosSalvos();
   const linhasNota = [...grupos.values()].map((g) => {
-    const valorCadastro = Number(g.nfe.val_comercial || 0);
-    // Sem valor no cadastro da NFeMail: fica o valor do site (com aviso).
+    // Valor baixo: o da NFeMail; se estiver vazio, o último que a NFeMail já
+    // teve (guardado); senão o padrão da categoria; por fim o valor do site.
+    const codigo = String(g.nfe.cod_produto);
+    const valorNFeMail = Number(g.nfe.val_comercial || 0);
+    const valorSalvo = Number(valoresSalvos[codigo]?.valor || 0);
+    const valorPadrao = Number(VALORES_BAIXOS_PADRAO[codigo] || 0);
+    const [valorCadastro, origemBaixo] =
+      valorNFeMail > 0 ? [valorNFeMail, "NFEMAIL"] : valorSalvo > 0 ? [valorSalvo, "SALVO"] : valorPadrao > 0 ? [valorPadrao, "PADRAO"] : [0, null];
     const doCadastro = !usarValorReal && valorCadastro > 0;
     if (!usarValorReal && !doCadastro) semValorNFeMail.push(g.nfe.dsc_produto);
     const vProd = doCadastro ? arredondar(g.qCom * valorCadastro) : g.vProd;
@@ -311,12 +330,13 @@ export const prepararNota = async (pedidoId, opcoes = {}) => {
       vProd,
       vUnCom: doCadastro ? valorCadastro : g.qCom ? g.vProd / g.qCom : 0,
       valorSite: g.vProd,
-      origemValor: doCadastro ? "NFEMAIL" : "SITE",
+      valorBaixo: valorCadastro || null,
+      origemValor: doCadastro ? origemBaixo : "SITE",
       produtosSite: g.produtosSite,
     };
   });
   if (semValorNFeMail.length) {
-    avisos.push(`Sem valor cadastrado na NFeMail (foi o valor do site): ${semValorNFeMail.join(", ")}. Cadastre o valor comercial desses produtos na NFeMail.`);
+    avisos.push(`Sem valor baixo na NFeMail nem guardado (foi o valor do site): ${semValorNFeMail.join(", ")}. Cadastre o valor comercial desses produtos na NFeMail.`);
   }
 
   // Totais iguais ao pedido: desconto (+ crédito usado), frete e taxas.

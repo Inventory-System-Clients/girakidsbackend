@@ -1,5 +1,6 @@
 import { Op } from "sequelize";
-import { CorreiosPostagem, Usuario, Pedido } from "../models/index.js";
+import { CorreiosPostagem, Usuario, Pedido, PedidoItem } from "../models/index.js";
+import { resumirCarga, volumesSugeridos } from "../services/freteService.js";
 import {
   baixarPdfsPostagemApi,
   cotarServicosApi,
@@ -160,9 +161,33 @@ export const buscarPedidos = async (req, res) => {
 
 export const detalharPedido = async (req, res) => {
   try {
-    const pedido = detalhar(await obterPedido(req.params.id));
+    const original = await obterPedido(req.params.id);
+    const pedido = detalhar(original);
     const postagens = await buscarPostagensDosPedidos([pedido.id]);
-    res.json({ ...pedido, postagem: postagens.get(pedido.id) || null });
+    // Itens do pedido e caixas sugeridas pela Calculadora de Pedidos (para
+    // montar a caixa e cotar sem voltar ao Time de Vendas).
+    const itens = await PedidoItem.findAll({ where: { pedidoId: original.id }, order: [["nome", "ASC"]] });
+    let volumes = [];
+    try {
+      volumes = await volumesSugeridos(await resumirCarga(itens.map((i) => ({ produtoId: i.produtoId, quantidade: i.quantidade }))));
+    } catch (erro) {
+      console.warn("[Correios] Volumes sugeridos:", erro.message);
+    }
+    res.json({
+      ...pedido,
+      postagem: postagens.get(pedido.id) || null,
+      itens: itens.map((i) => ({
+        id: i.id,
+        nome: i.nome,
+        sku: i.sku,
+        categoria: i.categoria,
+        imagemUrl: i.imagemUrl,
+        quantidade: i.quantidade,
+        unidadesPacote: i.unidadesPacote || 1,
+        pesoGramas: i.pesoGramas != null ? Number(i.pesoGramas) : null,
+      })),
+      volumesSugeridos: volumes,
+    });
   } catch (error) {
     responderErro(res, error, "Erro ao abrir o pedido");
   }

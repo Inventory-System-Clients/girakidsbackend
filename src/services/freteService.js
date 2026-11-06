@@ -78,6 +78,32 @@ const estimar = async (servico, pesoGramas, uf) => {
 
 // Braspress cotada no site deles (valor + R$ 15, prazo + 1 dia). Sem CEP ou
 // se a cotação falhar, a opção aparece indisponível e fica "Outra transportadora".
+// Volumes da Calculadora de Pedidos agrupados por tamanho de caixa:
+// [{ volumes, altura, largura, comprimento (cm), pesoKg (o mais pesado do grupo) }].
+// Sem tipo de embalagem mapeado: 1 volume da caixa padrão.
+export const volumesSugeridos = async (carga) => {
+  let calculadas = [{ volumes: 1, ...carga.caixa, pesoKg: null }];
+  try {
+    if (Object.keys(carga.quantidades).length) {
+      const calculo = await calcularPedidoCompleto({ quantidades: carga.quantidades, medidas: {}, avulsos: [] });
+      const grupos = new Map();
+      for (const v of calculo.volumes || []) {
+        if (!v.medidas) continue;
+        const chave = [v.medidas.altura, v.medidas.largura, v.medidas.comprimento].join("x");
+        const g = grupos.get(chave) || { volumes: 0, ...v.medidas, pesoKg: 0 };
+        g.volumes += 1;
+        g.pesoKg = Math.max(g.pesoKg, Number(v.pesoKg) || 0);
+        grupos.set(chave, g);
+      }
+      if (grupos.size) calculadas = [...grupos.values()];
+      else if (calculo.resumo?.volumes > 1) calculadas[0].volumes = calculo.resumo.volumes;
+    }
+  } catch {
+    // Calculadora sem parâmetros: 1 volume da caixa padrão.
+  }
+  return calculadas;
+};
+
 // Caixas = uma linha por tamanho { volumes, altura, largura, comprimento (cm) },
 // agrupando os volumes da Calculadora de Pedidos.
 // ajuste (só ADMIN): { pesoKg, caixas: [{ volumes, altura, largura, comprimento }] }
@@ -87,24 +113,7 @@ const opcaoBraspress = async (cepLimpo, documento, carga, ajuste) => {
   if (cepLimpo.length !== 8) return { ...base, disponivel: false, motivo: "Informe o CEP" };
   if (carga.freteIndisponivel) return { ...base, disponivel: false, motivo: "Frete indisponível para estes produtos — fale com o time de vendas" };
   try {
-    let calculadas = [{ volumes: 1, ...carga.caixa }];
-    try {
-      if (Object.keys(carga.quantidades).length) {
-        const calculo = await calcularPedidoCompleto({ quantidades: carga.quantidades, medidas: {}, avulsos: [] });
-        const grupos = new Map();
-        for (const v of calculo.volumes || []) {
-          if (!v.medidas) continue;
-          const chave = [v.medidas.altura, v.medidas.largura, v.medidas.comprimento].join("x");
-          const g = grupos.get(chave) || { volumes: 0, ...v.medidas };
-          g.volumes += 1;
-          grupos.set(chave, g);
-        }
-        if (grupos.size) calculadas = [...grupos.values()];
-        else if (calculo.resumo?.volumes > 1) calculadas[0].volumes = calculo.resumo.volumes;
-      }
-    } catch {
-      // Calculadora sem parâmetros: 1 volume da caixa padrão.
-    }
+    const calculadas = (await volumesSugeridos(carga)).map(({ pesoKg, ...c }) => c);
     const numero = (v, max) => {
       const n = Number(String(v ?? "").replace(",", "."));
       return n > 0 ? Math.min(max, n) : null;
