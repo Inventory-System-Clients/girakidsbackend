@@ -159,6 +159,7 @@ router.get("/parceiros", autenticar, exigirInterno, entradas.listarParceiros);
 const parc = [autenticar, exigirPermissao("ENTRADAS", "RECEBIMENTOS")];
 router.post("/parceiros", ...parc, registrarLog("CRIAR_PARCEIRO", "Parceiro"), entradas.criarParceiro);
 router.put("/parceiros/:id", ...parc, registrarLog("ATUALIZAR_PARCEIRO", "Parceiro"), entradas.atualizarParceiro);
+router.delete("/parceiros/:id", ...parc, registrarLog("EXCLUIR_PARCEIRO", "Parceiro"), entradas.excluirParceiro);
 router.get("/entradas/resumo", ...ent, entradas.resumo);
 router.get("/entradas/custos", ...ent, entradas.ultimosCustos);
 router.get("/entradas/recebimentos", ...ent, entradas.listarRecebimentos);

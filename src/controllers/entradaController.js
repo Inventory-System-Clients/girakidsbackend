@@ -6,6 +6,7 @@ import {
   Recebimento,
   RecebimentoItem,
   HistoricoPreco,
+  PreRecebimento,
 } from "../models/index.js";
 import { movimentar } from "../services/estoqueService.js";
 import { arredondar, erroHttp, hojeISO, numero, responderErro, somenteDigitos } from "../utils/helpers.js";
@@ -75,6 +76,31 @@ export const atualizarParceiro = async (req, res) => {
     res.json(parceiro);
   } catch (error) {
     responderErro(res, error, "Erro ao atualizar parceiro");
+  }
+};
+
+// Exclui um fornecedor. Os pré-recebimentos já feitos guardam o nome dele, então
+// o histórico (e o Setor de compras) continua mostrando quem foi. Não exclui se
+// ainda houver pré-recebimento em aberto ou entrada antiga (tela Entradas)
+// presa a ele: nesses casos, dá para desativar.
+export const excluirParceiro = async (req, res) => {
+  try {
+    const parceiro = await Parceiro.findByPk(req.params.id);
+    if (!parceiro) throw erroHttp(404, "Fornecedor não encontrado.");
+    const [abertos, entradas] = await Promise.all([
+      PreRecebimento.count({ where: { fornecedorId: parceiro.id, status: ["AGUARDANDO_FORNECEDOR", "FORNECEDOR_RESPONDEU"] } }),
+      Recebimento.count({ where: { fornecedorId: parceiro.id } }),
+    ]);
+    if (abertos) throw erroHttp(409, `${parceiro.nome} tem ${abertos} pré-recebimento(s) em aberto. Receba ou cancele antes de excluir.`);
+    if (entradas) throw erroHttp(409, `${parceiro.nome} tem ${entradas} entrada(s) antigas no histórico de Entradas e não pode ser excluído. Desative o fornecedor no lugar.`);
+    await sequelize.transaction(async (transaction) => {
+      await Produto.update({ fornecedorPreferencialId: null }, { where: { fornecedorPreferencialId: parceiro.id }, transaction });
+      await PreRecebimento.update({ fornecedorNome: parceiro.nome }, { where: { fornecedorId: parceiro.id, fornecedorNome: null }, transaction });
+      await parceiro.destroy({ transaction });
+    });
+    res.json({ ok: true });
+  } catch (error) {
+    responderErro(res, error, "Erro ao excluir fornecedor");
   }
 };
 
