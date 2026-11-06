@@ -224,7 +224,8 @@ export const criar = async (req, res) => {
           origemNumero: corpo.origemNumero || null,
           criadoPor: req.usuario.nome,
           ...(link?.campos || {}),
-          ...(direto ? { recebidoEm: new Date(), recebidoPor: req.usuario.nome } : {}),
+          // Recebido direto já vai para o Setor de compras (a pagar).
+          ...(direto ? { recebidoEm: new Date(), recebidoPor: req.usuario.nome, compraStatus: "PENDENTE" } : {}),
         },
         { transaction },
       );
@@ -316,7 +317,8 @@ export const receber = async (req, res) => {
         await aplicarNoEstoque(pre, item, recebida, req.usuario, transaction);
       }
 
-      const dados = { recebidoEm: new Date(), recebidoPor: req.usuario.nome, status: faltas.length ? "RECEBIDO_PARCIAL" : "RECEBIDO", respostaVista: true };
+      // Conferido: entra no estoque (acima) e vai para o Setor de compras (a pagar).
+      const dados = { recebidoEm: new Date(), recebidoPor: req.usuario.nome, status: faltas.length ? "RECEBIDO_PARCIAL" : "RECEBIDO", respostaVista: true, compraStatus: "PENDENTE" };
       if (faltas.length) {
         const d = corpo.divergencia || {};
         const descricao = texto(d.descricao);
@@ -419,6 +421,8 @@ export const estornar = async (req, res) => {
       await pre.update(
         {
           status: "ESTORNADO",
+          // Ainda não pago: sai do "a pagar". Já pago: fica no registro, marcado como estornado.
+          ...(pre.compraStatus === "PENDENTE" ? { compraStatus: null } : {}),
           canceladoEm: new Date(),
           canceladoPor: req.usuario.nome,
           motivoCancelamento: motivo,

@@ -52,11 +52,23 @@ export const PreRecebimento = sequelize.define(
     canceladoPor: { type: DataTypes.STRING(150), allowNull: true },
     motivoCancelamento: { type: DataTypes.TEXT, allowNull: true },
     criadoPor: { type: DataTypes.STRING(150), allowNull: true },
+
+    // Setor de compras (Financeiro): conferido = PENDENTE (a pagar); com quem
+    // comprou, forma e data do pagamento = FINALIZADA.
+    compraStatus: { type: DataTypes.STRING(20), allowNull: true },
+    compradoPor: { type: DataTypes.STRING(150), allowNull: true },
+    compraFormaPagamento: { type: DataTypes.STRING(30), allowNull: true },
+    compraParcelas: { type: DataTypes.INTEGER, allowNull: true },
+    compraPagoEm: { type: DataTypes.DATEONLY, allowNull: true },
+    compraValor: { type: DataTypes.DECIMAL(12, 2), allowNull: true },
+    compraObservacao: { type: DataTypes.TEXT, allowNull: true },
+    compraRegistradaPor: { type: DataTypes.STRING(150), allowNull: true },
+    compraRegistradaEm: { type: DataTypes.DATE, allowNull: true },
   },
   {
     tableName: "pre_recebimentos",
     timestamps: true,
-    indexes: [{ fields: ["status"] }, { fields: ["fornecedorId"] }, { fields: ["numero"] }, { unique: true, fields: ["tokenHash"], name: "pre_recebimentos_token_hash" }],
+    indexes: [{ fields: ["status"] }, { fields: ["fornecedorId"] }, { fields: ["numero"] }, { fields: ["compraStatus", "compraPagoEm"] }, { unique: true, fields: ["tokenHash"], name: "pre_recebimentos_token_hash" }],
   },
 );
 

@@ -28,6 +28,7 @@ import * as transportadoras from "../controllers/transportadoraController.js";
 import * as recebimentos from "../controllers/recebimentoController.js";
 import * as whatsapp from "../controllers/whatsappController.js";
 import * as legado from "../controllers/sincronizacaoLegadoController.js";
+import * as compras from "../controllers/compraController.js";
 import { limitarTaxa } from "../utils/linkSeguro.js";
 import { cotarBraspressSite, diagnosticoBraspress } from "../services/braspressService.js";
 import transportadoraRoutes from "./transportadora.routes.js";
@@ -217,6 +218,12 @@ router.get("/dashboard/tendencias", ...fin, dashboard.tendencias);
 router.get("/dashboard/produtos-ativos", autenticar, exigirPermissao("FINANCEIRO", "PRODUTOS"), dashboard.produtosAtivos);
 router.get("/dashboard/estoque", autenticar, exigirPermissao("FINANCEIRO", "PRODUTOS"), dashboard.estoqueResumo);
 router.get("/dashboard/movimentacoes", autenticar, exigirPermissao("FINANCEIRO", "PRODUTOS"), dashboard.movimentacoes);
+// Setor de compras (Financeiro): recebimentos conferidos → pagamento registrado.
+router.get("/compras/opcoes", ...fin, compras.opcoes);
+router.get("/compras/pendentes", ...fin, compras.pendentes);
+router.get("/compras", ...fin, compras.finalizadas);
+router.put("/compras/:id", ...fin, registrarLog("REGISTRAR_COMPRA", "PreRecebimento"), compras.registrar);
+router.post("/compras/:id/reabrir", ...fin, registrarLog("REABRIR_COMPRA", "PreRecebimento"), compras.reabrir);
 router.get("/dashboard/fila-sob-demanda", autenticar, exigirPermissao("FINANCEIRO", "PRODUTOS", "ENTRADAS"), dashboard.filaSobDemanda);
 
 // Arquivos (imagens e PDFs)
