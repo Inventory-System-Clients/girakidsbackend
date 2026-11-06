@@ -46,7 +46,7 @@ export const salvarVinculos = async (req, res) => {
 
 export const danfe = async (req, res) => {
   try {
-    res.json(await baixarDanfeDoPedido(req.params.id, req.usuario));
+    res.json(await baixarDanfeDoPedido(req.params.id, req.usuario, { pedidoNumero: req.body?.pedidoNumero }));
   } catch (error) {
     responderErro(res, error, "Erro ao baixar a DANFE");
   }

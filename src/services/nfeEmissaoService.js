@@ -188,10 +188,15 @@ export const prepararNota = async (pedidoId, opcoes = {}) => {
   if (!pedido || pedido.tipo !== "PEDIDO") throw erroHttp(404, "Pedido não encontrado.");
   const bloqueios = [];
   const avisos = [];
+  // Bloqueios de "já tem nota" com DANFE para baixar ali mesmo:
+  // { mensagem, numeroNota, pedidoNumero (pedido em que a nota foi emitida) }.
+  const bloqueiosDanfe = [];
   if (pedido.statusVendas === "CANCELADO") bloqueios.push("Pedido cancelado.");
   const jaSaiu = notaConjunta(pedido);
   if (jaSaiu?.juntoAoPedido) {
-    bloqueios.push(`Este pedido já saiu na nota ${jaSaiu.numero}, junto com o pedido ${jaSaiu.juntoAoPedido}.`);
+    const mensagem = `Este pedido já saiu na nota ${jaSaiu.numero}, junto com o pedido ${jaSaiu.juntoAoPedido}.`;
+    bloqueios.push(mensagem);
+    bloqueiosDanfe.push({ mensagem, numeroNota: jaSaiu.numero, pedidoNumero: jaSaiu.juntoAoPedido });
   }
 
   // Pedidos do mesmo cliente que entram na mesma nota (escolhidos na tela).
@@ -382,7 +387,7 @@ export const prepararNota = async (pedidoId, opcoes = {}) => {
   ].filter(Boolean).join(" ");
   const infCpl = opcoes.infCpl !== undefined ? String(opcoes.infCpl || "") : infCplPadrao;
 
-  const existentes = (await Promise.all(todos.map((p) => notasDoPedidoNaNFeMail(p.numero)))).flat()
+  const existentes = (await Promise.all(todos.map(async (p) => (await notasDoPedidoNaNFeMail(p.numero)).map((n) => ({ ...n, pedidoNumero: p.numero }))))).flat()
     .filter((n, i, lista) => lista.findIndex((o) => String(o.idNFeMail ?? o.chaveAcessoNFe ?? o.numeroNota) === String(n.idNFeMail ?? n.chaveAcessoNFe ?? n.numeroNota)) === i);
   for (const n of existentes) {
     // Rejeitada pela SEFAZ não tem número nem valor fiscal: pode gerar de novo.
@@ -390,13 +395,16 @@ export const prepararNota = async (pedidoId, opcoes = {}) => {
       avisos.push(`Tentativa anterior rejeitada pela SEFAZ (${n.status}). Esta nova emissão substitui aquela.`);
       continue;
     }
-    bloqueios.push(`${juntos.length ? "Um dos pedidos" : "O pedido"} já tem a nota ${n.numeroNota} na NFeMail (${descreverSituacao(n)}). ${AUTORIZADA(n) ? "Baixe a DANFE dela abaixo." : "Transmita ou exclua essa nota na NFeMail antes de gerar outra."}`);
+    const mensagem = `${juntos.length ? `O pedido ${n.pedidoNumero}` : "O pedido"} já tem a nota ${n.numeroNota} na NFeMail (${descreverSituacao(n)}).${AUTORIZADA(n) ? "" : " Transmita ou exclua essa nota na NFeMail antes de gerar outra."}`;
+    bloqueios.push(mensagem);
+    if (AUTORIZADA(n)) bloqueiosDanfe.push({ mensagem, numeroNota: n.numeroNota, pedidoNumero: n.pedidoNumero });
   }
 
   return {
     pedido: { id: pedido.id, numero: pedido.numero, numeroFormatado: pedido.numeroFormatado || String(pedido.numero), total: Number(pedido.total), formaPagamento: pedido.formaPagamento, metodoEnvio: pedido.metodoEnvio, notaFiscalNumero: pedido.notaFiscalNumero },
     // Sugestão: outros pedidos em aberto do cliente; "juntos" = os que entraram nesta nota.
     pedidosAbertos: abertos.map(resumoPedido),
+    bloqueiosDanfe,
     juntos: juntos.map(resumoPedido),
     totalPedidos,
     usarValorReal,
@@ -596,9 +604,17 @@ const salvarDanfe = async (pedido, nota, danfe, usuario) => {
   return url;
 };
 
-export const baixarDanfeDoPedido = async (pedidoId, usuario) => {
-  const pedido = await Pedido.findByPk(pedidoId);
+// pedidoNumero: a nota é de outro pedido (ex.: pedido juntado na tela, que já
+// tinha nota). A DANFE fica salva no pedido dono da nota.
+export const baixarDanfeDoPedido = async (pedidoId, usuario, { pedidoNumero } = {}) => {
+  let pedido = await Pedido.findByPk(pedidoId);
   if (!pedido) throw erroHttp(404, "Pedido não encontrado.");
+  const outroNumero = Number(pedidoNumero);
+  if (outroNumero && outroNumero !== Number(pedido.numero) && Number(notaConjunta(pedido)?.juntoAoPedido) !== outroNumero) {
+    const dono = await Pedido.findOne({ where: { numero: outroNumero, tipo: "PEDIDO" } });
+    if (!dono) throw erroHttp(404, "Pedido da nota não encontrado.");
+    pedido = dono;
+  }
   let nota = (await notasDoPedidoNaNFeMail(pedido.numero)).find(AUTORIZADA);
   const conjunta = notaConjunta(pedido);
   if (!nota && conjunta?.juntoAoPedido) {
