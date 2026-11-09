@@ -104,6 +104,58 @@ export const calcularMescla = async (linhas) =>
       }),
   );
 
+// Boletos do pedido: quantidade (1 a 24) e vencimento do primeiro; os
+// seguintes vencem de 30 em 30 dias contando do primeiro.
+export const lerBoletoConfig = (entrada) => {
+  if (!entrada) return null;
+  const primeiroVencimento = String(entrada.primeiroVencimento || "");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(primeiroVencimento) || Number.isNaN(Date.parse(`${primeiroVencimento}T12:00:00Z`))) {
+    throw erroHttp(400, "Informe a data do primeiro boleto.");
+  }
+  const quantidade = Math.round(Number(entrada.quantidade));
+  if (!(quantidade >= 1 && quantidade <= 24)) throw erroHttp(400, "A quantidade de boletos deve ser de 1 a 24.");
+  return { primeiroVencimento, quantidade };
+};
+const somarDias = (iso, dias) => {
+  const d = new Date(`${iso}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + dias);
+  return d.toISOString().slice(0, 10);
+};
+// Divide o valor em boletos iguais (o último acerta os centavos).
+export const montarBoletos = (valor, config) => {
+  const base = Math.floor((valor / config.quantidade) * 100) / 100;
+  return Array.from({ length: config.quantidade }, (_, i) => ({
+    valor: i === config.quantidade - 1 ? arredondar(valor - base * (config.quantidade - 1)) : base,
+    vencimento: somarDias(config.primeiroVencimento, 30 * i),
+  }));
+};
+// Troca os boletos em aberto do pedido pelos novos: cancela os boletos ainda
+// não pagos e divide o que falta receber (total - recebido - outras parcelas
+// em aberto) nos novos boletos. Boletos já pagos ficam como estão.
+export const gerarBoletosDoPedido = async (pedido, config, usuario, transaction) => {
+  const parcelas = await PedidoParcela.findAll({ where: { pedidoId: pedido.id }, transaction });
+  const abertasBoleto = parcelas.filter((p) => p.status === "ABERTA" && (p.metodoPrevisto === "BOLETO" || pedido.formaPagamento === "BOLETO"));
+  for (const p of abertasBoleto) await p.update({ status: "CANCELADA" }, { transaction });
+  const comprometido = parcelas
+    .filter((p) => p.status === "RECEBIDA" || (p.status === "ABERTA" && !abertasBoleto.includes(p)))
+    .reduce((s, p) => s + Number(p.valor), 0);
+  const restante = arredondar(Number(pedido.total) - comprometido);
+  if (restante <= 0.009) throw erroHttp(400, "Não há valor em aberto para gerar boletos.");
+  const ultimo = Math.max(0, ...parcelas.map((p) => p.numero));
+  await PedidoParcela.bulkCreate(
+    montarBoletos(restante, config).map((b, i) => ({
+      pedidoId: pedido.id,
+      numero: ultimo + i + 1,
+      valor: b.valor,
+      metodoPrevisto: "BOLETO",
+      vencimento: b.vencimento,
+      observacao: `Boleto ${i + 1}/${config.quantidade}`,
+      usuarioNome: usuario?.nome || null,
+    })),
+    { transaction },
+  );
+};
+
 export const calcularTotais = async ({
   subtotal,
   desconto = 0,
@@ -492,6 +544,7 @@ export const criarPedido = async (corpo, usuario, tipo = "PEDIDO", { reabrirId =
         formaPagamento,
         parcelasCartao,
         composicaoPagamento: formaPagamento === "MESCLA" ? composicao : null,
+        boletoConfig: formaPagamento === "BOLETO" ? lerBoletoConfig(corpo.boleto) : null,
         orcamentoOrigemId: corpo.orcamentoOrigemId || null,
     };
     let pedido;
@@ -535,6 +588,11 @@ export const criarPedido = async (corpo, usuario, tipo = "PEDIDO", { reabrirId =
       itens.map((item) => ({ ...item, pedidoId: pedido.id })),
       { transaction },
     );
+
+    // Boleto: um boleto em aberto por vencimento (30 em 30 dias).
+    if (tipo === "PEDIDO" && formaPagamento === "BOLETO" && pedido.boletoConfig) {
+      await gerarBoletosDoPedido(pedido, pedido.boletoConfig, usuario, transaction);
+    }
 
     // Mescla: cada forma vira uma parcela em aberto com seu vencimento.
     // A parcela no cartão já vem com a taxa dela (valorCobrado).

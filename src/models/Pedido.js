@@ -84,6 +84,9 @@ export const Pedido = sequelize.define(
       defaultValue: "A_DEFINIR",
     },
     parcelasCartao: { type: DataTypes.INTEGER, allowNull: true },
+    // Boleto: { primeiroVencimento: "AAAA-MM-DD", quantidade } — boletos de
+    // 30 em 30 dias a partir do primeiro (viram parcelas em aberto).
+    boletoConfig: { type: DataTypes.JSONB, allowNull: true },
     // Mescla de pagamentos: [{ metodo, valor, vencimento }]
     composicaoPagamento: { type: DataTypes.JSONB, allowNull: true },
     // Integração com o banco/gateway escolhido (src/services/pagamentos).

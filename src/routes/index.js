@@ -126,6 +126,7 @@ router.post("/pedidos/:id/confirmar-pagamento", autenticar, vendasOuFinanceiro, 
 router.get("/financeiro/bancos", autenticar, vendasOuFinanceiro, bancos.listar);
 router.post("/financeiro/bancos", autenticar, vendasOuFinanceiro, registrarLog("CRIAR_BANCO_RECEBEDOR", "Configuracao"), bancos.criar);
 router.post("/pedidos/:id/recebimentos", autenticar, vendasOuFinanceiro, registrarLog("REGISTRAR_RECEBIMENTO", "Pedido"), pedidos.registrarRecebimento);
+router.put("/pedidos/:id/boletos", autenticar, vendasOuFinanceiro, registrarLog("DEFINIR_BOLETOS", "Pedido"), pedidos.definirBoletos);
 router.post("/pedidos/:id/parcelas", autenticar, vendasOuFinanceiro, registrarLog("ADICIONAR_PARCELA", "Pedido"), pedidos.adicionarParcela);
 router.put("/pedidos/:id/parcelas/:parcelaId", autenticar, vendasOuFinanceiro, registrarLog("ATUALIZAR_PARCELA", "Pedido"), pedidos.atualizarParcela);
 router.post("/pedidos/:id/reabrir-financeiro", autenticar, exigirPermissao("FINANCEIRO"), registrarLog("REABRIR_FINANCEIRO", "Pedido"), pedidos.reabrirFinanceiro);

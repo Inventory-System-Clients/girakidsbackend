@@ -17,6 +17,8 @@ import {
   ehInterno,
   ehShowroom,
   formatarNumero,
+  gerarBoletosDoPedido,
+  lerBoletoConfig,
   montarFiltroPedidos,
   montarItens,
   resolverTransportadora,
@@ -339,6 +341,7 @@ export const gerarPedidoDoOrcamento = async (req, res) => {
       formaPagamento: orcamento.formaPagamento,
       parcelasCartao: orcamento.parcelasCartao,
       composicaoPagamento: orcamento.composicaoPagamento,
+      boleto: orcamento.boletoConfig,
       observacoes: orcamento.observacoes,
       orcamentoOrigemId: orcamento.id,
     };
@@ -499,7 +502,12 @@ export const editar = async (req, res) => {
         totalAnterior: Number(pedido.total),
         totalNovo: total,
       });
+      const totalAntes = Number(pedido.total);
       await pedido.update(atualizacao, { transaction });
+      // Total mudou: os boletos em aberto são refeitos com o novo saldo.
+      if (pedido.formaPagamento === "BOLETO" && pedido.boletoConfig && pedido.statusFinanceiro !== "PAGO" && Math.abs(total - totalAntes) > 0.009) {
+        await gerarBoletosDoPedido(pedido, pedido.boletoConfig, req.usuario, transaction);
+      }
     });
     await responderPedido(res, req.params.id);
   } catch (error) {
@@ -511,6 +519,7 @@ export const alterarFormaPagamento = async (req, res) => {
   try {
     const { formaPagamento, parcelasCartao, composicaoPagamento, motivo } = req.body || {};
     if (!FORMAS_PAGAMENTO[formaPagamento]) throw erroHttp(400, "Forma de pagamento inválida.");
+    const boletoConfig = formaPagamento === "BOLETO" ? lerBoletoConfig(req.body?.boleto) : null;
     await sequelize.transaction(async (transaction) => {
       const pedido = await carregarParaAlterar(req.params.id, transaction);
       garantirNaoCancelado(pedido);
@@ -550,6 +559,7 @@ export const alterarFormaPagamento = async (req, res) => {
           formaPagamento,
           parcelasCartao: parcelasCartao || null,
           composicaoPagamento: formaPagamento === "MESCLA" ? composicao : null,
+          boletoConfig,
           taxas,
           total,
           ...(pedido.pendenciaStatus === "ABERTA"
@@ -565,6 +575,7 @@ export const alterarFormaPagamento = async (req, res) => {
         },
         { transaction },
       );
+      if (boletoConfig && pedido.statusFinanceiro !== "PAGO") await gerarBoletosDoPedido(pedido, boletoConfig, req.usuario, transaction);
     });
     await responderPedido(res, req.params.id);
   } catch (error) {
@@ -903,5 +914,27 @@ export const resolverAlertaPagamento = async (req, res) => {
     res.json(alerta);
   } catch (error) {
     responderErro(res, error, "Erro ao resolver alerta");
+  }
+};
+
+// Boletos de um pedido já existente (criar ou refazer): data do primeiro e
+// quantidade, de 30 em 30 dias. Os boletos em aberto são trocados pelos novos.
+export const definirBoletos = async (req, res) => {
+  try {
+    const config = lerBoletoConfig(req.body);
+    await sequelize.transaction(async (transaction) => {
+      const pedido = await carregarParaAlterar(req.params.id, transaction);
+      garantirNaoCancelado(pedido);
+      if (pedido.statusFinanceiro === "PAGO") throw erroHttp(400, "Pedido já pago.");
+      if (pedido.formaPagamento !== "BOLETO") throw erroHttp(400, "Mude a forma de pagamento do pedido para Boleto primeiro.");
+      await gerarBoletosDoPedido(pedido, config, req.usuario, transaction);
+      await pedido.update(
+        { boletoConfig: config, historico: evento(pedido, req.usuario, "BOLETOS", { quantidade: config.quantidade, primeiroVencimento: config.primeiroVencimento }) },
+        { transaction },
+      );
+    });
+    await responderPedido(res, req.params.id);
+  } catch (error) {
+    responderErro(res, error, "Erro ao gerar os boletos");
   }
 };
