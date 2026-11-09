@@ -1,4 +1,4 @@
-import { baixarDanfeDoPedido, emitirNota, fixarVinculoProduto, lerVinculosCategorias, montarTxt, prepararNota, salvarVinculosCategorias } from "../services/nfeEmissaoService.js";
+import { baixarDanfeDoPedido, emitirNota, fixarValorManual, fixarVinculoProduto, lerVinculosCategorias, montarTxt, prepararNota, salvarVinculosCategorias } from "../services/nfeEmissaoService.js";
 import { emitenteDaUltimaNota, listarProdutosNFeMail } from "../services/nfemailService.js";
 import { responderErro } from "../utils/helpers.js";
 
@@ -41,6 +41,14 @@ export const fixarVinculo = async (req, res) => {
     res.json(await fixarVinculoProduto(req.params.produtoId, req.body?.codigo));
   } catch (error) {
     responderErro(res, error, "Erro ao salvar a categoria da NF-e do produto");
+  }
+};
+
+export const valorManual = async (req, res) => {
+  try {
+    res.json(await fixarValorManual(req.params.codigo, req.body?.valor, req.usuario));
+  } catch (error) {
+    responderErro(res, error, "Erro ao salvar o valor do produto da NF-e");
   }
 };
 

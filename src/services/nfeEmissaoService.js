@@ -65,6 +65,29 @@ export const fixarVinculoProduto = async (produtoId, codigo) => {
   return { produtoId: produto.id, codigo: produto.nfeProdutoCodigo };
 };
 
+// Valor unitário digitado à mão no form da nota para um produto da NFeMail
+// (código). Fica fixo em todas as notas, acima do valor da NFeMail e do site,
+// até alguém trocar ou apagar (valor vazio volta ao automático).
+export const CHAVE_VALORES_MANUAIS = "nfe.valoresManuais";
+export const lerValoresManuais = async () => (await lerConfiguracao(CHAVE_VALORES_MANUAIS)) || {};
+export const fixarValorManual = async (codigo, valor, usuario) => {
+  const cod = String(codigo || "").trim();
+  const produto = (await listarProdutosNFeMail()).find((p) => String(p.cod_produto) === cod);
+  if (!produto) throw erroHttp(400, "Produto da NFeMail não encontrado.");
+  const manuais = await lerValoresManuais();
+  const texto = String(valor ?? "").trim();
+  if (!texto) {
+    delete manuais[cod];
+  } else {
+    // "0,08" ou "1.234,56" (vírgula decimal) ou 0.08.
+    const numero = Number(texto.includes(",") ? texto.replace(/\./g, "").replace(",", ".") : texto);
+    if (!(numero > 0) || numero > 1_000_000) throw erroHttp(400, "Informe um valor unitário maior que zero.");
+    manuais[cod] = { valor: Math.round(numero * 1e6) / 1e6, nome: produto.dsc_produto, por: usuario?.nome || null, em: new Date().toISOString() };
+  }
+  await salvarConfiguracao(CHAVE_VALORES_MANUAIS, manuais);
+  return { codigo: cod, valor: manuais[cod]?.valor ?? null };
+};
+
 export const lerVinculosCategorias = async () => (await lerConfiguracao(CHAVE_VINCULO_CATEGORIAS)) || {};
 export const salvarVinculosCategorias = async (vinculos) => {
   const limpos = Object.fromEntries(Object.entries(vinculos || {}).filter(([c, v]) => c.trim() && v).map(([c, v]) => [c.trim(), String(v)]));
@@ -350,7 +373,7 @@ export const prepararNota = async (pedidoId, opcoes = {}) => {
 
   const usarValorReal = Boolean(opcoes.usarValorReal);
   const semValorNFeMail = [];
-  const valoresSalvos = await lerValoresBaixosSalvos();
+  const [valoresSalvos, valoresManuais] = await Promise.all([lerValoresBaixosSalvos(), lerValoresManuais()]);
   const linhasNota = [...grupos.values()].map((g) => {
     // Valor baixo: o da NFeMail; se estiver vazio, o último que a NFeMail já
     // teve (guardado); senão o padrão da categoria; por fim o valor do site.
@@ -360,9 +383,12 @@ export const prepararNota = async (pedidoId, opcoes = {}) => {
     const valorPadrao = Number(VALORES_BAIXOS_PADRAO[codigo] || 0);
     const [valorCadastro, origemBaixo] =
       valorNFeMail > 0 ? [valorNFeMail, "NFEMAIL"] : valorSalvo > 0 ? [valorSalvo, "SALVO"] : valorPadrao > 0 ? [valorPadrao, "PADRAO"] : [0, null];
+    // Valor digitado à mão vale sempre (com valor baixo ou real).
+    const valorManual = Number(valoresManuais[codigo]?.valor || 0);
     const doCadastro = !usarValorReal && valorCadastro > 0;
-    if (!usarValorReal && !doCadastro) semValorNFeMail.push(g.nfe.dsc_produto);
-    const vProd = doCadastro ? arredondar(g.qCom * valorCadastro) : g.vProd;
+    if (!valorManual && !usarValorReal && !doCadastro) semValorNFeMail.push(g.nfe.dsc_produto);
+    const vUnCom = valorManual > 0 ? valorManual : doCadastro ? valorCadastro : g.qCom ? g.vProd / g.qCom : 0;
+    const vProd = valorManual > 0 ? arredondar(g.qCom * valorManual) : doCadastro ? arredondar(g.qCom * valorCadastro) : g.vProd;
     return {
       cProd: g.nfe.cod_alternativo || String(g.nfe.cod_produto),
       xProd: g.nfe.dsc_produto,
@@ -370,10 +396,12 @@ export const prepararNota = async (pedidoId, opcoes = {}) => {
       unidade: g.nfe.cod_unidade || "UN",
       qCom: g.qCom,
       vProd,
-      vUnCom: doCadastro ? valorCadastro : g.qCom ? g.vProd / g.qCom : 0,
+      vUnCom,
+      codigoNFe: codigo,
       valorSite: g.vProd,
       valorBaixo: valorCadastro || null,
-      origemValor: doCadastro ? origemBaixo : "SITE",
+      valorManual: valorManual || null,
+      origemValor: valorManual > 0 ? "MANUAL" : doCadastro ? origemBaixo : "SITE",
       produtosSite: g.produtosSite,
     };
   });
