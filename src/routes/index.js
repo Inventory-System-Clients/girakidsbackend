@@ -227,6 +227,7 @@ router.get("/dashboard/boletos", ...fin, dashboard.boletos);
 router.get("/cheques", ...fin, cheques.listar);
 router.get("/cheques/periodo", ...fin, cheques.periodo);
 router.put("/cheques/:id", ...fin, registrarLog("ATUALIZAR_CHEQUE", "Cheque"), cheques.atualizar);
+router.put("/cheques/:id/distribuir", ...fin, registrarLog("DIVIDIR_CHEQUES", "Cheque"), cheques.distribuir);
 router.post("/cheques/:id/status", ...fin, registrarLog("STATUS_CHEQUE", "Cheque"), cheques.alterarStatus);
 router.get("/dashboard/analise", ...fin, dashboard.analise);
 router.get("/dashboard/tendencias", ...fin, dashboard.tendencias);

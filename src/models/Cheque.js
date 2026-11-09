@@ -12,6 +12,8 @@ const Cheque = sequelize.define(
     pedidoId: { type: DataTypes.UUID, allowNull: false },
     parcelaId: { type: DataTypes.UUID, allowNull: true },
     valor: { type: DataTypes.DECIMAL(12, 2), allowNull: false },
+    // Pedido/parcela dividido em vários cheques: posição (0, 1, 2...).
+    ordem: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
     recebidoEm: { type: DataTypes.DATEONLY, allowNull: true },
     numero: { type: DataTypes.STRING(40), allowNull: true },
     banco: { type: DataTypes.STRING(100), allowNull: true },
