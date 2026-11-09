@@ -487,6 +487,7 @@ export const editar = async (req, res) => {
         creditoUsado: Number(pedido.creditoUsado),
         formaPagamento: pedido.formaPagamento,
         parcelasCartao: pedido.parcelasCartao,
+        composicaoPagamento: pedido.composicaoPagamento,
       });
       atualizacao.taxas = taxas;
       atualizacao.total = total;
@@ -512,7 +513,7 @@ export const alterarFormaPagamento = async (req, res) => {
     await sequelize.transaction(async (transaction) => {
       const pedido = await carregarParaAlterar(req.params.id, transaction);
       garantirNaoCancelado(pedido);
-      const { taxas, total } = await calcularTotais({
+      const { taxas, total, composicao } = await calcularTotais({
         subtotal: Number(pedido.subtotal),
         desconto: Number(pedido.desconto),
         frete: Number(pedido.frete),
@@ -520,9 +521,11 @@ export const alterarFormaPagamento = async (req, res) => {
         creditoUsado: Number(pedido.creditoUsado),
         formaPagamento,
         parcelasCartao,
+        composicaoPagamento,
       });
       if (formaPagamento === "MESCLA") {
-        const linhas = (composicaoPagamento || []).filter((l) => numero(l.valor) > 0);
+        // Parte no cartão com a taxa dela já somada (valorCobrado).
+        const linhas = composicao;
         if (!linhas.length) throw erroHttp(400, "Mescla inválida.");
         await PedidoParcela.update(
           { status: "CANCELADA" },
@@ -533,7 +536,7 @@ export const alterarFormaPagamento = async (req, res) => {
           linhas.map((linha, i) => ({
             pedidoId: pedido.id,
             numero: ultimo + i + 1,
-            valor: numero(linha.valor),
+            valor: linha.valorCobrado,
             metodoPrevisto: linha.metodo,
             vencimento: linha.vencimento || hojeISO(),
             usuarioNome: req.usuario.nome,
@@ -545,7 +548,7 @@ export const alterarFormaPagamento = async (req, res) => {
         {
           formaPagamento,
           parcelasCartao: parcelasCartao || null,
-          composicaoPagamento: formaPagamento === "MESCLA" ? composicaoPagamento : null,
+          composicaoPagamento: formaPagamento === "MESCLA" ? composicao : null,
           taxas,
           total,
           ...(pedido.pendenciaStatus === "ABERTA"

@@ -84,6 +84,26 @@ export const percentualTaxa = async (forma, parcelasCartao) => {
   return Number(taxas[forma] ?? config.taxa ?? 0);
 };
 
+// Mescla de pagamentos: cada linha traz a parte do valor (sem taxa) que vai
+// por aquela forma. A parte no cartão (maquininha, link...) ganha a mesma taxa
+// que o pedido inteiro teria nessa forma e parcelas; as outras formas, a taxa
+// delas (PIX, boleto etc. = 0). Linha antiga de cartão sem "parcelas" (de
+// antes da taxa na mescla) fica sem taxa, para não mudar pedidos já feitos.
+const ehCartao = (metodo) => Boolean(FORMAS_PAGAMENTO[metodo]?.cartao) || metodo === "CREDITO_ONLINE";
+export const calcularMescla = async (linhas) =>
+  Promise.all(
+    (Array.isArray(linhas) ? linhas : [])
+      .filter((l) => l && numero(l.valor) > 0)
+      .map(async (l) => {
+        const valor = arredondar(numero(l.valor));
+        const cartao = ehCartao(l.metodo);
+        const parcelas = cartao && l.parcelas != null ? Math.min(12, Math.max(1, Math.round(Number(l.parcelas) || 1))) : null;
+        const percentual = cartao && parcelas == null ? 0 : await percentualTaxa(l.metodo, parcelas);
+        const taxa = arredondar((valor * percentual) / 100);
+        return { metodo: l.metodo, valor, vencimento: l.vencimento || null, parcelas, percentualTaxa: percentual, taxa, valorCobrado: arredondar(valor + taxa) };
+      }),
+  );
+
 export const calcularTotais = async ({
   subtotal,
   desconto = 0,
@@ -92,11 +112,17 @@ export const calcularTotais = async ({
   creditoUsado = 0,
   formaPagamento,
   parcelasCartao,
+  composicaoPagamento,
 }) => {
   const base = Math.max(0, subtotal - desconto - creditoUsado) + frete + freteAdicional;
+  if (formaPagamento === "MESCLA") {
+    const composicao = await calcularMescla(composicaoPagamento);
+    const taxas = arredondar(composicao.reduce((s, l) => s + l.taxa, 0));
+    return { taxas, total: arredondar(base + taxas), percentualTaxa: base > 0 ? arredondar((taxas / base) * 100) : 0, composicao };
+  }
   const percentual = await percentualTaxa(formaPagamento, parcelasCartao);
   const taxas = arredondar((base * percentual) / 100);
-  return { taxas, total: arredondar(base + taxas), percentualTaxa: percentual };
+  return { taxas, total: arredondar(base + taxas), percentualTaxa: percentual, composicao: null };
 };
 
 // Cliente pode "combinar com o comercial" (A_DEFINIR) quando a entrega é por
@@ -428,7 +454,7 @@ export const criarPedido = async (corpo, usuario, tipo = "PEDIDO", { reabrirId =
       ? Math.min(creditoDisponivel, Math.max(0, subtotal - desconto))
       : 0;
     const parcelasCartao = corpo.parcelasCartao ? Number(corpo.parcelasCartao) : null;
-    const { taxas, total } = await calcularTotais({
+    const { taxas, total, composicao } = await calcularTotais({
       subtotal,
       desconto,
       frete,
@@ -436,6 +462,7 @@ export const criarPedido = async (corpo, usuario, tipo = "PEDIDO", { reabrirId =
       creditoUsado,
       formaPagamento,
       parcelasCartao,
+      composicaoPagamento: corpo.composicaoPagamento,
     });
 
     const transportadora = viaBraspress
@@ -464,7 +491,7 @@ export const criarPedido = async (corpo, usuario, tipo = "PEDIDO", { reabrirId =
         total,
         formaPagamento,
         parcelasCartao,
-        composicaoPagamento: formaPagamento === "MESCLA" ? corpo.composicaoPagamento || [] : null,
+        composicaoPagamento: formaPagamento === "MESCLA" ? composicao : null,
         orcamentoOrigemId: corpo.orcamentoOrigemId || null,
     };
     let pedido;
@@ -510,13 +537,13 @@ export const criarPedido = async (corpo, usuario, tipo = "PEDIDO", { reabrirId =
     );
 
     // Mescla: cada forma vira uma parcela em aberto com seu vencimento.
+    // A parcela no cartão já vem com a taxa dela (valorCobrado).
     if (tipo === "PEDIDO" && formaPagamento === "MESCLA") {
-      const linhas = (corpo.composicaoPagamento || []).filter((l) => numero(l.valor) > 0);
       await PedidoParcela.bulkCreate(
-        linhas.map((linha, indice) => ({
+        composicao.map((linha, indice) => ({
           pedidoId: pedido.id,
           numero: indice + 1,
-          valor: numero(linha.valor),
+          valor: linha.valorCobrado,
           metodoPrevisto: linha.metodo,
           vencimento: linha.vencimento || hojeISO(),
           usuarioNome: usuario.nome,
