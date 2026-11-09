@@ -16,6 +16,7 @@ import PedidoCustoExtra from "./PedidoCustoExtra.js";
 import CredencialPagamento from "./CredencialPagamento.js";
 import { WhatsappMensagem, WhatsappOptOut } from "./Whatsapp.js";
 import { PreRecebimento, PreRecebimentoItem, OrdemMontagem } from "./PreRecebimento.js";
+import Cheque from "./Cheque.js";
 
 Produto.belongsTo(Parceiro, {
   foreignKey: "fornecedorPreferencialId",
@@ -75,4 +76,5 @@ export {
   CredencialPagamento,
   WhatsappMensagem,
   WhatsappOptOut,
+  Cheque,
 };
