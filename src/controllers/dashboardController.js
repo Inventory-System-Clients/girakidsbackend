@@ -10,7 +10,7 @@ import {
   Categoria,
 } from "../models/index.js";
 import { lerConfiguracao, salvarConfiguracao } from "../models/Configuracao.js";
-import { serializarPedido } from "../services/pedidoService.js";
+import { formatarNumero, serializarPedido } from "../services/pedidoService.js";
 import {
   arredondar,
   dataISO,
@@ -149,6 +149,56 @@ const segundaDaSemana = (data) => {
 };
 const chaveCliente = (pedido) => pedido.clienteId || (pedido.documento ? `doc:${pedido.documento}` : `nome:${(pedido.clienteNome || "").trim().toLowerCase()}`);
 
+// O que entrou de cada pedido, por forma e por banco: as parcelas recebidas.
+// Pedido pago sem parcela que cubra o total (ex.: pago online) conta o resto
+// na forma do pedido, com banco não informado.
+const recebidoDoPedido = (pedido) => {
+  const linhas = (pedido.parcelas || [])
+    .filter((p) => p.status === "RECEBIDA")
+    .map((p) => ({ forma: p.metodoRecebido || p.metodoPrevisto || pedido.formaPagamento, banco: p.bancoRecebedor || null, valor: Number(p.valor) }));
+  if (pedido.statusFinanceiro === "PAGO") {
+    const resto = arredondar(Number(pedido.total) - linhas.reduce((s, l) => s + l.valor, 0));
+    if (resto > 0.009) linhas.push({ forma: pedido.formaPagamento, banco: null, valor: resto });
+  }
+  return linhas;
+};
+
+// Agrupa linhas { chave, valor } somando valor e pedidos distintos, com %.
+const agruparValores = (entradas, nomeChave) => {
+  const mapa = new Map();
+  for (const { chave, valor, pedidoId } of entradas) {
+    const k = chave || null;
+    const g = mapa.get(k) || { [nomeChave]: k, valor: 0, pedidos: new Set() };
+    g.valor += valor;
+    g.pedidos.add(pedidoId);
+    mapa.set(k, g);
+  }
+  const total = [...mapa.values()].reduce((s, g) => s + g.valor, 0);
+  return [...mapa.values()]
+    .map((g) => ({ ...g, valor: arredondar(g.valor), pedidos: g.pedidos.size, percentual: total > 0 ? arredondar((g.valor / total) * 100) : 0 }))
+    .sort((a, b) => b.valor - a.valor);
+};
+
+const porBanco = (pedidos) =>
+  agruparValores(pedidos.flatMap((p) => recebidoDoPedido(p).map((l) => ({ chave: l.banco, valor: l.valor, pedidoId: p.id }))), "banco");
+
+// Boleto ainda não pago de um pedido em aberto: as parcelas em aberto de
+// boleto (cada uma com seu vencimento) ou, sem parcelas em aberto, o saldo do
+// pedido de forma "Boleto".
+const boletosEmAberto = (pedido) => {
+  if (pedido.statusFinanceiro === "PAGO") return [];
+  const abertas = (pedido.parcelas || []).filter((p) => p.status === "ABERTA");
+  if (abertas.length) {
+    return abertas
+      .filter((p) => p.metodoPrevisto === "BOLETO")
+      .map((p) => ({ parcelaId: p.id, parcelaNumero: p.numero, valor: Number(p.valor), vencimento: p.vencimento || null }));
+  }
+  if (pedido.formaPagamento !== "BOLETO") return [];
+  const recebido = (pedido.parcelas || []).filter((p) => p.status === "RECEBIDA").reduce((s, p) => s + Number(p.valor), 0);
+  const saldo = arredondar(Number(pedido.total) - recebido);
+  return saldo > 0.009 ? [{ parcelaId: null, parcelaNumero: null, valor: saldo, vencimento: null }] : [];
+};
+
 // Recebimentos: pedidos marcados como pago no período (data do pagamento),
 // sem relação com a data do pedido ou da expedição. Pedidos antigos
 // importados sem data de pagamento usam a data do pedido.
@@ -163,8 +213,8 @@ const pagosNoPeriodo = async ({ de, ate }) => {
         { pagoEm: null, createdAt: { [Op.between]: [de, ate] } },
       ],
     },
-    attributes: ["total", "taxas", "formaPagamento", "createdAt"],
-    raw: true,
+    attributes: ["id", "total", "taxas", "formaPagamento", "statusFinanceiro", "createdAt"],
+    include: [{ model: PedidoParcela, as: "parcelas", attributes: ["status", "valor", "metodoPrevisto", "metodoRecebido", "bancoRecebedor"] }],
   });
   const formas = new Map();
   const r = { pedidos: 0, valor: 0, taxas: 0, doPeriodo: 0, deAntes: 0 };
@@ -188,6 +238,8 @@ const pagosNoPeriodo = async ({ de, ate }) => {
     doPeriodo: arredondar(r.doPeriodo),
     deAntes: arredondar(r.deAntes),
     porForma: [...formas.values()].map((f) => ({ ...f, valor: arredondar(f.valor) })).sort((a, b) => b.valor - a.valor),
+    // Para qual banco foi cada pagamento desses pedidos.
+    porBanco: porBanco(pedidos),
   };
 };
 
@@ -263,7 +315,8 @@ export const resumo = async (req, res) => {
     const [pagos, comparativo, clientes] = await Promise.all([pagosNoPeriodo(p), comparativoMes(), clientesNovosRecorrentes(pedidos, p.de)]);
 
     const card = () => ({ pedidos: 0, bruta: 0, liquida: 0 });
-    const cards = { total: card(), recebida: card(), aberto: card(), aguardando: card() };
+    const cards = { total: card(), recebida: card(), aberto: card(), boletos: card(), aguardando: card() };
+    const recebidoPorForma = [];
     const semana = DIAS.map((dia) => ({ dia, pedidos: 0, bruta: 0, liquida: 0, vendaItens: 0, margem: 0 }));
     const extras = { taxas: 0, frete: 0, desconto: 0, custoItens: 0, custosPosVenda: 0 };
     const semanas = new Map();
@@ -285,8 +338,24 @@ export const resumo = async (req, res) => {
         c.liquida += a.liquida;
       };
       somar(cards.total);
-      if (pedido.statusFinanceiro === "PAGO") somar(cards.recebida);
-      else somar(cards.aberto);
+      if (pedido.statusFinanceiro === "PAGO") {
+        somar(cards.recebida);
+        for (const l of recebidoDoPedido(pedido)) recebidoPorForma.push({ chave: l.forma, valor: l.valor, pedidoId: pedido.id });
+      } else {
+        // Em aberto dividido: o boleto ainda não pago vai para a box "Boletos".
+        const boleto = boletosEmAberto(pedido).reduce((s, b) => s + b.valor, 0);
+        const parte = a.total > 0 ? Math.min(1, boleto / a.total) : 0;
+        if (boleto > 0) {
+          cards.boletos.pedidos += 1;
+          cards.boletos.bruta += boleto;
+          cards.boletos.liquida += a.liquida * parte;
+        }
+        if (parte < 0.9999) {
+          cards.aberto.pedidos += 1;
+          cards.aberto.bruta += a.total - boleto;
+          cards.aberto.liquida += a.liquida * (1 - parte);
+        }
+      }
       if (pedido.statusVendas !== "LIBERADO") somar(cards.aguardando);
 
       extras.taxas += Number(pedido.taxas);
@@ -320,6 +389,8 @@ export const resumo = async (req, res) => {
       periodo: { inicio: p.inicio, fim: p.fim },
       atualizadoEm: new Date(),
       cards: Object.fromEntries(Object.entries(cards).map(([k, v]) => [k, arredondarCard(v)])),
+      // Receita recebida (pedidos do período já pagos) por forma de pagamento.
+      recebidaPorForma: agruparValores(recebidoPorForma, "forma"),
       extras: {
         ...Object.fromEntries(Object.entries(extras).map(([k, v]) => [k, arredondar(v)])),
         ticketMedio: cards.total.pedidos ? arredondar(cards.total.bruta / cards.total.pedidos) : 0,
@@ -347,6 +418,8 @@ export const resumo = async (req, res) => {
         topClientes: [...porCliente.values()].sort((a, b) => b.bruta - a.bruta).slice(0, 7).map(arredondarBruta),
         horas: horas.map(arredondarBruta),
         formas: [...formas.values()].sort((a, b) => b.bruta - a.bruta).map(arredondarBruta),
+        // Para qual banco foi cada pagamento já registrado dos pedidos do período.
+        bancos: porBanco(pedidos),
         clientes,
         comparativo,
       },
@@ -958,5 +1031,66 @@ export const tendencias = async (req, res) => {
     });
   } catch (error) {
     responderErro(res, error, "Erro ao carregar tendências");
+  }
+};
+
+// ---------------------------------------------------------------------------
+// Boletos aguardando pagamento
+// ---------------------------------------------------------------------------
+
+// Boletos ainda não pagos. Filtro pelo vencimento (padrão; boleto sem
+// vencimento usa a data do pedido) ou pela data do pedido.
+export const boletos = async (req, res) => {
+  try {
+    const p = periodo(req.query);
+    const porPedido = req.query.por === "pedido";
+    const comParcela = await PedidoParcela.findAll({ where: { status: "ABERTA", metodoPrevisto: "BOLETO" }, attributes: ["pedidoId"], raw: true });
+    const pedidos = await Pedido.findAll({
+      where: {
+        tipo: "PEDIDO",
+        statusVendas: { [Op.ne]: "CANCELADO" },
+        statusFinanceiro: { [Op.ne]: "PAGO" },
+        [Op.or]: [{ formaPagamento: "BOLETO" }, { id: [...new Set(comParcela.map((c) => c.pedidoId))] }],
+      },
+      include: [{ model: PedidoParcela, as: "parcelas" }],
+      order: [["numero", "DESC"]],
+    });
+    const hoje = hojeISO();
+    const linhas = [];
+    for (const pedido of pedidos) {
+      const dataPedido = dataISO(pedido.createdAt);
+      for (const b of boletosEmAberto(pedido)) {
+        const vencimento = b.vencimento || dataPedido;
+        const referencia = porPedido ? dataPedido : vencimento;
+        if (referencia < p.inicio || referencia > p.fim) continue;
+        linhas.push({
+          ...b,
+          valor: arredondar(b.valor),
+          vencimento,
+          semVencimento: !b.vencimento,
+          vencido: vencimento < hoje,
+          pedidoId: pedido.id,
+          numero: pedido.numero,
+          numeroFormatado: formatarNumero(pedido),
+          clienteNome: pedido.clienteNome,
+          clienteTelefone: pedido.clienteTelefone,
+          dataPedido,
+          totalPedido: Number(pedido.total),
+          formaPagamento: pedido.formaPagamento,
+          statusVendas: pedido.statusVendas,
+        });
+      }
+    }
+    linhas.sort((a, b) => a.vencimento.localeCompare(b.vencimento) || b.numero - a.numero);
+    res.json({
+      periodo: { inicio: p.inicio, fim: p.fim },
+      por: porPedido ? "pedido" : "vencimento",
+      linhas,
+      total: arredondar(linhas.reduce((s, l) => s + l.valor, 0)),
+      vencidos: arredondar(linhas.filter((l) => l.vencido).reduce((s, l) => s + l.valor, 0)),
+      pedidos: new Set(linhas.map((l) => l.pedidoId)).size,
+    });
+  } catch (error) {
+    responderErro(res, error, "Erro ao listar boletos");
   }
 };

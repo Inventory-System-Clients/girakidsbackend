@@ -32,6 +32,7 @@ import {
 import { cotarFrete } from "../services/freteService.js";
 import { statusPagamentos } from "../services/pagamentos/index.js";
 import { lerConfiguracao, salvarConfiguracao } from "../models/Configuracao.js";
+import { bancoValido } from "./bancoController.js";
 import { ENDERECO_LOJA_PADRAO, FORMAS_PAGAMENTO, FORMAS_SHOWROOM } from "../utils/formasPagamento.js";
 import {
   arredondar,
@@ -650,6 +651,7 @@ const marcarPagoSeQuitado = async (pedido, usuario, transaction, observacao) => 
 export const confirmarPagamento = async (req, res) => {
   try {
     const { observacao, metodo, data, liberar: liberarJunto = true } = req.body || {};
+    const banco = await bancoValido(req.body?.banco);
     await sequelize.transaction(async (transaction) => {
       const pedido = await carregarParaAlterar(req.params.id, transaction);
       garantirNaoCancelado(pedido);
@@ -671,6 +673,7 @@ export const confirmarPagamento = async (req, res) => {
             vencimento: data || hojeISO(),
             status: "RECEBIDA",
             recebidaEm: data || hojeISO(),
+            bancoRecebedor: banco,
             observacao: observacao || null,
             usuarioNome: req.usuario.nome,
           },
@@ -704,6 +707,7 @@ export const registrarRecebimento = async (req, res) => {
     const valorNum = arredondar(numero(valor));
     if (valorNum <= 0) throw erroHttp(400, "Informe o valor recebido.");
     if (!metodo) throw erroHttp(400, "Selecione o método.");
+    const banco = await bancoValido(req.body?.banco);
     await sequelize.transaction(async (transaction) => {
       const pedido = await carregarParaAlterar(req.params.id, transaction);
       garantirNaoCancelado(pedido);
@@ -722,6 +726,7 @@ export const registrarRecebimento = async (req, res) => {
           vencimento: data || hojeISO(),
           status: "RECEBIDA",
           recebidaEm: data || hojeISO(),
+          bancoRecebedor: banco,
           observacao: observacao || null,
           usuarioNome: req.usuario.nome,
         },
@@ -774,6 +779,7 @@ export const adicionarParcela = async (req, res) => {
 export const atualizarParcela = async (req, res) => {
   try {
     const { acao, valor, metodoPrevisto, metodoRecebido, vencimento, recebidaEm, observacao } = req.body || {};
+    const banco = req.body?.banco !== undefined ? await bancoValido(req.body.banco) : undefined;
     await sequelize.transaction(async (transaction) => {
       const pedido = await carregarParaAlterar(req.params.id, transaction);
       const parcela = pedido.parcelas.find((p) => p.id === req.params.parcelaId);
@@ -787,6 +793,7 @@ export const atualizarParcela = async (req, res) => {
             status: "RECEBIDA",
             metodoRecebido: metodoRecebido || parcela.metodoPrevisto,
             recebidaEm: recebidaEm || hojeISO(),
+            bancoRecebedor: banco ?? parcela.bancoRecebedor,
             observacao: observacao ?? parcela.observacao,
             usuarioNome: req.usuario.nome,
           },
@@ -811,6 +818,7 @@ export const atualizarParcela = async (req, res) => {
             metodoRecebido: metodoRecebido ?? parcela.metodoRecebido,
             vencimento: vencimento ?? parcela.vencimento,
             recebidaEm: recebidaEm ?? parcela.recebidaEm,
+            bancoRecebedor: banco !== undefined ? banco : parcela.bancoRecebedor,
             observacao: observacao ?? parcela.observacao,
           },
           { transaction },

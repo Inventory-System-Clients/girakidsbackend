@@ -29,6 +29,7 @@ import * as recebimentos from "../controllers/recebimentoController.js";
 import * as whatsapp from "../controllers/whatsappController.js";
 import * as legado from "../controllers/sincronizacaoLegadoController.js";
 import * as compras from "../controllers/compraController.js";
+import * as bancos from "../controllers/bancoController.js";
 import { limitarTaxa } from "../utils/linkSeguro.js";
 import { cotarBraspressSite, diagnosticoBraspress } from "../services/braspressService.js";
 import transportadoraRoutes from "./transportadora.routes.js";
@@ -121,6 +122,9 @@ router.post("/pedidos/:id/nfe/danfe", autenticar, exigirPermissao("VENDAS", "FIN
 router.post("/pedidos/:id/nfe/emitir", autenticar, exigirPermissao("VENDAS", "FINANCEIRO", "COMERCIAL"), registrarLog("EMITIR_NFE", "Pedido"), nfeEmissao.emitir);
 router.put("/pedidos/:id/nota-fiscal", autenticar, exigirPermissao("VENDAS", "EXPEDICAO", "FINANCEIRO"), registrarLog("NOTA_FISCAL_PEDIDO", "Pedido"), pedidos.atualizarNotaFiscal);
 router.post("/pedidos/:id/confirmar-pagamento", autenticar, vendasOuFinanceiro, registrarLog("CONFIRMAR_PAGAMENTO", "Pedido"), pedidos.confirmarPagamento);
+// Bancos que recebem os pagamentos (escolhidos ao confirmar/quitar).
+router.get("/financeiro/bancos", autenticar, vendasOuFinanceiro, bancos.listar);
+router.post("/financeiro/bancos", autenticar, vendasOuFinanceiro, registrarLog("CRIAR_BANCO_RECEBEDOR", "Configuracao"), bancos.criar);
 router.post("/pedidos/:id/recebimentos", autenticar, vendasOuFinanceiro, registrarLog("REGISTRAR_RECEBIMENTO", "Pedido"), pedidos.registrarRecebimento);
 router.post("/pedidos/:id/parcelas", autenticar, vendasOuFinanceiro, registrarLog("ADICIONAR_PARCELA", "Pedido"), pedidos.adicionarParcela);
 router.put("/pedidos/:id/parcelas/:parcelaId", autenticar, vendasOuFinanceiro, registrarLog("ATUALIZAR_PARCELA", "Pedido"), pedidos.atualizarParcela);
@@ -216,6 +220,7 @@ router.get("/dashboard/resumo", ...fin, dashboard.resumo);
 router.get("/dashboard/meta", ...fin, dashboard.meta);
 router.put("/dashboard/metas", ...fin, registrarLog("SALVAR_METAS", "Configuracao"), dashboard.salvarMetas);
 router.get("/dashboard/expedidos", ...fin, dashboard.expedidos);
+router.get("/dashboard/boletos", ...fin, dashboard.boletos);
 router.get("/dashboard/analise", ...fin, dashboard.analise);
 router.get("/dashboard/tendencias", ...fin, dashboard.tendencias);
 router.get("/dashboard/produtos-ativos", autenticar, exigirPermissao("FINANCEIRO", "PRODUTOS"), dashboard.produtosAtivos);

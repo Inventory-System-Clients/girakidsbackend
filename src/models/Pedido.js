@@ -265,6 +265,8 @@ export const PedidoParcela = sequelize.define(
       defaultValue: "ABERTA",
     },
     recebidaEm: { type: DataTypes.DATEONLY, allowNull: true },
+    // Banco que recebeu (Bancos GK, Banco Leonardo...; ver bancoController).
+    bancoRecebedor: { type: DataTypes.STRING(100), allowNull: true },
     observacao: { type: DataTypes.TEXT, allowNull: true },
     usuarioNome: { type: DataTypes.STRING(150), allowNull: true },
   },
