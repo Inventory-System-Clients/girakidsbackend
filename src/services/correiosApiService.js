@@ -90,7 +90,7 @@ const autenticar = async () => {
   return sessao;
 };
 
-const requisitar = async (caminho, { method = "GET", corpo, tentarDeNovo = true } = {}) => {
+const requisitar = async (caminho, { method = "GET", corpo, tentarDeNovo = true, cabecalhos = {} } = {}) => {
   const { token } = await autenticar();
   const resposta = await fetch(`${BASE_URL}${caminho}`, {
     method,
@@ -98,12 +98,13 @@ const requisitar = async (caminho, { method = "GET", corpo, tentarDeNovo = true 
       Authorization: `Bearer ${token}`,
       Accept: "application/json, text/html, */*",
       ...(corpo ? { "Content-Type": "application/json" } : {}),
+      ...cabecalhos,
     },
     body: corpo ? JSON.stringify(corpo) : undefined,
   });
   if (resposta.status === 401 && tentarDeNovo) {
     sessao = null;
-    return requisitar(caminho, { method, corpo, tentarDeNovo: false });
+    return requisitar(caminho, { method, corpo, tentarDeNovo: false, cabecalhos });
   }
   return resposta;
 };
@@ -486,7 +487,7 @@ export const rastrearObjetoApi = async (codigo) => {
   if (!/^[A-Z]{2}\d{9}[A-Z]{2}$/.test(objeto)) throw erroHttp(400, "Código de rastreio inválido.");
   const guardado = cacheRastreio.get(objeto);
   if (guardado && Date.now() - guardado.em < MINUTOS_CACHE_RASTREIO * 60_000) return guardado.dados;
-  const resposta = await requisitar(`/srorastro/v1/objetos/${objeto}?resultado=T`);
+  const resposta = await requisitar(`/srorastro/v1/objetos/${objeto}?resultado=T`, { cabecalhos: { "Accept-Language": "pt-BR" } });
   const dados = await lerResposta(resposta);
   // 404: objeto ainda não entrou na base dos Correios (etiqueta gerada, não postado).
   if (!resposta.ok && resposta.status !== 404) {
