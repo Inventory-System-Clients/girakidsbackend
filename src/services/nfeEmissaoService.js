@@ -32,7 +32,7 @@ import {
   lerValoresBaixosSalvos,
   listarProdutosNFeMail,
 } from "./nfemailService.js";
-import { arredondar, erroHttp } from "../utils/helpers.js";
+import { arredondar, cnpjValido, erroHttp } from "../utils/helpers.js";
 
 export const ALIQUOTA_CREDITO_PADRAO = 2.73;
 export const CHAVE_VINCULO_CATEGORIAS = "nfeVinculoCategorias";
@@ -439,6 +439,22 @@ export const prepararNota = async (pedidoId, opcoes = {}) => {
   if (Number(opcoes.qVol) > 0) transporte.qVol = Math.round(Number(opcoes.qVol));
   if (Number(opcoes.pesoKg) > 0) transporte.pesoL = transporte.pesoB = Number(opcoes.pesoKg);
 
+  // Transportadora sem CNPJ no cadastro: o CNPJ digitado na tela vai na nota
+  // (obrigatório) e fica salvo na transportadora ao emitir.
+  if (transporte.transportadora && transporte.transportadora !== CORREIOS && digitos(transporte.transportadora.cnpj).length !== 14) {
+    transporte.semCnpjCadastrado = true;
+    const digitado = digitos(opcoes.transportadoraCnpj);
+    if (digitado.length === 14 && cnpjValido(digitado)) {
+      transporte.transportadora = { ...transporte.transportadora, cnpj: digitado };
+    } else if (transporte.modFrete !== "9") {
+      bloqueios.push(
+        digitado.length === 14
+          ? "CNPJ da transportadora inválido: confira os números."
+          : `Digite o CNPJ da transportadora ${transporte.transportadora.nome}: ela não tem CNPJ cadastrado.`,
+      );
+    }
+  }
+
   const tPag = String(opcoes.tPag || pagamentoPadrao(pedido.formaPagamento));
   const pagamento = { tPag, indPag: PAGAMENTOS_NF[tPag]?.indPag ?? "1", nome: PAGAMENTOS_NF[tPag]?.nome || tPag, vPag: vNF };
   if (!opcoes.tPag && juntos.some((p) => pagamentoPadrao(p.formaPagamento) !== tPag)) {
@@ -559,6 +575,16 @@ const descreverSituacao = (n) =>
 export const emitirNota = async (pedidoId, opcoes, usuario) => {
   const nota = await prepararNota(pedidoId, opcoes);
   if (nota.bloqueios.length) throw erroHttp(400, nota.bloqueios.join(" "));
+
+  // CNPJ digitado da transportadora fica no cadastro dela para as próximas notas.
+  if (nota.transporte.semCnpjCadastrado && digitos(nota.transporte.transportadora?.cnpj).length === 14) {
+    const { transportadoraId } = (await Pedido.findByPk(pedidoId, { attributes: ["transportadoraId"] })) || {};
+    if (transportadoraId) {
+      await Parceiro.update({ documento: digitos(nota.transporte.transportadora.cnpj) }, { where: { id: transportadoraId } }).catch((e) =>
+        console.warn("[NF-e] CNPJ da transportadora não salvo:", e.message),
+      );
+    }
+  }
 
   // Vínculos escolhidos na tela ficam salvos no produto para as próximas notas.
   for (const [produtoId, codigo] of Object.entries(opcoes.vinculos || {})) {
