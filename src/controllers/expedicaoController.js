@@ -148,6 +148,7 @@ const listaUrls = (valor) =>
 export const salvarFotos = async (req, res) => {
   try {
     const pedido = await carregarLiberado(req.params.id);
+    if (pedido.statusExpedicao === "EXPEDIDO") throw erroHttp(400, "Pedido já expedido: as fotos não podem mais ser alteradas.");
     const imagensExpedicao = listaUrls(req.body?.imagensExpedicao);
     const imagensTransportadora = listaUrls(req.body?.imagensTransportadora);
     await pedido.update({
