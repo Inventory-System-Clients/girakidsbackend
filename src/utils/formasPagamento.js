@@ -11,7 +11,7 @@ export const FORMAS_PAGAMENTO = {
     nome: "Crédito link",
     cartao: true,
     contatoComercial: true,
-    aviso: "Depois de finalizar, fale com o comercial no WhatsApp para receber o link de pagamento do cartão.",
+    aviso: "Depois de finalizar, o botão \"Pagar com cartão\" aparece na tela do pedido assim que o comercial gerar o link (ou fale com ele no WhatsApp).",
   },
   LINK_PAGAMENTO: { nome: "Link de pagamento", admin: true, cartao: true },
   MAQUININHA: { nome: "Maquininha", admin: true, cartao: true },

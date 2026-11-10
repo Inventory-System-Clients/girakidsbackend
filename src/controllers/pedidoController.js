@@ -554,10 +554,13 @@ export const alterarFormaPagamento = async (req, res) => {
           { transaction },
         );
       }
+      const tirarLinkRede =
+        pedido.pagamentoLink && !FORMAS_PAGAMENTO[pedido.formaPagamento]?.online && !aceitaLinkRede(formaPagamento, composicao);
       await pedido.update(
         {
           formaPagamento,
           parcelasCartao: parcelasCartao || null,
+          ...(tirarLinkRede ? { pagamentoLink: null, pagamentoExpiraEm: null } : {}),
           composicaoPagamento: formaPagamento === "MESCLA" ? composicao : null,
           boletoConfig,
           taxas,
@@ -919,6 +922,80 @@ export const resolverAlertaPagamento = async (req, res) => {
 
 // Boletos de um pedido já existente (criar ou refazer): data do primeiro e
 // quantidade, de 30 em 30 dias. Os boletos em aberto são trocados pelos novos.
+// ---------------------------------------------------------------------------
+// Link de pagamento da Rede (gerado pela equipe no portal da Rede e colado
+// aqui): o cliente vê o botão "Pagar com cartão" na tela do pedido.
+// ---------------------------------------------------------------------------
+
+const FORMAS_LINK_REDE = ["CREDITO_LINK", "LINK_PAGAMENTO"];
+const HOSTS_REDE = ["userede.com.br", "rede.com.br", "itau.com.br"];
+
+const aceitaLinkRede = (formaPagamento, composicao) =>
+  FORMAS_LINK_REDE.includes(formaPagamento) ||
+  (formaPagamento === "MESCLA" && (composicao || []).some((l) => FORMAS_LINK_REDE.includes(l.metodo)));
+
+// Só https e só domínios da Rede/Itaú (mais os de REDE_LINK_HOSTS, se a Rede
+// usar outro): evita que um link qualquer apareça para o cliente pagar.
+const lerLinkRede = (bruto) => {
+  const texto = String(bruto ?? "").trim();
+  if (!texto) return null;
+  let url;
+  try {
+    url = new URL(texto);
+  } catch {
+    throw erroHttp(400, "Cole o link completo gerado na Rede (começa com https://).");
+  }
+  if (url.protocol !== "https:" || url.username || url.password || texto.length > 1000) {
+    throw erroHttp(400, "Link inválido: use o link https gerado no portal da Rede.");
+  }
+  const host = url.hostname.toLowerCase();
+  const extras = String(process.env.REDE_LINK_HOSTS || "")
+    .split(",")
+    .map((h) => h.trim().toLowerCase())
+    .filter(Boolean);
+  if (![...HOSTS_REDE, ...extras].some((h) => host === h || host.endsWith(`.${h}`))) {
+    throw erroHttp(400, `Esse link não é da Rede/Itaú (${host}). Confira se copiou o link certo.`);
+  }
+  return url.toString();
+};
+
+// Vencimento do link (AAAA-MM-DD, até 30 dias): vale até o fim do dia.
+const lerVencimentoLink = (valor) => {
+  const texto = String(valor || "");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(texto)) throw erroHttp(400, "Informe o vencimento do link.");
+  const fim = new Date(`${texto}T23:59:59-03:00`);
+  const dias = (fim - Date.now()) / 86_400_000;
+  if (Number.isNaN(fim.getTime()) || dias < 0 || dias > 31) throw erroHttp(400, "Vencimento do link inválido.");
+  return fim;
+};
+
+export const salvarLinkRede = async (req, res) => {
+  try {
+    const link = lerLinkRede(req.body?.link);
+    const expiraEm = link ? lerVencimentoLink(req.body?.vencimento) : null;
+    await sequelize.transaction(async (transaction) => {
+      const pedido = await carregarParaAlterar(req.params.id, transaction);
+      garantirNaoCancelado(pedido);
+      if (link && pedido.statusFinanceiro === "PAGO") throw erroHttp(400, "Pedido já pago.");
+      if (FORMAS_PAGAMENTO[pedido.formaPagamento]?.online) throw erroHttp(400, "Este pedido usa pagamento online: o link é gerado pelo banco.");
+      if (link && !aceitaLinkRede(pedido.formaPagamento, pedido.composicaoPagamento)) {
+        throw erroHttp(400, "Mude a forma de pagamento do pedido para Crédito link primeiro.");
+      }
+      await pedido.update(
+        {
+          pagamentoLink: link,
+          pagamentoExpiraEm: expiraEm,
+          historico: evento(pedido, req.usuario, link ? "LINK_REDE" : "LINK_REDE_REMOVIDO", link ? { vencimento: req.body.vencimento } : {}),
+        },
+        { transaction },
+      );
+    });
+    await responderPedido(res, req.params.id);
+  } catch (error) {
+    responderErro(res, error, "Erro ao salvar o link de pagamento");
+  }
+};
+
 export const definirBoletos = async (req, res) => {
   try {
     const config = lerBoletoConfig(req.body);
