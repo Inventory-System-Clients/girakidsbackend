@@ -29,6 +29,12 @@ export const preencherUsuariosPeloPedido = () =>
 // Cria/ajusta as tabelas a partir dos models (alter: só adiciona colunas e
 // ajusta tipos; não apaga dados) e garante o administrador inicial.
 export const sincronizarBanco = async () => {
+  // Papel novo no enum dos usuários (o sync não acrescenta valor em enum).
+  try {
+    await sequelize.query(`ALTER TYPE "enum_usuarios_role" ADD VALUE IF NOT EXISTS 'FORNECEDOR'`);
+  } catch (error) {
+    console.warn("[migrate] Papel FORNECEDOR:", error.message);
+  }
   await sequelize.sync({ alter: process.env.DB_SYNC_ALTER !== "false" });
 
   // Logs de atividade sobrevivem à exclusão do usuário (o sync não remove o

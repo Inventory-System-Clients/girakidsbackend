@@ -31,6 +31,7 @@ import * as legado from "../controllers/sincronizacaoLegadoController.js";
 import * as compras from "../controllers/compraController.js";
 import * as bancos from "../controllers/bancoController.js";
 import * as cheques from "../controllers/chequeController.js";
+import * as portalFornecedor from "../controllers/portalFornecedorController.js";
 import { limitarTaxa } from "../utils/linkSeguro.js";
 import { cotarBraspressSite, diagnosticoBraspress } from "../services/braspressService.js";
 import transportadoraRoutes from "./transportadora.routes.js";
@@ -176,6 +177,10 @@ router.post("/entradas/recebimentos/:id/estornar", ...ent, registrarLog("ESTORNA
 // Recebimentos (pré-recebimento com link do fornecedor, montagem em cápsula)
 const rec = [autenticar, exigirPermissao("RECEBIMENTOS")];
 router.get("/recebimentos/alertas", ...rec, recebimentos.alertas);
+// Login e itens de cada fornecedor (portal do fornecedor).
+router.get("/recebimentos/fornecedores/:id/acesso", ...rec, portalFornecedor.obterAcesso);
+router.put("/recebimentos/fornecedores/:id/acesso", ...rec, registrarLog("ACESSO_FORNECEDOR", "Parceiro"), portalFornecedor.salvarAcesso);
+router.put("/recebimentos/fornecedores/:id/produtos", ...rec, registrarLog("ITENS_FORNECEDOR", "Parceiro"), portalFornecedor.definirProdutos);
 router.get("/recebimentos/produtos", ...rec, recebimentos.buscarProdutos);
 router.get("/recebimentos/historico", ...rec, recebimentos.historico);
 router.get("/recebimentos/montagem", ...rec, recebimentos.montagem);
@@ -201,6 +206,11 @@ router.delete("/recebimentos/:id", ...rec, registrarLog("EXCLUIR_PRE_RECEBIMENTO
 // Link público do fornecedor (sem login; token no cabeçalho, nunca na URL
 // do servidor, e limite de tentativas por IP).
 const publicoFornecedor = limitarTaxa({ janelaMs: 60_000, maximo: 30 });
+// Portal do fornecedor (login FORNECEDOR: só estas rotas; ver auth.js).
+router.get("/portal-fornecedor/dados", autenticar, portalFornecedor.meusDados);
+router.get("/portal-fornecedor/pre-recebimentos", autenticar, portalFornecedor.meusPreRecebimentos);
+router.post("/portal-fornecedor/pre-recebimentos", autenticar, limitarTaxa({ janelaMs: 60_000, maximo: 20 }), portalFornecedor.criarMeu);
+router.put("/portal-fornecedor/pre-recebimentos/:id", autenticar, limitarTaxa({ janelaMs: 60_000, maximo: 30 }), portalFornecedor.responderMeu);
 router.get("/publico/pre-recebimento", publicoFornecedor, recebimentos.publicoObter);
 router.put("/publico/pre-recebimento", publicoFornecedor, recebimentos.publicoResponder);
 

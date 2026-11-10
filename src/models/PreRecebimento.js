@@ -52,6 +52,8 @@ export const PreRecebimento = sequelize.define(
     canceladoPor: { type: DataTypes.STRING(150), allowNull: true },
     motivoCancelamento: { type: DataTypes.TEXT, allowNull: true },
     criadoPor: { type: DataTypes.STRING(150), allowNull: true },
+    // Criado pelo próprio fornecedor no portal dele.
+    criadoPeloFornecedor: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
 
     // Setor de compras (Financeiro): conferido = PENDENTE (a pagar); com quem
     // comprou, forma e data do pagamento = FINALIZADA.

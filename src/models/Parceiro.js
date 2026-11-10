@@ -22,6 +22,9 @@ const Parceiro = sequelize.define(
     cidade: { type: DataTypes.STRING(100), allowNull: true },
     estado: { type: DataTypes.STRING(2), allowNull: true },
     observacoes: { type: DataTypes.TEXT, allowNull: true },
+    // Itens que o fornecedor traz: só esses aparecem no portal dele para
+    // criar pré-recebimento (ids de produto).
+    produtosFornecidos: { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },
     ativo: {
       type: DataTypes.BOOLEAN,
       allowNull: false,

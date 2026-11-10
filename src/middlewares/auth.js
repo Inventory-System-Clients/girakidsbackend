@@ -25,6 +25,12 @@ const lerUsuarioDoToken = async (req) => {
   return usuario;
 };
 
+// Login de fornecedor só usa o portal dele e o básico da conta (perfil e
+// senha); qualquer outra rota é negada.
+const ROTAS_FORNECEDOR = [/\/portal-fornecedor(\/|$)/, /\/auth\/perfil$/, /\/auth\/senha$/];
+const fornecedorForaDoPortal = (req, usuario) =>
+  usuario?.role === "FORNECEDOR" && !ROTAS_FORNECEDOR.some((r) => r.test(String(req.originalUrl || "").split("?")[0]));
+
 export const autenticar = async (req, res, next) => {
   try {
     if (!req.headers.authorization) {
@@ -35,6 +41,9 @@ export const autenticar = async (req, res, next) => {
       return res
         .status(401)
         .json({ error: "Usuário não encontrado ou inativo" });
+    }
+    if (fornecedorForaDoPortal(req, usuario)) {
+      return res.status(403).json({ error: "Acesso restrito ao portal do fornecedor." });
     }
     req.usuario = usuario;
     next();
@@ -47,6 +56,7 @@ export const autenticar = async (req, res, next) => {
 export const autenticarOpcional = async (req, res, next) => {
   try {
     req.usuario = await lerUsuarioDoToken(req);
+    if (fornecedorForaDoPortal(req, req.usuario)) req.usuario = null;
   } catch {
     req.usuario = null;
   }

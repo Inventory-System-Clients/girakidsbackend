@@ -93,6 +93,7 @@ export const perfil = async (req, res) => res.json(req.usuario);
 export const atualizarPerfil = async (req, res) => {
   try {
     if (req.usuario.role === "SHOWROOM") throw erroHttp(403, "A conta do showroom só pode ser alterada pelo administrador.");
+    if (req.usuario.role === "FORNECEDOR") throw erroHttp(403, "Os dados do fornecedor são alterados pela Gira Kids.");
     const corpo = { ...req.usuario.toJSON(), ...req.body };
     const novoEmail = String(corpo.email || "").trim().toLowerCase();
     if (novoEmail !== String(req.usuario.email || "").toLowerCase() && !req.usuario.trocarSenha) {

@@ -45,10 +45,16 @@ const Usuario = sequelize.define(
     // ADMIN: acesso total; FUNCIONARIO: acesso pelas permissões; CLIENTE:
     // catálogo, checkout e "Meus Pedidos"; SHOWROOM: totem da loja — só tira
     // pedidos para clientes cadastrados, sem nenhuma tela administrativa.
+    // FORNECEDOR: só o portal do fornecedor (pré-recebimentos dele, sem valores).
     role: {
-      type: DataTypes.ENUM("ADMIN", "FUNCIONARIO", "CLIENTE", "SHOWROOM"),
+      type: DataTypes.ENUM("ADMIN", "FUNCIONARIO", "CLIENTE", "SHOWROOM", "FORNECEDOR"),
       allowNull: false,
       defaultValue: "CLIENTE",
+    },
+    // Login de fornecedor: o fornecedor (Parceiro) que ele representa.
+    parceiroId: {
+      type: DataTypes.UUID,
+      allowNull: true,
     },
     permissoes: {
       type: DataTypes.JSONB,

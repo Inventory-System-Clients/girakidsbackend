@@ -7,6 +7,7 @@ import {
   RecebimentoItem,
   HistoricoPreco,
   PreRecebimento,
+  Usuario,
 } from "../models/index.js";
 import { movimentar } from "../services/estoqueService.js";
 import { arredondar, erroHttp, hojeISO, numero, responderErro, somenteDigitos } from "../utils/helpers.js";
@@ -96,6 +97,8 @@ export const excluirParceiro = async (req, res) => {
     await sequelize.transaction(async (transaction) => {
       await Produto.update({ fornecedorPreferencialId: null }, { where: { fornecedorPreferencialId: parceiro.id }, transaction });
       await PreRecebimento.update({ fornecedorNome: parceiro.nome }, { where: { fornecedorId: parceiro.id, fornecedorNome: null }, transaction });
+      // Login do fornecedor (portal) deixa de funcionar.
+      await Usuario.update({ ativo: false }, { where: { parceiroId: parceiro.id, role: "FORNECEDOR" }, transaction });
       await parceiro.destroy({ transaction });
     });
     res.json({ ok: true });
