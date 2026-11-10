@@ -458,3 +458,45 @@ export const statusApiCorreios = async () => {
     return { configurada: true, login: false, erro: error.message, variaveis };
   }
 };
+
+
+// Rastreio do objeto (API SRO Rastro do contrato). Guarda a resposta por 10
+// minutos para o cliente poder atualizar a tela sem sobrecarregar a API.
+const cacheRastreio = new Map();
+const MINUTOS_CACHE_RASTREIO = 10;
+
+const lerEvento = (e) => {
+  const endereco = e?.unidade?.endereco || {};
+  const destino = e?.unidadeDestino?.endereco || {};
+  const local = [e?.unidade?.tipo, [endereco.cidade, endereco.uf].filter(Boolean).join("/")].filter(Boolean).join(" · ");
+  const para = [destino.cidade, destino.uf].filter(Boolean).join("/");
+  return {
+    codigo: String(e?.codigo || ""),
+    tipo: String(e?.tipo || ""),
+    descricao: String(e?.descricao || "").trim(),
+    detalhe: String(e?.detalhe || "").trim() || null,
+    data: e?.dtHrCriado || null,
+    local: local || null,
+    destino: para || null,
+  };
+};
+
+export const rastrearObjetoApi = async (codigo) => {
+  const objeto = String(codigo || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (!/^[A-Z]{2}\d{9}[A-Z]{2}$/.test(objeto)) throw erroHttp(400, "Código de rastreio inválido.");
+  const guardado = cacheRastreio.get(objeto);
+  if (guardado && Date.now() - guardado.em < MINUTOS_CACHE_RASTREIO * 60_000) return guardado.dados;
+  const dados = await requisitarJson(`/srorastro/v1/objetos/${objeto}?resultado=T`, {}, "Rastreio dos Correios");
+  const obj = (dados?.objetos || [])[0] || {};
+  const eventos = (obj.eventos || []).map(lerEvento).filter((e) => e.descricao);
+  const resultado = {
+    codigo: objeto,
+    eventos,
+    mensagem: obj.mensagem ? String(obj.mensagem) : null,
+    entregue: eventos.some((e) => /entregue ao destinat/i.test(e.descricao)),
+    atualizadoEm: new Date().toISOString(),
+  };
+  cacheRastreio.set(objeto, { em: Date.now(), dados: resultado });
+  if (cacheRastreio.size > 500) cacheRastreio.delete(cacheRastreio.keys().next().value);
+  return resultado;
+};

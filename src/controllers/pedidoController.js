@@ -34,6 +34,8 @@ import {
 import { cotarFrete } from "../services/freteService.js";
 import { statusPagamentos } from "../services/pagamentos/index.js";
 import { lerConfiguracao, salvarConfiguracao } from "../models/Configuracao.js";
+import { rastrearObjetoApi } from "../services/correiosApiService.js";
+import { assinar, assinaturaConfere } from "../utils/linkSeguro.js";
 import { bancoValido } from "./bancoController.js";
 import { ENDERECO_LOJA_PADRAO, FORMAS_PAGAMENTO, FORMAS_SHOWROOM } from "../utils/formasPagamento.js";
 import {
@@ -117,8 +119,14 @@ export const listar = async (req, res) => {
 
 export const meusPedidos = async (req, res) => {
   try {
+    // Em andamento: ainda não enviado. Concluídos: finalizados pela expedição
+    // (enviados/retirados) ou cancelados.
+    const situacao = {
+      andamento: { statusVendas: { [Op.ne]: "CANCELADO" }, statusExpedicao: { [Op.ne]: "EXPEDIDO" } },
+      concluidos: { [Op.or]: [{ statusExpedicao: "EXPEDIDO" }, { statusVendas: "CANCELADO" }] },
+    }[req.query.situacao] || {};
     const pedidos = await Pedido.findAll({
-      where: { clienteId: req.usuario.id, tipo: "PEDIDO" },
+      where: { clienteId: req.usuario.id, tipo: "PEDIDO", ...situacao },
       include: INCLUDE_COMPLETO,
       order: [["createdAt", "DESC"]],
       limit: Math.min(Number(req.query.limite) || 20, 100),
@@ -127,6 +135,98 @@ export const meusPedidos = async (req, res) => {
     res.json(pedidos.map((p) => serializarPedido(p, { completo: false, usuario: req.usuario })));
   } catch (error) {
     responderErro(res, error, "Erro ao listar seus pedidos");
+  }
+};
+
+// ---------------------------------------------------------------------------
+// Acompanhamento do pedido (cliente) e link público assinado
+// ---------------------------------------------------------------------------
+
+const FINALIDADE_ACOMPANHAMENTO = "acompanhamento-pedido";
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// Só o necessário para acompanhar: sem valores, endereço, documento ou
+// telefone (o link pode ser repassado).
+const dadosAcompanhamento = (pedido) => ({
+  id: pedido.id,
+  numeroFormatado: formatarNumero(pedido),
+  createdAt: pedido.createdAt,
+  clienteNome: String(pedido.clienteNome || "").split(" ")[0],
+  clienteId: pedido.clienteId,
+  formaPagamento: pedido.formaPagamento,
+  statusFinanceiro: pedido.statusFinanceiro,
+  pagoEm: pedido.pagoEm,
+  statusVendas: pedido.statusVendas,
+  liberadoEm: pedido.liberadoEm,
+  statusExpedicao: pedido.statusExpedicao,
+  montagemConcluidaEm: pedido.montagemConcluidaEm,
+  expedidoEm: pedido.expedidoEm,
+  canceladoEm: pedido.canceladoEm,
+  metodoEnvio: pedido.metodoEnvio,
+  transportadoraNome: pedido.transportadoraNome,
+  codigoRastreio: pedido.codigoRastreio,
+  quantidadeItens: (pedido.itens || []).length,
+  itens: (pedido.itens || []).map((i) => ({ id: i.id, nome: i.nome, quantidade: i.quantidade, imagemUrl: i.imagemUrl || i.produto?.imagemUrl || null })),
+});
+
+const pedidoDoLink = async (req) => {
+  const { id, assinatura } = req.params;
+  if (!UUID.test(id) || !assinaturaConfere(FINALIDADE_ACOMPANHAMENTO, id, assinatura)) throw erroHttp(404, "Link de acompanhamento inválido.");
+  const pedido = await Pedido.findByPk(id, { include: INCLUDE_COMPLETO });
+  if (!pedido || pedido.tipo !== "PEDIDO") throw erroHttp(404, "Pedido não encontrado.");
+  return pedido;
+};
+
+const rastrear = async (pedido) => {
+  if (!pedido.codigoRastreio) throw erroHttp(404, "Este pedido ainda não tem código de rastreio.");
+  try {
+    return await rastrearObjetoApi(pedido.codigoRastreio);
+  } catch (error) {
+    if (error.status === 400 && /inválido/.test(error.message)) throw error;
+    console.warn(`[Rastreio] Pedido ${pedido.numero}:`, error.message);
+    return { codigo: pedido.codigoRastreio, eventos: [], indisponivel: true };
+  }
+};
+
+// Equipe: link para enviar ao cliente.
+export const linkAcompanhamento = async (req, res) => {
+  try {
+    const pedido = await Pedido.findByPk(req.params.id, { attributes: ["id", "tipo"] });
+    if (!pedido || pedido.tipo !== "PEDIDO") throw erroHttp(404, "Pedido não encontrado.");
+    res.json({ caminho: `/acompanhamento/${pedido.id}/${assinar(FINALIDADE_ACOMPANHAMENTO, pedido.id)}` });
+  } catch (error) {
+    responderErro(res, error, "Erro ao gerar o link de acompanhamento");
+  }
+};
+
+// Público (com o link assinado).
+export const acompanhamentoPublico = async (req, res) => {
+  try {
+    res.json(dadosAcompanhamento(await pedidoDoLink(req)));
+  } catch (error) {
+    responderErro(res, error, "Erro ao carregar o pedido");
+  }
+};
+
+export const rastreioPublico = async (req, res) => {
+  try {
+    res.json(await rastrear(await pedidoDoLink(req)));
+  } catch (error) {
+    responderErro(res, error, "Erro ao consultar o rastreio");
+  }
+};
+
+// Cliente logado (dono do pedido) ou equipe.
+export const rastreio = async (req, res) => {
+  try {
+    const pedido = await Pedido.findByPk(req.params.id);
+    if (!pedido) throw erroHttp(404, "Pedido não encontrado.");
+    if (ehInterno(req.usuario) ? !veTodosPedidos(req.usuario) : pedido.clienteId !== req.usuario.id) {
+      return res.status(403).json({ error: "Este pedido não pertence à sua conta." });
+    }
+    res.json(await rastrear(pedido));
+  } catch (error) {
+    responderErro(res, error, "Erro ao consultar o rastreio");
   }
 };
 

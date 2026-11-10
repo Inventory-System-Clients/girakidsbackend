@@ -71,6 +71,11 @@ router.post("/assistente/transcrever", autenticarOpcional, uploadAudio.single("a
 router.get("/catalogo", autenticarOpcional, produtos.catalogo);
 router.get("/catalogo/produtos/:id", produtos.obterPublico);
 
+// Acompanhamento público do pedido (link assinado enviado ao cliente)
+const limiteAcompanhamento = limitarTaxa({ janelaMs: 60_000, maximo: 30 });
+router.get("/acompanhamento/:id/:assinatura", limiteAcompanhamento, pedidos.acompanhamentoPublico);
+router.get("/acompanhamento/:id/:assinatura/rastreio", limiteAcompanhamento, pedidos.rastreioPublico);
+
 // Checkout e pedidos do cliente
 router.get("/checkout/opcoes", autenticar, pedidos.opcoesCheckout);
 // Equipe tirando pedido com entrega por transportadora
@@ -96,6 +101,8 @@ router.put("/pedidos/alertas-pagamento/:alertaId/resolver", autenticar, vendasOu
 router.put("/pedidos/config/cartoes-online", autenticar, vendasOuFinanceiro, registrarLog("CARTOES_ONLINE", "Configuracao"), pedidos.alternarCartoesOnline);
 router.post("/orcamentos", autenticar, exigirPermissao("ORCAMENTOS", "VENDAS"), registrarLog("CRIAR_ORCAMENTO", "Pedido"), pedidos.criarOrcamento);
 router.post("/orcamentos/:id/gerar-pedido", autenticar, exigirPermissao("VENDAS"), registrarLog("GERAR_PEDIDO_ORCAMENTO", "Pedido"), pedidos.gerarPedidoDoOrcamento);
+router.get("/pedidos/:id/rastreio", autenticar, limitarTaxa({ janelaMs: 60_000, maximo: 30 }), pedidos.rastreio);
+router.get("/pedidos/:id/link-acompanhamento", autenticar, exigirPermissao("VENDAS", "FINANCEIRO", "COMERCIAL", "EXPEDICAO"), pedidos.linkAcompanhamento);
 router.get("/pedidos/:id", autenticar, pedidos.obter);
 router.put("/pedidos/:id", autenticar, exigirPermissao("VENDAS"), registrarLog("EDITAR_PEDIDO", "Pedido"), pedidos.editar);
 router.put("/pedidos/:id/reabrir", autenticar, exigirPermissao("VENDAS"), registrarLog("REABRIR_PEDIDO", "Pedido"), pedidos.reabrir);

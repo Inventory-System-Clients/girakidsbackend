@@ -14,6 +14,18 @@ const chave = () =>
 
 export const FORMATO_TOKEN = /^[A-Za-z0-9_-]{43}$/;
 
+// Assinatura (HMAC-SHA256) de um texto: links que não precisam ficar no banco,
+// como o de acompanhamento do pedido. Sem a chave do servidor não dá para
+// montar o link de outro pedido.
+export const assinar = (finalidade, texto) =>
+  crypto.createHmac("sha256", chave()).update(`${finalidade}:${texto}`).digest("base64url");
+
+export const assinaturaConfere = (finalidade, texto, assinatura) => {
+  const esperada = Buffer.from(assinar(finalidade, texto));
+  const recebida = Buffer.from(String(assinatura || ""));
+  return esperada.length === recebida.length && crypto.timingSafeEqual(esperada, recebida);
+};
+
 export const gerarToken = () => crypto.randomBytes(32).toString("base64url");
 
 export const hashToken = (token) => crypto.createHash("sha256").update(String(token)).digest("hex");
