@@ -486,8 +486,14 @@ export const rastrearObjetoApi = async (codigo) => {
   if (!/^[A-Z]{2}\d{9}[A-Z]{2}$/.test(objeto)) throw erroHttp(400, "Código de rastreio inválido.");
   const guardado = cacheRastreio.get(objeto);
   if (guardado && Date.now() - guardado.em < MINUTOS_CACHE_RASTREIO * 60_000) return guardado.dados;
-  const dados = await requisitarJson(`/srorastro/v1/objetos/${objeto}?resultado=T`, {}, "Rastreio dos Correios");
+  const resposta = await requisitar(`/srorastro/v1/objetos/${objeto}?resultado=T`);
+  const dados = await lerResposta(resposta);
+  // 404: objeto ainda não entrou na base dos Correios (etiqueta gerada, não postado).
+  if (!resposta.ok && resposta.status !== 404) {
+    throw erroHttp(502, `Rastreio dos Correios (HTTP ${resposta.status}): ${mensagemCorreios(dados)}`);
+  }
   const obj = (dados?.objetos || [])[0] || {};
+  if (resposta.status === 404 && !obj.mensagem) obj.mensagem = "Os Correios ainda não registraram este objeto (aguardando postagem).";
   const eventos = (obj.eventos || []).map(lerEvento).filter((e) => e.descricao);
   const resultado = {
     codigo: objeto,

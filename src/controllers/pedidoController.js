@@ -177,14 +177,14 @@ const pedidoDoLink = async (req) => {
   return pedido;
 };
 
-const rastrear = async (pedido) => {
+const rastrear = async (pedido, interno = false) => {
   if (!pedido.codigoRastreio) throw erroHttp(404, "Este pedido ainda não tem código de rastreio.");
   try {
     return await rastrearObjetoApi(pedido.codigoRastreio);
   } catch (error) {
     if (error.status === 400 && /inválido/.test(error.message)) throw error;
     console.warn(`[Rastreio] Pedido ${pedido.numero}:`, error.message);
-    return { codigo: pedido.codigoRastreio, eventos: [], indisponivel: true };
+    return { codigo: pedido.codigoRastreio, eventos: [], indisponivel: true, ...(interno ? { motivo: error.message } : {}) };
   }
 };
 
@@ -224,7 +224,7 @@ export const rastreio = async (req, res) => {
     if (ehInterno(req.usuario) ? !veTodosPedidos(req.usuario) : pedido.clienteId !== req.usuario.id) {
       return res.status(403).json({ error: "Este pedido não pertence à sua conta." });
     }
-    res.json(await rastrear(pedido));
+    res.json(await rastrear(pedido, ehInterno(req.usuario)));
   } catch (error) {
     responderErro(res, error, "Erro ao consultar o rastreio");
   }
