@@ -1,7 +1,7 @@
 import { Op } from "sequelize";
 import { sequelize } from "../database/connection.js";
 import { Pedido, PedidoItem } from "../models/index.js";
-import { INCLUDE_COMPLETO, serializarPedido } from "../services/pedidoService.js";
+import { INCLUDE_COMPLETO, formatarNumero, serializarPedido } from "../services/pedidoService.js";
 import { avisarPedido, esquecerAviso } from "../services/whatsappService.js";
 import { erroHttp, responderErro } from "../utils/helpers.js";
 import { contem } from "../utils/busca.js";
@@ -22,6 +22,16 @@ const FILTRO_ABA = {
 // não aparecem na expedição.
 export const PRIMEIRO_PEDIDO_EXPEDICAO = 70000;
 const BASE = { tipo: "PEDIDO", statusVendas: "LIBERADO", numero: { [Op.gte]: PRIMEIRO_PEDIDO_EXPEDICAO } };
+
+// Pedido montado e não expedido há mais que isso vira alerta (pedido parado).
+export const DIAS_PARADO = 2;
+const parados = () =>
+  Pedido.findAll({
+    where: { ...BASE, ...FILTRO_ABA.PRONTOS, montagemConcluidaEm: { [Op.lt]: new Date(Date.now() - DIAS_PARADO * 86_400_000) } },
+    attributes: ["id", "numero", "tipo", "codigoLegado", "clienteNome", "montagemConcluidaEm"],
+    order: [["montagemConcluidaEm", "ASC"]],
+    limit: 100,
+  });
 
 export const listar = async (req, res) => {
   try {
@@ -52,9 +62,10 @@ export const listar = async (req, res) => {
         limit: limite,
         offset: (pagina - 1) * limite,
       }),
+      parados(),
       ...["INICIAR", "MONTAGEM", "PRONTOS"].map((a) => Pedido.count({ where: { ...BASE, ...FILTRO_ABA[a] } })),
     ]);
-    const [iniciar, montagem, prontos] = contagens;
+    const [listaParados, iniciar, montagem, prontos] = contagens;
     res.json({
       itens: rows.map((p) => serializarPedido(p, { completo: false })),
       total: count,
@@ -62,6 +73,8 @@ export const listar = async (req, res) => {
       paginas: Math.max(1, Math.ceil(count / limite)),
       contadores: { INICIAR: iniciar, MONTAGEM: montagem, PRONTOS: prontos },
       pendentes: iniciar + montagem + prontos,
+      diasParado: DIAS_PARADO,
+      parados: listaParados.map((p) => ({ id: p.id, numeroFormatado: formatarNumero(p), clienteNome: p.clienteNome, montagemConcluidaEm: p.montagemConcluidaEm })),
     });
   } catch (error) {
     responderErro(res, error, "Erro ao listar expedição");
