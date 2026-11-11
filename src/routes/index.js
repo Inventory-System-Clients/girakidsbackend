@@ -102,6 +102,7 @@ router.put("/pedidos/config/cartoes-online", autenticar, vendasOuFinanceiro, reg
 router.post("/orcamentos", autenticar, exigirPermissao("ORCAMENTOS", "VENDAS"), registrarLog("CRIAR_ORCAMENTO", "Pedido"), pedidos.criarOrcamento);
 router.post("/orcamentos/:id/gerar-pedido", autenticar, exigirPermissao("VENDAS"), registrarLog("GERAR_PEDIDO_ORCAMENTO", "Pedido"), pedidos.gerarPedidoDoOrcamento);
 router.get("/pedidos/:id/rastreio", autenticar, limitarTaxa({ janelaMs: 60_000, maximo: 30 }), pedidos.rastreio);
+router.put("/pedidos/:id/codigo-rastreio", autenticar, exigirPermissao("VENDAS", "FINANCEIRO", "COMERCIAL", "EXPEDICAO"), registrarLog("RASTREIO_MANUAL", "Pedido"), pedidos.salvarCodigoRastreio);
 router.get("/pedidos/:id/link-acompanhamento", autenticar, exigirPermissao("VENDAS", "FINANCEIRO", "COMERCIAL", "EXPEDICAO"), pedidos.linkAcompanhamento);
 router.get("/pedidos/:id", autenticar, pedidos.obter);
 router.put("/pedidos/:id", autenticar, exigirPermissao("VENDAS"), registrarLog("EDITAR_PEDIDO", "Pedido"), pedidos.editar);

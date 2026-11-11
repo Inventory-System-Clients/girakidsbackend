@@ -230,6 +230,39 @@ export const rastreio = async (req, res) => {
   }
 };
 
+// Etiqueta dos Correios feita por fora do site: a equipe associa o código ao
+// pedido para o cliente acompanhar. Sem código, remove a associação.
+const METODOS_CORREIOS = ["PAC", "SEDEX"];
+export const salvarCodigoRastreio = async (req, res) => {
+  try {
+    const codigo = String(req.body?.codigo || "").replace(/\s+/g, "").toUpperCase() || null;
+    if (codigo && !/^[A-Z]{2}\d{9}[A-Z]{2}$/.test(codigo)) {
+      throw erroHttp(400, "Código de rastreio inválido: use o formato dos Correios (ex.: AB123456789BR).");
+    }
+    await sequelize.transaction(async (transaction) => {
+      const pedido = await carregarParaAlterar(req.params.id, transaction);
+      garantirNaoCancelado(pedido);
+      const mudancas = { codigoRastreio: codigo };
+      // Pedido que estava com outro método de entrega passa a ser Correios.
+      if (codigo && !METODOS_CORREIOS.includes(pedido.metodoEnvio)) {
+        const metodo = req.body?.metodoEnvio;
+        if (!METODOS_CORREIOS.includes(metodo)) throw erroHttp(400, "Escolha se o envio foi por PAC ou SEDEX.");
+        mudancas.metodoEnvio = metodo;
+      }
+      await pedido.update(
+        {
+          ...mudancas,
+          historico: evento(pedido, req.usuario, codigo ? "RASTREIO_MANUAL" : "RASTREIO_REMOVIDO", codigo ? { codigo, ...(mudancas.metodoEnvio ? { metodoEnvio: mudancas.metodoEnvio } : {}) } : { codigo: pedido.codigoRastreio }),
+        },
+        { transaction },
+      );
+    });
+    await responderPedido(res, req.params.id);
+  } catch (error) {
+    responderErro(res, error, "Erro ao salvar o código de rastreio");
+  }
+};
+
 export const obter = async (req, res) => {
   try {
     const pedido = await Pedido.findByPk(req.params.id, { include: [...INCLUDE_COMPLETO, INCLUDE_CLIENTE] });
