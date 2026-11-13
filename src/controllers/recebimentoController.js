@@ -4,7 +4,8 @@ import { MovimentacaoEstoque, OrdemMontagem, Parceiro, PreRecebimento, PreRecebi
 import { movimentar } from "../services/estoqueService.js";
 import {
   capacidadeGrupo,
-  distribuirGrupo,
+  capacidadeMontagem,
+  planejarCapsulas,
   gruposDe,
   idsCapsulas,
   mexerEstoque,
@@ -553,8 +554,9 @@ export const configurarProduto = async (req, res) => {
           opcoes: [...new Map(g.opcoes.filter((o) => o.produtoId !== produto.id).map((o) => [o.produtoId, { produtoId: o.produtoId, quantidade: Math.max(1, Math.round(o.quantidade)) }])).values()],
         }))
         .filter((g) => g.opcoes.length);
-      const todosIds = grupos.flatMap((g) => g.opcoes.map((o) => o.produtoId));
-      if (new Set(todosIds).size !== todosIds.length) throw erroHttp(400, "A mesma cápsula aparece em mais de um item. Use-a em um item só (como opção).");
+      // A mesma cápsula pode aparecer em mais de um item (ex.: os dois lados
+      // da cápsula "vermelha ou branca"); a montagem divide o estoque.
+      const todosIds = [...new Set(grupos.flatMap((g) => g.opcoes.map((o) => o.produtoId)))];
       const unicas = todosIds.map((produtoId) => ({ produtoId }));
       if (unicas.length) {
         const existentes = await Produto.findAll({ where: { id: todosIds }, transaction });
@@ -607,15 +609,20 @@ export const enviarParaMontagem = async (req, res) => {
       const ids = idsCapsulas(produto);
       const porId = new Map((ids.length ? await Produto.findAll({ where: { id: ids }, transaction, lock: transaction.LOCK.UPDATE }) : []).map((c) => [c.id, c]));
       const estoque = (id) => Number(porId.get(id)?.estoque || 0);
-      const capsulas = [];
       for (const g of grupos) {
         const capacidade = capacidadeGrupo(g, estoque);
         if (capacidade < quantidade) {
           const nomes = g.opcoes.map((o) => `${porId.get(o.produtoId)?.nome || "cápsula"} (${estoque(o.produtoId)})`).join(" ou ");
           throw erroHttp(400, `Faltam cápsulas: ${nomes} dão para ${capacidade} un., precisa de ${quantidade}.`);
         }
-        for (const uso of distribuirGrupo(g, quantidade, estoque)) capsulas.push({ capsula: porId.get(uso.produtoId), precisa: uso.quantidade });
       }
+      // Itens que dividem a mesma cápsula: confere o total.
+      const plano = planejarCapsulas(grupos, quantidade, estoque);
+      if (!plano) {
+        const capacidade = capacidadeMontagem(grupos, quantidade, estoque);
+        throw erroHttp(400, `Faltam cápsulas: as cápsulas em estoque dão para montar ${capacidade} un., precisa de ${quantidade}.`);
+      }
+      const capsulas = plano.map((uso) => ({ capsula: porId.get(uso.produtoId), precisa: uso.quantidade }));
       const ordem = await OrdemMontagem.create(
         {
           produtoId: produto.id,

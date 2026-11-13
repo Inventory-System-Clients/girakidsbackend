@@ -36,21 +36,71 @@ export const idsCapsulas = (produto) => gruposDe(produto).flatMap((g) => g.opcoe
 export const capacidadeGrupo = (grupo, estoque) =>
   grupo.opcoes.reduce((soma, o) => soma + Math.floor(Math.max(0, estoque(o.produtoId)) / o.quantidade), 0);
 
-// Escolhe de quais opções sai o necessário para `unidades` (a opção com mais
-// estoque primeiro). Devolve [{ produtoId, quantidade }] em cápsulas.
+// Escolhe de quais opções sai o necessário para `unidades`, equilibrando:
+// tira da opção com mais estoque até empatar com a próxima e, empatadas,
+// reparte igual (só brancas → tudo branca; das duas → metade de cada).
+// Devolve [{ produtoId, quantidade }] em cápsulas.
 export const distribuirGrupo = (grupo, unidades, estoque) => {
-  const usos = [];
+  const cap = new Map(grupo.opcoes.map((o) => [o.produtoId, Math.floor(Math.max(0, estoque(o.produtoId)) / o.quantidade)]));
+  const usado = new Map();
   let falta = unidades;
-  const ordem = [...grupo.opcoes].sort((a, b) => Math.floor(estoque(b.produtoId) / b.quantidade) - Math.floor(estoque(a.produtoId) / a.quantidade));
-  for (const o of ordem) {
-    if (falta <= 0) break;
-    const u = Math.min(falta, Math.floor(Math.max(0, estoque(o.produtoId)) / o.quantidade));
-    if (u > 0) {
-      usos.push({ produtoId: o.produtoId, quantidade: u * o.quantidade });
+  while (falta > 0) {
+    const ordem = grupo.opcoes.filter((o) => cap.get(o.produtoId) > 0).sort((a, b) => cap.get(b.produtoId) - cap.get(a.produtoId));
+    if (!ordem.length) break;
+    const maior = cap.get(ordem[0].produtoId);
+    const empatadas = ordem.filter((o) => cap.get(o.produtoId) === maior);
+    const proximo = ordem.find((o) => cap.get(o.produtoId) < maior);
+    const alvo = proximo ? cap.get(proximo.produtoId) : 0;
+    const porOpcao = Math.max(1, Math.min(maior - alvo, Math.floor(falta / empatadas.length)));
+    for (const o of empatadas) {
+      if (falta <= 0) break;
+      const u = Math.min(porOpcao, falta, cap.get(o.produtoId));
+      cap.set(o.produtoId, cap.get(o.produtoId) - u);
+      usado.set(o.produtoId, (usado.get(o.produtoId) || 0) + u);
       falta -= u;
     }
   }
-  return usos;
+  return grupo.opcoes.filter((o) => usado.get(o.produtoId) > 0).map((o) => ({ produtoId: o.produtoId, quantidade: usado.get(o.produtoId) * o.quantidade }));
+};
+
+// A mesma cápsula pode estar em mais de um item (ex.: Pokemon 2 pol = lado
+// de cima "vermelha ou branca" + lado de baixo "branca ou vermelha"). Então
+// os itens dividem o estoque: distribui item a item (os com menos opções
+// primeiro), descontando o que os anteriores já usaram.
+// Devolve [{ produtoId, quantidade }] somados, ou null se não dá.
+export const planejarCapsulas = (grupos, unidades, estoque) => {
+  if (unidades <= 0) return [];
+  const usado = new Map();
+  const livre = (id) => Math.max(0, estoque(id)) - (usado.get(id) || 0);
+  const ordem = [...grupos].sort((a, b) => a.opcoes.length - b.opcoes.length);
+  for (const g of ordem) {
+    const usos = distribuirGrupo(g, unidades, livre);
+    const atendidas = usos.reduce((s, u) => s + u.quantidade / g.opcoes.find((o) => o.produtoId === u.produtoId).quantidade, 0);
+    if (atendidas < unidades) return null;
+    for (const u of usos) usado.set(u.produtoId, (usado.get(u.produtoId) || 0) + u.quantidade);
+  }
+  return [...usado].map(([produtoId, quantidade]) => ({ produtoId, quantidade }));
+};
+
+const compartilhaCapsula = (grupos) => {
+  const ids = grupos.flatMap((g) => g.opcoes.map((o) => o.produtoId));
+  return new Set(ids).size !== ids.length;
+};
+
+// Quantas unidades dá para montar (até `limite`) com as cápsulas.
+export const capacidadeMontagem = (grupos, limite, estoque) => {
+  let maximo = Math.max(0, limite);
+  for (const g of grupos) maximo = Math.min(maximo, capacidadeGrupo(g, estoque));
+  if (!compartilhaCapsula(grupos)) return maximo;
+  // Itens dividindo cápsulas: maior quantidade que fecha (busca binária).
+  let baixo = 0;
+  let alto = maximo;
+  while (baixo < alto) {
+    const meio = Math.ceil((baixo + alto) / 2);
+    if (planejarCapsulas(grupos, meio, estoque)) baixo = meio;
+    else alto = meio - 1;
+  }
+  return baixo;
 };
 
 // Regras de compra de cada insumo (cápsula ou sleeve).
@@ -78,12 +128,8 @@ export const calcularMontagem = (controlados, porId) => {
     const grupos = gruposDe(p);
     // Quanto falta de cada item para montar todos os soltos.
     const faltas = grupos.map((g) => ({ opcoes: g.opcoes, falta: Math.max(0, solto - capacidadeGrupo(g, livre)) }));
-    let podeMontar = soltoLivre;
-    for (const g of grupos) podeMontar = Math.min(podeMontar, capacidadeGrupo(g, livre));
-    podeMontar = Math.max(0, podeMontar);
-    for (const g of grupos) {
-      for (const uso of distribuirGrupo(g, podeMontar, livre)) restante.set(uso.produtoId, livre(uso.produtoId) - uso.quantidade);
-    }
+    const podeMontar = capacidadeMontagem(grupos, soltoLivre, livre);
+    for (const uso of planejarCapsulas(grupos, podeMontar, livre) || []) restante.set(uso.produtoId, livre(uso.produtoId) - uso.quantidade);
     if (p.produtoSoltoId) restante.set(p.produtoSoltoId, soltoLivre - podeMontar);
     const montado = inteiro(p.estoqueMontado);
     const emMontagem = inteiro(p.estoqueEmMontagem);
@@ -221,16 +267,13 @@ export const aplicarNosSaldos = async (produto, delta, { motivo, usuario, pedido
     const porId = await carregarInsumos([produto], transaction);
     const estoque = (id) => positivo(porId.get(id)?.estoque);
     const grupos = gruposDe(produto);
-    let usar = Math.min(falta, soltoDe(produto, porId));
-    for (const g of grupos) usar = Math.min(usar, capacidadeGrupo(g, estoque));
+    const usar = capacidadeMontagem(grupos, Math.min(falta, soltoDe(produto, porId)), estoque);
     if (usar > 0) {
       const ctx = { motivo: `${motivo} (montar ${usar} un. de ${produto.nome})`, usuario, pedido, transaction, origem: "RECEBIMENTOS" };
       await mexerSolto(produto, -usar, ctx);
-      for (const g of grupos) {
-        for (const uso of distribuirGrupo(g, usar, estoque)) {
-          const capsula = porId.get(uso.produtoId);
-          if (capsula) await mexerEstoque(capsula, -uso.quantidade, ctx);
-        }
+      for (const uso of planejarCapsulas(grupos, usar, estoque) || []) {
+        const capsula = porId.get(uso.produtoId);
+        if (capsula) await mexerEstoque(capsula, -uso.quantidade, ctx);
       }
       falta -= usar;
     }
@@ -274,7 +317,10 @@ export const painelMontagem = async () => {
           produtos: [],
         };
         atual.falta += f.falta * f.opcoes[0].quantidade;
-        atual.produtos.push({ id: p.id, nome: p.nome, unidades: f.falta });
+        // Dois itens do mesmo produto com as mesmas opções (os dois lados).
+        const doProduto = atual.produtos.find((x) => x.id === p.id);
+        if (doProduto) doProduto.unidades += f.falta;
+        else atual.produtos.push({ id: p.id, nome: p.nome, unidades: f.falta });
         faltas.set(chave, atual);
       }
       return {
