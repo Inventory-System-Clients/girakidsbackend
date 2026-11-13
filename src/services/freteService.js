@@ -4,6 +4,7 @@ import { caixaParaFrete } from "./pedidoCalculoEngine.js";
 import { apiCorreiosConfigurada, cotarServicosApi } from "./correiosApiService.js";
 import { braspressConfigurada, cotarBraspress } from "./braspressService.js";
 import { calcularPedidoCompleto } from "./pedidoCalculoEngine.js";
+import { assinaturaConteudo, buscarCaixaAprendida, volumesDaCaixaAprendida } from "./caixasAprendidasService.js";
 import { arredondar, somenteDigitos } from "../utils/helpers.js";
 import { ENDERECO_LOJA_PADRAO } from "../utils/formasPagamento.js";
 
@@ -45,6 +46,8 @@ export const resumirCarga = async (itens) => {
   let valorMercadoria = 0;
   let freteIndisponivel = false;
   const quantidades = {};
+  // Unidades por categoria: identifica o conteúdo para as caixas aprendidas.
+  const porCategoria = {};
   for (const item of itens) {
     const produto = porId.get(item.produtoId);
     if (!produto) continue;
@@ -52,16 +55,34 @@ export const resumirCarga = async (itens) => {
     pesoGramas += pacotes * Number(produto.pesoPacoteGramas || 0);
     valorMercadoria += pacotes * Number(produto.unidadesPacote || 1) * Number(produto.precoVenda || 0);
     if (produto.tipoEmbalagem === "frete_indisponivel") freteIndisponivel = true;
+    const categoria = produto.categoria || "Sem categoria";
+    porCategoria[categoria] = (porCategoria[categoria] || 0) + pacotes * Number(produto.unidadesPacote || 1);
     const campo = CAMPO_CALCULADORA_POR_EMBALAGEM[produto.tipoEmbalagem];
     if (campo) {
       quantidades[campo] = (quantidades[campo] || 0) + pacotes * Number(produto.unidadesPacote || 1);
     }
   }
 
-  // Caixa do primeiro volume pela Calculadora de Pedidos (base 70x50x60).
-  const caixa = (Object.keys(quantidades).length && (await caixaParaFrete(quantidades))) || CAIXA_PADRAO;
+  // Mesmo conteúdo já postado antes: usa a caixa que a expedição usou.
+  const assinatura = assinaturaConteudo(porCategoria);
+  let aprendida = null;
+  try {
+    aprendida = await buscarCaixaAprendida(assinatura);
+  } catch (erro) {
+    console.warn("[Frete] Caixas aprendidas:", erro.message);
+  }
+  const descricao = Object.entries(porCategoria)
+    .filter(([, n]) => n > 0)
+    .map(([categoria, n]) => `${n} un. ${categoria}`)
+    .join(" · ");
 
-  return { pesoGramas, valorMercadoria: arredondar(valorMercadoria), freteIndisponivel, quantidades, caixa };
+  // Caixa do primeiro volume: a aprendida ou a da Calculadora de Pedidos (base 70x50x60).
+  const primeiraAprendida = aprendida?.volumes?.[0];
+  const caixa = primeiraAprendida
+    ? { altura: primeiraAprendida.altura, largura: primeiraAprendida.largura, comprimento: primeiraAprendida.comprimento }
+    : (Object.keys(quantidades).length && (await caixaParaFrete(quantidades))) || CAIXA_PADRAO;
+
+  return { pesoGramas, valorMercadoria: arredondar(valorMercadoria), freteIndisponivel, quantidades, caixa, assinatura, descricao, aprendida };
 };
 
 const estimar = async (servico, pesoGramas, uf) => {
@@ -81,8 +102,9 @@ const estimar = async (servico, pesoGramas, uf) => {
 // Volumes da Calculadora de Pedidos agrupados por tamanho de caixa:
 // [{ volumes, altura, largura, comprimento (cm), pesoKg (o mais pesado do grupo) }].
 // Sem tipo de embalagem mapeado: 1 volume da caixa padrão.
-export const volumesSugeridos = async (carga) => {
-  let calculadas = [{ volumes: 1, ...carga.caixa, pesoKg: null }];
+export const volumesSugeridos = async (carga, { usarAprendida = true } = {}) => {
+  if (usarAprendida && carga.aprendida?.volumes?.length) return volumesDaCaixaAprendida(carga.aprendida);
+  let calculadas = [{ volumes: 1, ...(carga.aprendida ? CAIXA_PADRAO : carga.caixa), pesoKg: null }];
   try {
     if (Object.keys(carga.quantidades).length) {
       const calculo = await calcularPedidoCompleto({ quantidades: carga.quantidades, medidas: {}, avulsos: [] });

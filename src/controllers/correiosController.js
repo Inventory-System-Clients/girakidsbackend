@@ -8,6 +8,7 @@ import {
   statusApiCorreios,
 } from "../services/correiosApiService.js";
 import { METODOS_ENVIO } from "../utils/formasPagamento.js";
+import { aprenderCaixa, esquecerCaixa } from "../services/caixasAprendidasService.js";
 import { fimDoDia, inicioDoDia } from "../utils/helpers.js";
 import { contem } from "../utils/busca.js";
 
@@ -168,8 +169,16 @@ export const detalharPedido = async (req, res) => {
     // montar a caixa e cotar sem voltar ao Time de Vendas).
     const itens = await PedidoItem.findAll({ where: { pedidoId: original.id }, order: [["nome", "ASC"]] });
     let volumes = [];
+    let calculados = [];
+    let aprendida = null;
     try {
-      volumes = await volumesSugeridos(await resumirCarga(itens.map((i) => ({ produtoId: i.produtoId, quantidade: i.quantidade }))));
+      const carga = await resumirCarga(itens.map((i) => ({ produtoId: i.produtoId, quantidade: i.quantidade })));
+      volumes = await volumesSugeridos(carga);
+      if (carga.aprendida) {
+        calculados = await volumesSugeridos(carga, { usarAprendida: false });
+        const { volumes: _v, pedidoId: _p, ...info } = carga.aprendida;
+        aprendida = { ...info, mesmoPedido: carga.aprendida.pedidoId === original.id };
+      }
     } catch (erro) {
       console.warn("[Correios] Volumes sugeridos:", erro.message);
     }
@@ -187,6 +196,9 @@ export const detalharPedido = async (req, res) => {
         pesoGramas: i.pesoGramas != null ? Number(i.pesoGramas) : null,
       })),
       volumesSugeridos: volumes,
+      // Caixa aprendida de uma postagem anterior com o mesmo conteúdo.
+      caixaAprendida: aprendida,
+      volumesCalculados: calculados,
     });
   } catch (error) {
     responderErro(res, error, "Erro ao abrir o pedido");
@@ -194,6 +206,18 @@ export const detalharPedido = async (req, res) => {
 };
 
 // Cotação e postagem vão direto na API oficial dos Correios.
+// Remove uma caixa aprendida errada (volta para a conta da calculadora).
+export const esquecerCaixaAprendida = async (req, res) => {
+  try {
+    const assinatura = String(req.body?.assinatura || "");
+    if (!assinatura) return res.status(400).json({ error: "Informe a caixa." });
+    const removida = await esquecerCaixa(assinatura);
+    res.json({ removida });
+  } catch (error) {
+    responderErro(res, error, "Erro ao esquecer a caixa");
+  }
+};
+
 export const apiStatus = async (req, res) => {
   try {
     res.json(await statusApiCorreios());
@@ -259,6 +283,21 @@ export const criarPostagem = async (req, res) => {
     });
     if (resultado.etiqueta) {
       await pedido.update({ codigoRastreio: resultado.etiqueta });
+    }
+    // A caixa postada vira a sugestão para pedidos com o mesmo conteúdo.
+    try {
+      const itens = await PedidoItem.findAll({ where: { pedidoId: pedido.id } });
+      const conteudo = await resumirCarga(itens.map((i) => ({ produtoId: i.produtoId, quantidade: i.quantidade })));
+      await aprenderCaixa({
+        assinatura: conteudo.assinatura,
+        descricao: conteudo.descricao,
+        pedidoId: pedido.id,
+        pedidoNumero: pedido.numero,
+        carga,
+        usuarioNome: req.usuario?.nome,
+      });
+    } catch (erro) {
+      console.warn("[Correios] Aprender caixa:", erro.message);
     }
 
     res.status(201).json({

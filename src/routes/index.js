@@ -324,6 +324,7 @@ router.post("/correios/cotacao", ...com, correios.cotar);
 router.get("/correios/api/status", ...com, correios.apiStatus);
 router.post("/correios/postagens", ...com, registrarLog("CRIAR_POSTAGEM_CORREIOS", "CorreiosPostagem"), correios.criarPostagem);
 router.get("/correios/postagens/:id/pdfs", ...com, correios.baixarPdfs);
+router.post("/correios/caixas-aprendidas/esquecer", ...com, registrarLog("ESQUECER_CAIXA", "Configuracao"), correios.esquecerCaixaAprendida);
 router.use("/transportadoras", transportadoraRoutes);
 router.use("/calculadora-pedidos", calculoPedidoRoutes);
 router.use("/calculo-pedido", calculoPedidoRoutes);
