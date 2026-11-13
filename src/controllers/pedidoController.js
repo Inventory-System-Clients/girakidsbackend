@@ -719,15 +719,21 @@ export const alterarFormaPagamento = async (req, res) => {
   }
 };
 
+const METODOS_ENVIO_VALIDOS = ["RETIRAR_LOCAL", "TRANSPORTADORA", "PAC", "SEDEX"];
 export const alterarTransportadora = async (req, res) => {
   try {
     const pedido = await carregar(req.params.id);
-    const { transportadoraId, transportadora: escolha, observacoes, cotacao, cotacaoCom } = req.body || {};
+    const { transportadoraId, transportadora: escolha, observacoes, cotacao, cotacaoCom, metodoEnvio } = req.body || {};
+    if (metodoEnvio !== undefined && !METODOS_ENVIO_VALIDOS.includes(metodoEnvio)) throw erroHttp(400, "Método de entrega inválido.");
+    // Retirada e Correios não têm transportadora; escolher uma transportadora
+    // sem informar o método passa o pedido para "Transportadora".
+    const metodo = metodoEnvio || (escolha || transportadoraId ? "TRANSPORTADORA" : pedido.metodoEnvio);
+    const comTransportadora = metodo === "TRANSPORTADORA";
     // Aceita o id de um parceiro ou a escolha do seletor (planilha/web), que
     // é cadastrada em Parceiros se ainda não existir.
     let transportadora = null;
-    if (escolha) transportadora = await resolverTransportadora(escolha, req.usuario);
-    else if (transportadoraId) {
+    if (comTransportadora && escolha) transportadora = await resolverTransportadora(escolha, req.usuario);
+    else if (comTransportadora && transportadoraId) {
       transportadora = await Parceiro.findByPk(transportadoraId);
       if (!transportadora) throw erroHttp(404, "Transportadora não encontrada.");
     }
@@ -737,6 +743,9 @@ export const alterarTransportadora = async (req, res) => {
       transportadoraObs: transportadora ? observacoes || null : null,
       transportadoraCotacao: transportadora ? textoCurto(cotacao, 60) : null,
       transportadoraCotacaoCom: transportadora ? textoCurto(cotacaoCom, 150) : null,
+      ...(metodo !== pedido.metodoEnvio
+        ? { metodoEnvio: metodo, historico: evento(pedido, req.usuario, "METODO_ENVIO", { de: pedido.metodoEnvio, para: metodo }) }
+        : {}),
     });
     await responderPedido(res, pedido.id);
   } catch (error) {
