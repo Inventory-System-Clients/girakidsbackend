@@ -35,11 +35,66 @@ export const assinaturaConteudo = (porCategoria) => {
 
 const lerTodas = async () => ({ ...((await lerConfiguracao(CHAVE)) || {}) });
 
+// "capsulas:300|encapsulados:1000" → Map { capsulas → 300, encapsulados → 1000 }
+const lerAssinatura = (assinatura) =>
+  new Map(
+    String(assinatura || "")
+      .split("|")
+      .filter(Boolean)
+      .map((parte) => {
+        const i = parte.lastIndexOf(":");
+        return [parte.slice(0, i), Number(parte.slice(i + 1)) || 0];
+      }),
+  );
+
+// Pedido parecido: mesmas categorias e quantidades próximas.
+//  - cabe com folga: cada categoria até a quantidade já postada naquela
+//    caixa, sem ser pequeno demais (no mínimo 70% do total, senão a caixa
+//    fica grande e a calculadora acerta melhor);
+//  - um pouco mais: até 10% acima em cada categoria (a caixa costuma ter
+//    sobra), só se não houver uma que caiba com folga.
+const MINIMO_DO_TOTAL = 0.7;
+const MAXIMO_ACIMA = 1.1;
+
+const compararConteudo = (atual, aprendido) => {
+  if (atual.size !== aprendido.size) return null;
+  let maiorRazao = 0;
+  let somaAtual = 0;
+  let somaAprendida = 0;
+  for (const [categoria, unidades] of atual) {
+    const base = aprendido.get(categoria);
+    if (!base) return null;
+    maiorRazao = Math.max(maiorRazao, unidades / base);
+    somaAtual += unidades;
+    somaAprendida += base;
+  }
+  const proporcao = somaAtual / somaAprendida;
+  if (maiorRazao > MAXIMO_ACIMA || proporcao < MINIMO_DO_TOTAL) return null;
+  // Menor nota = melhor: primeiro as que cabem, depois a mais próxima.
+  return { cabe: maiorRazao <= 1, distancia: Math.abs(1 - proporcao) };
+};
+
 export const buscarCaixaAprendida = async (assinatura) => {
   if (!assinatura) return null;
   const todas = await lerTodas();
-  const registro = todas[assinatura];
-  return registro?.volumes?.length ? { assinatura, ...registro } : null;
+  const exata = todas[assinatura];
+  if (exata?.volumes?.length) return { assinatura, ...exata, parecida: false };
+
+  const atual = lerAssinatura(assinatura);
+  let melhor = null;
+  for (const [chave, registro] of Object.entries(todas)) {
+    if (!registro?.volumes?.length) continue;
+    const nota = compararConteudo(atual, lerAssinatura(chave));
+    if (!nota) continue;
+    const melhorQue =
+      !melhor ||
+      (nota.cabe && !melhor.nota.cabe) ||
+      (nota.cabe === melhor.nota.cabe &&
+        (nota.distancia < melhor.nota.distancia ||
+          (nota.distancia === melhor.nota.distancia && (registro.vezes || 1) > (melhor.registro.vezes || 1))));
+    if (melhorQue) melhor = { chave, registro, nota };
+  }
+  return melhor ? { assinatura: melhor.chave, ...melhor.registro, parecida: true } : null;
 };
 
 const medida = (valor) => {
