@@ -1,6 +1,7 @@
 import { Op } from "sequelize";
 import { Categoria, Produto } from "../models/index.js";
 import { lerConfiguracao } from "../models/Configuracao.js";
+import { emBlackFriday, precoAtual } from "../models/Produto.js";
 import { cotarFrete } from "../services/freteService.js";
 import { statusPagamentos } from "../services/pagamentos/index.js";
 import { clientePodeCombinar, ehInterno } from "../services/pedidoService.js";
@@ -62,7 +63,8 @@ const catalogo = async () => {
       sku: p.sku,
       categoria: p.categoria,
       descricao: p.descricao,
-      precoVenda: Number(p.precoVenda),
+      precoVenda: precoAtual(p),
+      blackFriday: emBlackFriday(p),
       unidadesPacote: p.unidadesPacote,
       estoque: p.estoque,
       modoVenda: p.modoVenda,

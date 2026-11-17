@@ -17,6 +17,11 @@ export const TIPOS_EMBALAGEM = {
   frete_indisponivel: "Frete Indisponível (contato obrigatório)",
 };
 
+// Preço por unidade que vale agora: com a Black Friday ativa, o preço
+// promocional; senão o valor de venda normal.
+export const emBlackFriday = (p) => Boolean(p?.blackFriday) && Number(p.precoBlackFriday) > 0;
+export const precoAtual = (p) => (emBlackFriday(p) ? Number(p.precoBlackFriday) : Number(p.precoVenda || 0));
+
 const Produto = sequelize.define(
   "Produto",
   {
@@ -65,6 +70,12 @@ const Produto = sequelize.define(
       allowNull: false,
       defaultValue: 0,
     },
+    // Modo Black Friday: vende por precoBlackFriday e mostra
+    // precoOriginalBlackFriday riscado (sem valor: o precoVenda). Ambos por
+    // unidade, como o precoVenda. Aparece no topo do catálogo.
+    blackFriday: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    precoBlackFriday: { type: DataTypes.DECIMAL(12, 4), allowNull: true },
+    precoOriginalBlackFriday: { type: DataTypes.DECIMAL(12, 4), allowNull: true },
     custo: {
       type: DataTypes.DECIMAL(12, 4),
       allowNull: true,

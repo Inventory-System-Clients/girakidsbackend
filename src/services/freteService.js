@@ -1,5 +1,6 @@
 import { Produto } from "../models/index.js";
 import { lerConfiguracao } from "../models/Configuracao.js";
+import { precoAtual } from "../models/Produto.js";
 import { caixaParaFrete } from "./pedidoCalculoEngine.js";
 import { apiCorreiosConfigurada, cotarServicosApi } from "./correiosApiService.js";
 import { braspressConfigurada, cotarBraspress } from "./braspressService.js";
@@ -53,7 +54,7 @@ export const resumirCarga = async (itens) => {
     if (!produto) continue;
     const pacotes = Number(item.quantidade) || 0;
     pesoGramas += pacotes * Number(produto.pesoPacoteGramas || 0);
-    valorMercadoria += pacotes * Number(produto.unidadesPacote || 1) * Number(produto.precoVenda || 0);
+    valorMercadoria += pacotes * Number(produto.unidadesPacote || 1) * precoAtual(produto);
     if (produto.tipoEmbalagem === "frete_indisponivel") freteIndisponivel = true;
     const categoria = produto.categoria || "Sem categoria";
     porCategoria[categoria] = (porCategoria[categoria] || 0) + pacotes * Number(produto.unidadesPacote || 1);

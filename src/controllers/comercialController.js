@@ -1,6 +1,7 @@
 import { Op } from "sequelize";
 import { Pedido, PedidoItem, Produto, Usuario } from "../models/index.js";
 import { lerConfiguracao, salvarConfiguracao } from "../models/Configuracao.js";
+import { precoAtual } from "../models/Produto.js";
 import { CAMPO_CALCULADORA_POR_EMBALAGEM } from "../services/freteService.js";
 import { ENDERECO_LOJA_PADRAO } from "../utils/formasPagamento.js";
 import { responderErro, erroHttp, dataISO } from "../utils/helpers.js";
@@ -151,7 +152,7 @@ const resumoProduto = (p) =>
     nome: p.nome,
     sku: p.sku,
     categoria: p.categoria,
-    precoVenda: Number(p.precoVenda),
+    precoVenda: precoAtual(p),
     unidadesPacote: p.unidadesPacote,
     imagemUrl: p.imagemUrl,
     estoque: p.estoque,

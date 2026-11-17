@@ -6,7 +6,7 @@ import {
   HistoricoPreco,
   Parceiro,
 } from "../models/index.js";
-import { TIPOS_EMBALAGEM } from "../models/Produto.js";
+import { TIPOS_EMBALAGEM, emBlackFriday, precoAtual } from "../models/Produto.js";
 import { movimentar } from "../services/estoqueService.js";
 import { verificarImagemEsgotado } from "../services/imagemEsgotadoService.js";
 import { ehInterno } from "../services/pedidoService.js";
@@ -28,11 +28,20 @@ const serializarAdmin = (produto) => {
   return {
     ...p,
     precoVenda,
+    precoBlackFriday: p.precoBlackFriday != null ? Number(p.precoBlackFriday) : null,
+    precoOriginalBlackFriday: p.precoOriginalBlackFriday != null ? Number(p.precoOriginalBlackFriday) : null,
     custo,
     margemValor: margem,
     margemPercentual: custo != null && precoVenda > 0 ? arredondar((margem / precoVenda) * 100) : null,
     statusEstoque: statusEstoque(p),
   };
+};
+
+// Preço riscado da Black Friday (só quando é maior que o promocional).
+const blackFridayCatalogo = (p) => {
+  if (!emBlackFriday(p)) return { blackFriday: false, precoOriginal: null };
+  const original = Number(p.precoOriginalBlackFriday) || Number(p.precoVenda);
+  return { blackFriday: true, precoOriginal: original > precoAtual(p) ? original : null };
 };
 
 const serializarCatalogo = (produto) => {
@@ -45,7 +54,9 @@ const serializarCatalogo = (produto) => {
     descricao: p.descricao,
     videoUrl: p.videoUrl,
     categoria: p.categoria,
-    precoVenda: Number(p.precoVenda),
+    // Já com a Black Friday aplicada (é o preço cobrado no carrinho).
+    precoVenda: precoAtual(p),
+    ...blackFridayCatalogo(p),
     unidadesPacote: p.unidadesPacote,
     pesoPacoteGramas: p.pesoPacoteGramas,
     estoque: p.estoque,
@@ -105,6 +116,8 @@ export const catalogo = async (req, res) => {
       // Esgotados sempre no fim (por encomenda conta como disponível).
       order: [
         [sequelize.literal(`CASE WHEN "estoque" > 0 OR "modoVenda" = 'ENCOMENDA' THEN 0 ELSE 1 END`), "ASC"],
+        // Black Friday ativa no topo.
+        [sequelize.literal(`CASE WHEN "blackFriday" AND "precoBlackFriday" > 0 THEN 0 ELSE 1 END`), "ASC"],
         ["destaque", "DESC"],
         ["nome", "ASC"],
       ],
@@ -146,7 +159,8 @@ export const buscar = async (req, res) => {
     });
     // Custo e margem só para quem cuida de produtos, compras ou financeiro.
     const veCusto = req.usuario?.temPermissao("PRODUTOS", "ENTRADAS", "RECEBIMENTOS", "FINANCEIRO", "COMERCIAL");
-    res.json(produtos.map((p) => (veCusto ? serializarAdmin(p) : serializarCatalogo(p))));
+    // Preço que vale agora (com Black Friday) para montar pedidos.
+    res.json(produtos.map((p) => (veCusto ? { ...serializarAdmin(p), precoVenda: precoAtual(p), ...blackFridayCatalogo(p) } : serializarCatalogo(p))));
   } catch (error) {
     responderErro(res, error, "Erro ao buscar produtos");
   }
@@ -256,13 +270,17 @@ const CAMPOS = [
   "sku", "nome", "descricao", "categoria", "tipo", "componentes", "modoVenda",
   "unidadesPacote", "pesoPacoteGramas", "tipoEmbalagem", "estoqueMinimo",
   "fornecedorPreferencialId", "observacoesCompra", "imagemUrl",
-  "imagemSemEstoqueUrl", "destaque", "videoUrl",
+  "imagemSemEstoqueUrl", "destaque", "videoUrl", "blackFriday",
 ];
 
 const normalizar = (corpo) => {
   const dados = {};
   for (const campo of CAMPOS) if (corpo[campo] !== undefined) dados[campo] = corpo[campo];
   if (corpo.precoVenda !== undefined) dados.precoVenda = numero(corpo.precoVenda);
+  for (const campo of ["precoBlackFriday", "precoOriginalBlackFriday"]) {
+    if (corpo[campo] !== undefined) dados[campo] = corpo[campo] === "" || corpo[campo] == null ? null : numero(corpo[campo]);
+  }
+  if (dados.blackFriday !== undefined) dados.blackFriday = Boolean(dados.blackFriday);
   if (corpo.custo !== undefined) dados.custo = corpo.custo === "" || corpo.custo == null ? null : numero(corpo.custo);
   if (dados.unidadesPacote !== undefined) dados.unidadesPacote = Math.max(1, Math.round(numero(dados.unidadesPacote)));
   if (dados.pesoPacoteGramas !== undefined) dados.pesoPacoteGramas = Math.max(0, Math.round(numero(dados.pesoPacoteGramas)));
@@ -298,10 +316,20 @@ const validar = (dados, novo) => {
   if (dados.precoVenda !== undefined && dados.precoVenda < 0) throw erroHttp(400, "Valor de venda inválido.");
 };
 
+// Com a Black Friday ligada: precisa do preço promocional, menor que o riscado.
+const validarBlackFriday = (p) => {
+  if (!p.blackFriday) return;
+  const promocional = Number(p.precoBlackFriday);
+  if (!(promocional > 0)) throw erroHttp(400, "Informe o valor com desconto da Black Friday.");
+  const original = Number(p.precoOriginalBlackFriday) || Number(p.precoVenda);
+  if (original <= promocional) throw erroHttp(400, "O valor riscado da Black Friday precisa ser maior que o valor com desconto.");
+};
+
 export const criar = async (req, res) => {
   try {
     const dados = normalizar(req.body || {});
     validar(dados, true);
+    validarBlackFriday(dados);
     const existente = await Produto.findOne({ where: { sku: dados.sku, arquivado: false } });
     if (existente) throw erroHttp(409, "Já existe um produto ativo com este SKU.");
     const produto = await sequelize.transaction(async (transaction) => {
@@ -340,6 +368,7 @@ export const atualizar = async (req, res) => {
       const produto = await Produto.findByPk(req.params.id, { transaction });
       if (!produto) throw erroHttp(404, "Produto não encontrado.");
       await garantirCategoria(dados.categoria, transaction);
+      validarBlackFriday({ ...produto.toJSON(), ...dados });
       const historico = [];
       if (dados.precoVenda !== undefined && Number(produto.precoVenda) !== dados.precoVenda) {
         historico.push({ campo: "VENDA", valorAnterior: produto.precoVenda, valorNovo: dados.precoVenda });

@@ -12,6 +12,7 @@ import {
   Categoria,
 } from "../models/index.js";
 import { lerConfiguracao } from "../models/Configuracao.js";
+import { precoAtual } from "../models/Produto.js";
 import { cotarFrete } from "./freteService.js";
 import { provedorAtivo, provedorMaquininha } from "./pagamentos/index.js";
 import { configPagamentos } from "./pagamentos/config.js";
@@ -225,7 +226,7 @@ export const montarItens = async (itensEntrada, usuario, transaction, { manterLi
     const precoUnitario =
       ehInterno(usuario) && entrada.precoUnitario != null && entrada.precoUnitario !== ""
         ? numero(entrada.precoUnitario)
-        : Number(produto.precoVenda);
+        : precoAtual(produto);
     const unidadesPacote = Number(produto.unidadesPacote || 1);
     return {
       produtoId: produto.id,
