@@ -1,4 +1,5 @@
 import { PRIMEIRO_PEDIDO_EXPEDICAO } from "./expedicaoController.js";
+import { esquecerAviso } from "../services/whatsappService.js";
 import { Op } from "sequelize";
 import { sequelize } from "../database/connection.js";
 import { contem } from "../utils/busca.js";
@@ -260,6 +261,34 @@ export const salvarCodigoRastreio = async (req, res) => {
     await responderPedido(res, req.params.id);
   } catch (error) {
     responderErro(res, error, "Erro ao salvar o código de rastreio");
+  }
+};
+
+// Retirada na loja: marca (ou desmarca) que o cliente já levou o pedido.
+export const marcarRetirado = async (req, res) => {
+  try {
+    const retirado = req.body?.retirado !== false;
+    await sequelize.transaction(async (transaction) => {
+      const pedido = await carregarParaAlterar(req.params.id, transaction);
+      garantirNaoCancelado(pedido);
+      if (pedido.tipo !== "PEDIDO") throw erroHttp(400, "Só pedidos podem ser marcados como retirados.");
+      if (pedido.metodoEnvio !== "RETIRAR_LOCAL") throw erroHttp(400, "O método de entrega deste pedido não é retirada na loja.");
+      if (pedido.statusExpedicao === "EXPEDIDO") throw erroHttp(400, "Pedido já expedido.");
+      if (Boolean(pedido.retiradoEm) === retirado) return;
+      await pedido.update(
+        {
+          retiradoEm: retirado ? new Date() : null,
+          retiradoPor: retirado ? req.usuario.nome : null,
+          historico: evento(pedido, req.usuario, retirado ? "RETIRADO" : "RETIRADA_DESFEITA"),
+        },
+        { transaction },
+      );
+    });
+    // Aviso de "pronto para retirada" que ainda não saiu não sai mais.
+    if (retirado) await esquecerAviso(req.params.id, "PRONTO");
+    await responderPedido(res, req.params.id);
+  } catch (error) {
+    responderErro(res, error, "Erro ao marcar pedido como retirado");
   }
 };
 
@@ -744,7 +773,12 @@ export const alterarTransportadora = async (req, res) => {
       transportadoraCotacao: transportadora ? textoCurto(cotacao, 60) : null,
       transportadoraCotacaoCom: transportadora ? textoCurto(cotacaoCom, 150) : null,
       ...(metodo !== pedido.metodoEnvio
-        ? { metodoEnvio: metodo, historico: evento(pedido, req.usuario, "METODO_ENVIO", { de: pedido.metodoEnvio, para: metodo }) }
+        ? {
+            metodoEnvio: metodo,
+            historico: evento(pedido, req.usuario, "METODO_ENVIO", { de: pedido.metodoEnvio, para: metodo }),
+            // Deixou de ser retirada: o "já retirado" não vale mais.
+            ...(metodo !== "RETIRAR_LOCAL" ? { retiradoEm: null, retiradoPor: null } : {}),
+          }
         : {}),
     });
     await responderPedido(res, pedido.id);

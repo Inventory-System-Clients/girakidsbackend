@@ -106,6 +106,7 @@ router.put("/pedidos/:id/codigo-rastreio", autenticar, exigirPermissao("VENDAS",
 router.get("/pedidos/:id/link-acompanhamento", autenticar, exigirPermissao("VENDAS", "FINANCEIRO", "COMERCIAL", "EXPEDICAO"), pedidos.linkAcompanhamento);
 router.get("/pedidos/:id", autenticar, pedidos.obter);
 router.put("/pedidos/:id", autenticar, exigirPermissao("VENDAS"), registrarLog("EDITAR_PEDIDO", "Pedido"), pedidos.editar);
+router.post("/pedidos/:id/retirado", autenticar, exigirPermissao("VENDAS", "FINANCEIRO", "COMERCIAL"), registrarLog("PEDIDO_RETIRADO", "Pedido"), pedidos.marcarRetirado);
 router.put("/pedidos/:id/reabrir", autenticar, exigirPermissao("VENDAS"), registrarLog("REABRIR_PEDIDO", "Pedido"), pedidos.reabrir);
 router.post("/pedidos/:id/liberar", autenticar, vendasOuFinanceiro, registrarLog("LIBERAR_PEDIDO", "Pedido"), pedidos.liberar);
 router.post("/pedidos/:id/cancelar", autenticar, exigirPermissao("VENDAS"), registrarLog("CANCELAR_PEDIDO", "Pedido"), pedidos.cancelar);

@@ -139,6 +139,11 @@ export const Pedido = sequelize.define(
     },
     expedidoEm: { type: DataTypes.DATE, allowNull: true },
     expedidoPor: { type: DataTypes.STRING(150), allowNull: true },
+    // Retirada na loja: o cliente já levou o pedido (marcado pelo time de
+    // vendas). Não manda o WhatsApp de "pronto para retirada" e a expedição
+    // pode dar baixa direto, sem montar.
+    retiradoEm: { type: DataTypes.DATE, allowNull: true },
+    retiradoPor: { type: DataTypes.STRING(150), allowNull: true },
     observacoesExpedicao: { type: DataTypes.TEXT, allowNull: true },
     imagemExpedicaoUrl: { type: DataTypes.TEXT, allowNull: true },
     // Montagem: concluída quando todos os itens foram conferidos e a pessoa

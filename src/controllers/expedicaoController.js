@@ -205,7 +205,14 @@ export const expedir = async (req, res) => {
   try {
     const pedido = await carregarLiberado(req.params.id);
     if (pedido.statusExpedicao === "EXPEDIDO") throw erroHttp(400, "Pedido já expedido.");
-    if (!pedido.itens.every((i) => i.conferido)) {
+    // Já retirado pelo cliente: dá baixa direto, sem montar (os itens ficam
+    // conferidos em nome de quem deu a baixa).
+    if (pedido.retiradoEm) {
+      await PedidoItem.update(
+        { conferido: true, conferidoEm: new Date(), conferidoPor: req.usuario.nome },
+        { where: { pedidoId: pedido.id, conferido: false } },
+      );
+    } else if (!pedido.itens.every((i) => i.conferido)) {
       throw erroHttp(400, "Confira todos os itens na montagem antes de expedir.");
     }
     const imagensExpedicao = listaUrls(req.body?.imagensExpedicao) ?? (req.body?.imagemUrl ? [req.body.imagemUrl] : pedido.imagensExpedicao);

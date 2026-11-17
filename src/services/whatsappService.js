@@ -543,6 +543,8 @@ export const avisarPedido = async (pedidoId, etapa) => {
     if (!pedido || pedido.tipo !== "PEDIDO" || pedido.statusVendas === "CANCELADO") return null;
     // Retirada não tem "a caminho": quando expede, o cliente já está com ele.
     if (etapa === "A_CAMINHO" && (!pedido.metodoEnvio || pedido.metodoEnvio === "RETIRAR_LOCAL")) return null;
+    // Cliente já retirou: não avisa que está pronto para retirada.
+    if (etapa === "PRONTO" && pedido.retiradoEm) return null;
     if (pedido.cliente && pedido.cliente.whatsappAvisos === false) return null;
 
     const telefone = normalizarTelefone(pedido.cliente?.telefone) || normalizarTelefone(pedido.clienteTelefone);
