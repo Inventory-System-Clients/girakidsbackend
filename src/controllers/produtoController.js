@@ -78,6 +78,11 @@ const categoriasOcultas = async () =>
 // Catálogo público
 // ---------------------------------------------------------------------------
 
+// Categoria especial do catálogo: só os itens com Black Friday ativa (eles
+// não aparecem em "Todos" nem nas outras categorias, a não ser na busca).
+export const CATEGORIA_BLACK_FRIDAY = "Black Friday";
+const SQL_BLACK_FRIDAY = `("blackFriday" AND "precoBlackFriday" > 0)`;
+
 export const catalogo = async (req, res) => {
   try {
     const ocultas = await categoriasOcultas();
@@ -86,21 +91,29 @@ export const catalogo = async (req, res) => {
       ...(ocultas.length ? { categoria: { [Op.notIn]: ocultas } } : {}),
     };
 
-    const contagem = await Produto.findAll({
-      where: base,
+    const semBlackFriday = sequelize.literal(`NOT ${SQL_BLACK_FRIDAY}`);
+    const [contagem, totalBlackFriday] = await Promise.all([
+      Produto.findAll({
+        where: { ...base, [Op.and]: [semBlackFriday] },
       attributes: ["categoria", [fn("COUNT", col("id")), "total"]],
-      group: ["categoria"],
-      order: [["categoria", "ASC"]],
-      raw: true,
-    });
+        group: ["categoria"],
+        order: [["categoria", "ASC"]],
+        raw: true,
+      }),
+      Produto.count({ where: { ...base, [Op.and]: [sequelize.literal(SQL_BLACK_FRIDAY)] } }),
+    ]);
 
     const where = { ...base };
-    // Categoria oculta não aparece nem pedida pelo nome.
-    if (req.query.categoria) {
-      const categoria = String(req.query.categoria);
-      where.categoria = ocultas.includes(categoria) ? { [Op.in]: [] } : categoria;
-    }
+    const categoria = String(req.query.categoria || "");
     const busca = String(req.query.busca || "").trim();
+    if (categoria === CATEGORIA_BLACK_FRIDAY) {
+      where[Op.and] = [sequelize.literal(SQL_BLACK_FRIDAY)];
+    } else {
+      // Categoria oculta não aparece nem pedida pelo nome.
+      if (categoria) where.categoria = ocultas.includes(categoria) ? { [Op.in]: [] } : categoria;
+      // Black Friday fica só na categoria dela (a busca em "Todos" acha tudo).
+      if (categoria || !busca) where[Op.and] = [semBlackFriday];
+    }
     if (busca) {
       where[Op.or] = [
         contem("nome", busca),
@@ -134,6 +147,8 @@ export const catalogo = async (req, res) => {
         .filter((c) => c.categoria)
         .map((c) => ({ nome: c.categoria, total: Number(c.total) })),
       totalGeral: contagem.reduce((s, c) => s + Number(c.total), 0),
+      categoriaBlackFriday: CATEGORIA_BLACK_FRIDAY,
+      totalBlackFriday,
     });
   } catch (error) {
     responderErro(res, error, "Erro ao carregar catálogo");
