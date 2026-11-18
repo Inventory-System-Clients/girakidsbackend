@@ -47,6 +47,10 @@ export const resumirCarga = async (itens) => {
   let valorMercadoria = 0;
   let freteIndisponivel = false;
   const quantidades = {};
+  // Produtos com caixa de envio própria (agrupados pelo tamanho da caixa) e
+  // com medidas do pacote (a calculadora escolhe a caixa onde cabem).
+  const fixas = new Map();
+  const avulsos = [];
   // Unidades por categoria: identifica o conteúdo para as caixas aprendidas.
   const porCategoria = {};
   for (const item of itens) {
@@ -58,19 +62,37 @@ export const resumirCarga = async (itens) => {
     if (produto.tipoEmbalagem === "frete_indisponivel") freteIndisponivel = true;
     const categoria = produto.categoria || "Sem categoria";
     porCategoria[categoria] = (porCategoria[categoria] || 0) + pacotes * Number(produto.unidadesPacote || 1);
+    const caixaFixa = produto.freteCaixa;
+    const medidas = produto.freteMedidas;
+    if (caixaFixa?.pacotesPorCaixa > 0 && caixaFixa.altura && caixaFixa.largura && caixaFixa.comprimento) {
+      const chave = `${caixaFixa.altura}x${caixaFixa.largura}x${caixaFixa.comprimento}`;
+      const g = fixas.get(chave) || { altura: caixaFixa.altura, largura: caixaFixa.largura, comprimento: caixaFixa.comprimento, fracao: 0, pesoGramas: 0 };
+      g.fracao += pacotes / caixaFixa.pacotesPorCaixa;
+      g.pesoGramas += pacotes * Number(produto.pesoPacoteGramas || 0);
+      fixas.set(chave, g);
+      continue;
+    }
+    if (medidas?.altura && medidas.largura && medidas.comprimento && pacotes > 0) {
+      avulsos.push({ nome: produto.nome, quantidade: pacotes, ...medidas, pesoUnitario: Number(produto.pesoPacoteGramas || 0) / 1000 });
+      continue;
+    }
     const campo = CAMPO_CALCULADORA_POR_EMBALAGEM[produto.tipoEmbalagem];
     if (campo) {
       quantidades[campo] = (quantidades[campo] || 0) + pacotes * Number(produto.unidadesPacote || 1);
     }
   }
 
-  // Mesmo conteúdo já postado antes: usa a caixa que a expedição usou.
+  // Mesmo conteúdo já postado antes: usa a caixa que a expedição usou (a não
+  // ser que algum produto tenha caixa/medidas de frete definidas no cadastro).
   const assinatura = assinaturaConteudo(porCategoria);
+  const configurado = fixas.size > 0 || avulsos.length > 0;
   let aprendida = null;
-  try {
-    aprendida = await buscarCaixaAprendida(assinatura);
-  } catch (erro) {
-    console.warn("[Frete] Caixas aprendidas:", erro.message);
+  if (!configurado) {
+    try {
+      aprendida = await buscarCaixaAprendida(assinatura);
+    } catch (erro) {
+      console.warn("[Frete] Caixas aprendidas:", erro.message);
+    }
   }
   const descricao = Object.entries(porCategoria)
     .filter(([, n]) => n > 0)
@@ -79,11 +101,28 @@ export const resumirCarga = async (itens) => {
 
   // Caixa do primeiro volume: a aprendida ou a da Calculadora de Pedidos (base 70x50x60).
   const primeiraAprendida = aprendida?.volumes?.[0];
-  const caixa = primeiraAprendida
-    ? { altura: primeiraAprendida.altura, largura: primeiraAprendida.largura, comprimento: primeiraAprendida.comprimento }
-    : (Object.keys(quantidades).length && (await caixaParaFrete(quantidades))) || CAIXA_PADRAO;
-
-  return { pesoGramas, valorMercadoria: arredondar(valorMercadoria), freteIndisponivel, quantidades, caixa, assinatura, descricao, aprendida };
+  const carga = {
+    pesoGramas,
+    valorMercadoria: arredondar(valorMercadoria),
+    freteIndisponivel,
+    quantidades,
+    fixas: [...fixas.values()],
+    avulsos,
+    assinatura,
+    descricao,
+    aprendida,
+  };
+  if (configurado) {
+    // Correios cotam uma caixa: a maior dos volumes sugeridos.
+    const volumes = await volumesSugeridos({ ...carga, caixa: CAIXA_PADRAO });
+    const maior = volumes.reduce((a, b) => (b.altura * b.largura * b.comprimento > a.altura * a.largura * a.comprimento ? b : a), volumes[0]);
+    carga.caixa = maior ? { altura: maior.altura, largura: maior.largura, comprimento: maior.comprimento } : CAIXA_PADRAO;
+  } else {
+    carga.caixa = primeiraAprendida
+      ? { altura: primeiraAprendida.altura, largura: primeiraAprendida.largura, comprimento: primeiraAprendida.comprimento }
+      : (Object.keys(quantidades).length && (await caixaParaFrete(quantidades))) || CAIXA_PADRAO;
+  }
+  return carga;
 };
 
 const estimar = async (servico, pesoGramas, uf) => {
@@ -105,10 +144,20 @@ const estimar = async (servico, pesoGramas, uf) => {
 // Sem tipo de embalagem mapeado: 1 volume da caixa padrão.
 export const volumesSugeridos = async (carga, { usarAprendida = true } = {}) => {
   if (usarAprendida && carga.aprendida?.volumes?.length) return volumesDaCaixaAprendida(carga.aprendida);
+  // Caixas de envio definidas no produto: N pacotes por caixa (produtos que
+  // usam a mesma caixa dividem as caixas).
+  const fixas = (carga.fixas || [])
+    .filter((g) => g.fracao > 0)
+    .map((g) => {
+      const volumes = Math.max(1, Math.ceil(g.fracao - 1e-9));
+      return { volumes, altura: g.altura, largura: g.largura, comprimento: g.comprimento, pesoKg: g.pesoGramas ? arredondar(g.pesoGramas / 1000 / volumes, 3) : null };
+    });
+  const temCalculadora = Object.keys(carga.quantidades).length > 0 || (carga.avulsos || []).length > 0;
+  if (fixas.length && !temCalculadora) return fixas;
   let calculadas = [{ volumes: 1, ...(carga.aprendida ? CAIXA_PADRAO : carga.caixa), pesoKg: null }];
   try {
-    if (Object.keys(carga.quantidades).length) {
-      const calculo = await calcularPedidoCompleto({ quantidades: carga.quantidades, medidas: {}, avulsos: [] });
+    if (temCalculadora) {
+      const calculo = await calcularPedidoCompleto({ quantidades: carga.quantidades, medidas: {}, avulsos: carga.avulsos || [] });
       const grupos = new Map();
       for (const v of calculo.volumes || []) {
         if (!v.medidas) continue;
@@ -123,6 +172,14 @@ export const volumesSugeridos = async (carga, { usarAprendida = true } = {}) => 
     }
   } catch {
     // Calculadora sem parâmetros: 1 volume da caixa padrão.
+  }
+  // Junta com as caixas fixas (mesmo tamanho vira uma linha só).
+  for (const f of fixas) {
+    const igual = calculadas.find((c) => c.altura === f.altura && c.largura === f.largura && c.comprimento === f.comprimento);
+    if (igual) {
+      igual.volumes += f.volumes;
+      igual.pesoKg = Math.max(Number(igual.pesoKg) || 0, Number(f.pesoKg) || 0) || null;
+    } else calculadas.push(f);
   }
   return calculadas;
 };

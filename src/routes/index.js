@@ -157,6 +157,7 @@ router.post("/expedicao/:id/expedir", ...exp, registrarLog("EXPEDIR_PEDIDO", "Pe
 const prod = [autenticar, exigirPermissao("PRODUTOS")];
 router.get("/produtos/busca", autenticar, exigirInterno, produtos.buscar);
 router.get("/produtos/embalagens", autenticar, produtos.tiposEmbalagem);
+router.get("/produtos/caixas-frete", ...prod, produtos.caixasFrete);
 router.get("/produtos/categorias", autenticar, exigirInterno, produtos.listarCategorias);
 router.post("/produtos/categorias", ...prod, produtos.salvarCategoria);
 router.put("/produtos/categorias/:id", ...prod, registrarLog("ATUALIZAR_CATEGORIA", "Categoria"), produtos.salvarCategoria);

@@ -9,6 +9,7 @@ import {
 import { TIPOS_EMBALAGEM, emBlackFriday, precoAtual } from "../models/Produto.js";
 import { movimentar } from "../services/estoqueService.js";
 import { verificarImagemEsgotado } from "../services/imagemEsgotadoService.js";
+import { lerParametros } from "../services/pedidoCalculoEngine.js";
 import { ehInterno } from "../services/pedidoService.js";
 import { arredondar, erroHttp, numero, responderErro } from "../utils/helpers.js";
 import { contem } from "../utils/busca.js";
@@ -155,6 +156,17 @@ export const catalogo = async (req, res) => {
   }
 };
 
+// Caixas cadastradas na Calculadora de Pedidos (para escolher a caixa de
+// envio do produto).
+export const caixasFrete = async (req, res) => {
+  try {
+    const { caixas } = await lerParametros();
+    res.json(caixas.map(({ altura, largura, comprimento, nome }) => ({ altura, largura, comprimento, nome })));
+  } catch (error) {
+    responderErro(res, error, "Erro ao carregar as caixas");
+  }
+};
+
 // Busca rápida (combobox do recebimento, checkout interno, etc.).
 export const buscar = async (req, res) => {
   try {
@@ -288,6 +300,17 @@ const CAMPOS = [
   "imagemSemEstoqueUrl", "destaque", "videoUrl", "blackFriday",
 ];
 
+// { altura, largura, comprimento } em cm (todos > 0 e até 300) ou null.
+const lerMedidas = (valor, rotulo) => {
+  if (!valor) return null;
+  const m = {};
+  for (const lado of ["altura", "largura", "comprimento"]) m[lado] = Math.round(numero(valor[lado]) * 10) / 10;
+  const preenchidos = Object.values(m).filter((n) => n > 0).length;
+  if (!preenchidos) return null;
+  if (preenchidos < 3 || Object.values(m).some((n) => n > 300)) throw erroHttp(400, `${rotulo}: informe altura, largura e comprimento em cm (até 300).`);
+  return m;
+};
+
 const normalizar = (corpo) => {
   const dados = {};
   for (const campo of CAMPOS) if (corpo[campo] !== undefined) dados[campo] = corpo[campo];
@@ -303,6 +326,15 @@ const normalizar = (corpo) => {
     dados.estoqueMinimo = dados.estoqueMinimo === "" || dados.estoqueMinimo == null ? null : Math.round(numero(dados.estoqueMinimo));
   }
   if (dados.tipoEmbalagem && !TIPOS_EMBALAGEM[dados.tipoEmbalagem]) dados.tipoEmbalagem = null;
+  if (corpo.freteMedidas !== undefined) dados.freteMedidas = lerMedidas(corpo.freteMedidas, "Medidas do pacote");
+  if (corpo.freteCaixa !== undefined) {
+    const caixa = lerMedidas(corpo.freteCaixa, "Caixa de envio");
+    if (caixa) {
+      caixa.pacotesPorCaixa = Math.round(numero(corpo.freteCaixa.pacotesPorCaixa));
+      if (!(caixa.pacotesPorCaixa > 0)) throw erroHttp(400, "Informe quantos pacotes cabem na caixa de envio.");
+    }
+    dados.freteCaixa = caixa;
+  }
   if (dados.fornecedorPreferencialId === "") dados.fornecedorPreferencialId = null;
   if (dados.categoria) dados.categoria = String(dados.categoria).trim();
   // Só links http(s) (nada de "javascript:").

@@ -94,6 +94,14 @@ const Produto = sequelize.define(
       type: DataTypes.STRING(30),
       allowNull: true,
     },
+    // Frete (opcional, definido em Gerenciar Produtos):
+    //   freteCaixa   { altura, largura, comprimento (cm), pacotesPorCaixa }:
+    //                o produto vai sempre nesta caixa, N pacotes por caixa.
+    //   freteMedidas { altura, largura, comprimento (cm) } de 1 pacote: sem
+    //                caixa fixa, a calculadora escolhe a caixa onde ele cabe.
+    // Sem nenhum dos dois: segue pelo tipo de embalagem (calculadora).
+    freteCaixa: { type: DataTypes.JSONB, allowNull: true },
+    freteMedidas: { type: DataTypes.JSONB, allowNull: true },
     // Estoque em unidades.
     // Produto do cadastro da NFeMail (cod_produto) usado na nota fiscal.
     nfeProdutoCodigo: { type: DataTypes.STRING(30), allowNull: true },
