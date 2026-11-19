@@ -181,9 +181,14 @@ export default {
   },
 
   async cobrarMaquininha({ pedido, maquininha }) {
+    // Parcelado no sistema: a cobrança já chega na maquininha como crédito
+    // parcelado (sem isso a SumUp cobra à vista e não oferece parcelar).
+    // À vista (1x): a maquininha pergunta crédito ou débito ao cliente.
+    const parcelas = Math.min(12, Math.max(1, Math.trunc(Number(pedido.parcelasCartao) || 1)));
     const dados = await chamar("POST", `/v0.1/merchants/${await merchant()}/readers/${maquininha.identificador}/checkout`, {
       total_amount: { currency: "BRL", minor_unit: 2, value: centavos(pedido.total) },
       description: descricao(pedido),
+      ...(parcelas > 1 ? { card_type: "credit", installments: parcelas } : {}),
     });
     const resposta = dados.data || dados;
     return { referencia: `reader:${maquininha.identificador}:${resposta.client_transaction_id || ""}` };
