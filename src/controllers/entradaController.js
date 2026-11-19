@@ -36,7 +36,17 @@ export const listarParceiros = async (req, res) => {
   }
 };
 
-const dadosParceiro = (corpo) => {
+// IE: só números, ou "ISENTO".
+const lerIe = (valor) => {
+  const texto = String(valor || "").trim();
+  if (!texto) return null;
+  if (/^isent/i.test(texto)) return "ISENTO";
+  const ie = somenteDigitos(texto);
+  if (!ie || ie.length > 14) throw erroHttp(400, "Inscrição estadual inválida: use só os números ou ISENTO.");
+  return ie;
+};
+
+export const dadosParceiro = (corpo) => {
   const nome = String(corpo.nome || "").trim();
   if (!nome) throw erroHttp(400, "Informe o nome / razão social.");
   const documento = somenteDigitos(corpo.documento);
@@ -54,6 +64,8 @@ const dadosParceiro = (corpo) => {
     email: corpo.email || null,
     cidade: corpo.cidade || null,
     estado: corpo.estado ? String(corpo.estado).toUpperCase().slice(0, 2) : null,
+    inscricaoEstadual: lerIe(corpo.inscricaoEstadual),
+    endereco: String(corpo.endereco || "").trim().slice(0, 200) || null,
     observacoes: corpo.observacoes || null,
     ativo: corpo.ativo !== false,
   };

@@ -172,7 +172,14 @@ const transporteDoPedido = async (pedido) => {
     const nome = parceiro?.nome || pedido.transportadoraNome;
     return {
       modFrete: /braspress/i.test(nome) ? "0" : "1",
-      transportadora: { nome, cnpj: digitos(parceiro?.documento), endereco: "", cidade: parceiro?.cidade || "", uf: parceiro?.estado || "" },
+      transportadora: {
+        nome,
+        cnpj: digitos(parceiro?.documento),
+        ie: parceiro?.inscricaoEstadual || "",
+        endereco: parceiro?.endereco || "",
+        cidade: parceiro?.cidade || "",
+        uf: parceiro?.estado || "",
+      },
     };
   }
   // Retirada no local: sem transporte.
@@ -545,7 +552,7 @@ export const montarTxt = (nota, emit) => {
   linhas.push(linha("X", tr.modFrete));
   if (tr.transportadora) {
     const tp = tr.transportadora;
-    linhas.push(linha("X03", tp.nome, "", tp.endereco, tp.cidade, tp.uf));
+    linhas.push(linha("X03", tp.nome, tp.ie || "", tp.endereco || "", tp.cidade || "", tp.uf || ""));
     if (digitos(tp.cnpj).length === 14) linhas.push(linha("X04", digitos(tp.cnpj)));
   }
   linhas.push(linha("X26", tr.qVol, tr.esp, "", "", dec(tr.pesoL, 3), dec(tr.pesoB, 3)));

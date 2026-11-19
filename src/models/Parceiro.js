@@ -21,6 +21,9 @@ const Parceiro = sequelize.define(
     email: { type: DataTypes.STRING(150), allowNull: true },
     cidade: { type: DataTypes.STRING(100), allowNull: true },
     estado: { type: DataTypes.STRING(2), allowNull: true },
+    // Dados que vão no bloco de transporte da NF-e (transportadoras).
+    inscricaoEstadual: { type: DataTypes.STRING(20), allowNull: true },
+    endereco: { type: DataTypes.STRING(200), allowNull: true },
     observacoes: { type: DataTypes.TEXT, allowNull: true },
     // Itens que o fornecedor traz: só esses aparecem no portal dele para
     // criar pré-recebimento (ids de produto).

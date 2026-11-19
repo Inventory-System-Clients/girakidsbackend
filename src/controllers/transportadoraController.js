@@ -1,6 +1,8 @@
 import fs from "fs";
 import { Op, fn, col } from "sequelize";
 import { Parceiro, Pedido } from "../models/index.js";
+import { dadosParceiro } from "./entradaController.js";
+import { erroHttp, responderErro } from "../utils/helpers.js";
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -304,5 +306,54 @@ export const sugestoesCheckout = async (req, res) => {
   } catch (error) {
     console.error("Erro ao sugerir transportadoras:", error);
     res.status(500).json({ error: "Erro ao sugerir transportadoras" });
+  }
+};
+
+// ---------------------------------------------------------------------------
+// Transportadoras cadastradas (aba Comercial → Transportadoras): ver e corrigir
+// os dados que vão no bloco de transporte da nota fiscal.
+// ---------------------------------------------------------------------------
+
+export const listarCadastradas = async (req, res) => {
+  try {
+    const [lista, usos] = await Promise.all([
+      Parceiro.findAll({ where: { tipo: "TRANSPORTADORA" }, order: [["ativo", "DESC"], ["nome", "ASC"]] }),
+      Pedido.findAll({
+        attributes: ["transportadoraId", [fn("COUNT", col("id")), "pedidos"], [fn("MAX", col("createdAt")), "ultimoPedido"]],
+        where: { transportadoraId: { [Op.ne]: null } },
+        group: ["transportadoraId"],
+        raw: true,
+      }),
+    ]);
+    const porId = new Map(usos.map((u) => [u.transportadoraId, u]));
+    res.json(
+      lista.map((t) => ({
+        ...t.toJSON(),
+        pedidos: Number(porId.get(t.id)?.pedidos || 0),
+        ultimoPedido: porId.get(t.id)?.ultimoPedido || null,
+      })),
+    );
+  } catch (error) {
+    responderErro(res, error, "Erro ao listar transportadoras");
+  }
+};
+
+export const criarCadastrada = async (req, res) => {
+  try {
+    const transportadora = await Parceiro.create({ ...dadosParceiro(req.body || {}), tipo: "TRANSPORTADORA", criadoPor: req.usuario.nome });
+    res.status(201).json(transportadora);
+  } catch (error) {
+    responderErro(res, error, "Erro ao cadastrar transportadora");
+  }
+};
+
+export const atualizarCadastrada = async (req, res) => {
+  try {
+    const transportadora = await Parceiro.findOne({ where: { id: req.params.id, tipo: "TRANSPORTADORA" } });
+    if (!transportadora) throw erroHttp(404, "Transportadora não encontrada.");
+    await transportadora.update(dadosParceiro({ ...transportadora.toJSON(), ...req.body }));
+    res.json(transportadora);
+  } catch (error) {
+    responderErro(res, error, "Erro ao atualizar transportadora");
   }
 };
