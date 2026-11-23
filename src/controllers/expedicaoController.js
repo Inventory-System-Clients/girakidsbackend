@@ -33,6 +33,40 @@ const parados = () =>
     limit: 100,
   });
 
+// Aviso aos admins no topo de todas as telas: pedidos separados (montagem
+// concluída) e não expedidos há mais de 3 dias — falta pedir coleta na
+// transportadora ou fazer a etiqueta dos Correios. Retirada na loja fica de fora.
+export const DIAS_ALERTA_ADMIN = 3;
+export const alertasSeparados = async (req, res) => {
+  try {
+    const pedidos = await Pedido.findAll({
+      where: {
+        ...BASE,
+        ...FILTRO_ABA.PRONTOS,
+        metodoEnvio: { [Op.ne]: "RETIRAR_LOCAL" },
+        montagemConcluidaEm: { [Op.lt]: new Date(Date.now() - DIAS_ALERTA_ADMIN * 86_400_000) },
+      },
+      attributes: ["id", "numero", "tipo", "codigoLegado", "clienteNome", "metodoEnvio", "transportadoraNome", "cidade", "estado", "montagemConcluidaEm"],
+      order: [["montagemConcluidaEm", "ASC"]],
+      limit: 100,
+    });
+    res.json({
+      dias: DIAS_ALERTA_ADMIN,
+      pedidos: pedidos.map((p) => ({
+        id: p.id,
+        numeroFormatado: formatarNumero(p),
+        clienteNome: p.clienteNome,
+        metodoEnvio: p.metodoEnvio,
+        transportadoraNome: p.transportadoraNome,
+        destino: [p.cidade, p.estado].filter(Boolean).join("/"),
+        montagemConcluidaEm: p.montagemConcluidaEm,
+      })),
+    });
+  } catch (error) {
+    responderErro(res, error, "Erro ao carregar pedidos separados parados");
+  }
+};
+
 export const listar = async (req, res) => {
   try {
     const aba = FILTRO_ABA[req.query.aba] ? req.query.aba : "INICIAR";

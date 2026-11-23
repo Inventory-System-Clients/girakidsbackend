@@ -96,6 +96,13 @@ export const exigirInterno = (req, res, next) => {
   next();
 };
 
+export const exigirAdmin = (req, res, next) => {
+  if (req.usuario?.role !== "ADMIN") {
+    return res.status(403).json({ error: "Acesso restrito aos administradores." });
+  }
+  next();
+};
+
 export const registrarLog = (acao, entidade = null) => (req, res, next) => {
   const originalSend = res.send;
 

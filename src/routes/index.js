@@ -4,6 +4,7 @@ import {
   autenticar,
   autenticarOpcional,
   exigirInterno,
+  exigirAdmin,
   exigirPermissao,
   exigirPermissaoOuShowroom,
   registrarLog,
@@ -146,6 +147,8 @@ router.post("/pedidos/:id/reabrir-financeiro", autenticar, exigirPermissao("FINA
 // Time Expedição
 const exp = [autenticar, exigirPermissao("EXPEDICAO")];
 router.get("/expedicao", ...exp, expedicao.listar);
+// Aviso no topo para admins: separados e não expedidos há mais de 3 dias.
+router.get("/expedicao/alertas-separados", autenticar, exigirAdmin, expedicao.alertasSeparados);
 router.put("/expedicao/:id/itens/:itemId", ...exp, expedicao.marcarItem);
 router.put("/expedicao/:id/observacoes", ...exp, expedicao.salvarObservacoes);
 router.put("/expedicao/:id/fotos", ...exp, registrarLog("FOTOS_EXPEDICAO", "Pedido"), expedicao.salvarFotos);
