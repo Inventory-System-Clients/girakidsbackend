@@ -6,6 +6,7 @@ import { lerConfiguracao, salvarConfiguracao } from "../models/Configuracao.js";
 import { cifrarCredenciais, decifrarCredenciais } from "../utils/cofreCredenciais.js";
 import { ENDERECO_LOJA_PADRAO } from "../utils/formasPagamento.js";
 import { erroHttp } from "../utils/helpers.js";
+import { fetchPublico, garantirUrlPublica } from "../utils/urlSegura.js";
 
 // Avisos de pedido no WhatsApp pela Evolution API (mesma base do GrupoGK e do
 // Dubob). Os avisos entram numa fila gravada no banco e saem um por vez, com
@@ -157,6 +158,10 @@ export const salvarConfig = async (payload = {}, usuarioNome) => {
   if (payload.evolutionUrl !== undefined) {
     const url = String(payload.evolutionUrl || "").trim().replace(/\/+$/, "");
     if (url && !/^https?:\/\/[^\s/]+/i.test(url)) throw erroHttp(400, "A URL da Evolution API deve começar com https://");
+    // Só servidor público: a chave da Evolution não vai para rede interna.
+    if (url) await garantirUrlPublica(url).catch((e) => {
+      throw erroHttp(400, `URL da Evolution API: ${e.message}`);
+    });
     novo.evolutionUrl = url || null;
   }
   if (payload.instancia !== undefined) {
@@ -210,7 +215,7 @@ const evolution = async (config, caminho, { method = "GET", body } = {}) => {
   if (!config?.evolutionUrl || !config?.apiKey) throw erroHttp(400, "Configure a URL e a chave da Evolution API.");
   let resposta;
   try {
-    resposta = await fetch(`${config.evolutionUrl}${caminho}`, {
+    resposta = await fetchPublico(`${config.evolutionUrl}${caminho}`, {
       method,
       headers: { apikey: config.apiKey, "Content-Type": "application/json" },
       body: body ? JSON.stringify(body) : undefined,

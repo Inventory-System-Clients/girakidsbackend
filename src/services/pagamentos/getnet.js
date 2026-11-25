@@ -144,7 +144,7 @@ export default {
         metodo === "PIX_ONLINE"
           ? { pix: { enable: true } }
           : credito
-            ? { credit: { enable: true, max_installments: Math.max(1, Number(parcelas) || 1) } }
+            ? { credit: { enable: true, max_installments: Math.min(12, Math.max(1, Math.trunc(Number(parcelas)) || 1)) } }
             : { debit: { enable: true, caixa_virtual_card: false } },
     });
     if (!link.link_id || !link.url) throw erroHttp(502, "A Getnet não devolveu o link de pagamento.");

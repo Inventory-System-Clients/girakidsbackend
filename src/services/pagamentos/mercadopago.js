@@ -13,11 +13,13 @@ const API = process.env.MERCADOPAGO_API_URL || "https://api.mercadopago.com";
 
 const STATUS = {
   approved: "PAGO",
-  authorized: "PAGO",
+  // authorized = autorizado e ainda não capturado: não libera o pedido.
+  authorized: "PENDENTE",
   rejected: "RECUSADO",
   cancelled: "RECUSADO",
-  refunded: "RECUSADO",
-  charged_back: "RECUSADO",
+  // Devolvido/contestado: em pedido já pago vira alerta crítico.
+  refunded: "ESTORNADO",
+  charged_back: "ESTORNADO",
 };
 
 const token = (credenciais = credenciaisDe("mercadopago")) => {
@@ -119,7 +121,8 @@ export default {
       statement_descriptor: "GIRAKIDS",
       payment_methods: {
         excluded_payment_types: [{ id: "ticket" }, { id: "bank_transfer" }, { id: "atm" }, ...(debito ? [{ id: "credit_card" }] : [{ id: "debit_card" }, { id: "prepaid_card" }])],
-        installments: debito ? 1 : Math.max(1, Number(parcelas) || 12),
+        // Máximo de parcelas = as escolhidas no pedido (a taxa foi cobrada por elas).
+        installments: debito ? 1 : Math.min(12, Math.max(1, Math.trunc(Number(parcelas)) || 1)),
       },
     });
     return { referencia: `pref:${preferencia.id}`, link: preferencia.init_point };

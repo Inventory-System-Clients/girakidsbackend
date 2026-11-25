@@ -50,7 +50,8 @@ router.post("/auth/login", limitarTaxa({ janelaMs: 60_000, maximo: 10 }), auth.l
 router.post("/auth/registrar", limitarTaxa({ janelaMs: 60 * 60_000, maximo: 10 }), auth.registrar);
 router.get("/auth/perfil", autenticar, auth.perfil);
 router.put("/auth/perfil", autenticar, auth.atualizarPerfil);
-router.put("/auth/senha", autenticar, auth.alterarSenha);
+// Limite contra adivinhar a senha atual com um token roubado.
+router.put("/auth/senha", limitarTaxa({ janelaMs: 15 * 60_000, maximo: 10 }), autenticar, auth.alterarSenha);
 
 // Configuração pública (WhatsApp do comercial) e banners do catálogo
 router.get("/config/publica", comercial.configPublica);
@@ -83,10 +84,10 @@ router.get("/checkout/opcoes", autenticar, pedidos.opcoesCheckout);
 // Também a expedição, que pode trocar a transportadora de um pedido.
 const tiraPedido = [autenticar, exigirPermissao("CHECKOUT", "VENDAS", "ORCAMENTOS", "COMERCIAL", "EXPEDICAO")];
 router.get("/checkout/transportadoras", ...tiraPedido, transportadoras.sugestoesCheckout);
-router.post("/checkout/transportadoras/ia", ...tiraPedido, registrarLog("BUSCAR_TRANSPORTADORAS", "Transportadora"), transportadoras.buscarTransportadoras);
+router.post("/checkout/transportadoras/ia", limitarTaxa({ janelaMs: 60_000, maximo: 10 }), ...tiraPedido, registrarLog("BUSCAR_TRANSPORTADORAS", "Transportadora"), transportadoras.buscarTransportadoras);
 // Cada cotação consulta Correios e o site da Braspress: limite por IP.
 router.post("/checkout/frete", limitarTaxa({ janelaMs: 60_000, maximo: 40 }), autenticar, pedidos.cotar);
-router.post("/pedidos", autenticar, (req, res, next) =>
+router.post("/pedidos", limitarTaxa({ janelaMs: 60_000, maximo: 30 }), autenticar, (req, res, next) =>
   ["CLIENTE", "SHOWROOM"].includes(req.usuario.role) ? next() : exigirPermissao("CHECKOUT", "VENDAS")(req, res, next),
 registrarLog("CRIAR_PEDIDO", "Pedido"), pedidos.criar);
 router.get("/pedidos/meus", autenticar, pedidos.meusPedidos);
@@ -231,7 +232,9 @@ router.put("/publico/pre-recebimento", publicoFornecedor, recebimentos.publicoRe
 
 // Gerenciar Usuários
 const usr = [autenticar, exigirPermissao("USUARIOS")];
-router.get("/usuarios/clientes", autenticar, exigirPermissaoOuShowroom("CHECKOUT", "ORCAMENTOS", "VENDAS", "USUARIOS"), usuarios.buscarClientes);
+// Totem do showroom: limite de buscas (não dá para varrer a base de clientes).
+const limiteBuscaTotem = limitarTaxa({ janelaMs: 60_000, maximo: 40, bloqueioMs: 10 * 60_000 });
+router.get("/usuarios/clientes", autenticar, exigirPermissaoOuShowroom("CHECKOUT", "ORCAMENTOS", "VENDAS", "USUARIOS"), (req, res, next) => (req.usuario.role === "SHOWROOM" ? limiteBuscaTotem(req, res, next) : next()), usuarios.buscarClientes);
 router.get("/usuarios/etiquetas", autenticar, exigirInterno, usuarios.etiquetasUsadas);
 router.put("/usuarios/:id/etiquetas", autenticar, exigirPermissao("VENDAS", "COMERCIAL", "USUARIOS", "ORCAMENTOS"), registrarLog("ETIQUETAS_CLIENTE", "Usuario"), usuarios.atualizarEtiquetas);
 router.get("/usuarios/:id/historico", autenticar, exigirPermissao("CHECKOUT", "ORCAMENTOS", "VENDAS", "COMERCIAL"), comercial.historicoCliente);

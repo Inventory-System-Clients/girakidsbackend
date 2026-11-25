@@ -125,9 +125,13 @@ export const etiquetasUsadas = async (req, res) => {
 
 const dados = (corpo, editor) => {
   const saida = {};
-  for (const campo of ["nome", "email", "telefone", "rua", "numero", "complemento", "bairro", "cidade", "estado", "outrosPagamentos", "ativo"]) {
+  for (const campo of ["nome", "email", "telefone", "rua", "numero", "complemento", "bairro", "cidade", "estado", "ativo"]) {
     if (corpo[campo] !== undefined) saida[campo] = corpo[campo];
   }
+  // Crédito e "outros pagamentos" valem dinheiro: só administrador ou quem
+  // tem permissão FINANCEIRO (não basta a permissão USUARIOS).
+  const podeFinanceiro = editor.role === "ADMIN" || Boolean(editor.temPermissao?.("FINANCEIRO"));
+  if (corpo.outrosPagamentos !== undefined && podeFinanceiro) saida.outrosPagamentos = corpo.outrosPagamentos;
   if (corpo.documento !== undefined) {
     const documento = somenteDigitos(corpo.documento);
     if (documento && !documentoValido(documento)) throw erroHttp(400, "CPF/CNPJ inválido.");
@@ -135,7 +139,7 @@ const dados = (corpo, editor) => {
     saida.documentoTipo = documento.length === 14 ? "CNPJ" : documento ? "CPF" : null;
   }
   if (corpo.cep !== undefined) saida.cep = somenteDigitos(corpo.cep) || null;
-  if (corpo.credito !== undefined) saida.credito = Math.max(0, numero(corpo.credito));
+  if (corpo.credito !== undefined && podeFinanceiro) saida.credito = Math.max(0, numero(corpo.credito));
   if (corpo.role !== undefined) {
     if (!ROLES.includes(corpo.role)) throw erroHttp(400, "Cargo inválido.");
     if (editor.role !== "ADMIN" && corpo.role !== "CLIENTE") {
@@ -143,9 +147,11 @@ const dados = (corpo, editor) => {
     }
     saida.role = corpo.role;
   }
-  if (corpo.permissoes !== undefined) {
+  // Permissões: só administrador define, e só valem para FUNCIONARIO.
+  if (corpo.permissoes !== undefined && editor.role === "ADMIN") {
     saida.permissoes = (corpo.permissoes || []).filter((p) => PERMISSOES.includes(p));
   }
+  if (saida.role && saida.role !== "FUNCIONARIO") saida.permissoes = [];
   return saida;
 };
 

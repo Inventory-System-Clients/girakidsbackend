@@ -20,6 +20,7 @@ import {
   formatarNumero,
   gerarBoletosDoPedido,
   lerBoletoConfig,
+  lerParcelasCartao,
   montarFiltroPedidos,
   montarItens,
   resolverTransportadora,
@@ -708,8 +709,9 @@ export const editar = async (req, res) => {
 
 export const alterarFormaPagamento = async (req, res) => {
   try {
-    const { formaPagamento, parcelasCartao, composicaoPagamento, motivo } = req.body || {};
+    const { formaPagamento, composicaoPagamento, motivo } = req.body || {};
     if (!FORMAS_PAGAMENTO[formaPagamento]) throw erroHttp(400, "Forma de pagamento inválida.");
+    const parcelasCartao = lerParcelasCartao(req.body?.parcelasCartao, formaPagamento);
     const boletoConfig = formaPagamento === "BOLETO" ? lerBoletoConfig(req.body?.boleto) : null;
     await sequelize.transaction(async (transaction) => {
       const pedido = await carregarParaAlterar(req.params.id, transaction);

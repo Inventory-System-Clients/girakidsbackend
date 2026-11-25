@@ -11,6 +11,7 @@ const { default: morgan } = await import("morgan");
 const { sequelize } = await import("./database/connection.js");
 const { sincronizarBanco } = await import("./database/migrate.js");
 const { default: routes } = await import("./routes/index.js");
+const { limitarTaxa } = await import("./utils/linkSeguro.js");
 
 // Sem chave secreta o servidor nem sobe (tokens e cofres dependem dela).
 if (!process.env.JWT_SECRET) {
@@ -19,6 +20,10 @@ if (!process.env.JWT_SECRET) {
 }
 if (process.env.JWT_SECRET.length < 32 || /troque-por/.test(process.env.JWT_SECRET)) {
   console.warn("[Segurança] JWT_SECRET fraca: use pelo menos 32 caracteres aleatórios.");
+}
+
+if (!process.env.CREDENCIAIS_SECRET) {
+  console.warn("[Segurança] CREDENCIAIS_SECRET não definida: as credenciais dos bancos usam chave derivada do JWT_SECRET. Veja o relatório de segurança antes de trocar (exige recadastrar as credenciais).");
 }
 
 const app = express();
@@ -39,7 +44,13 @@ const allowedOrigins = [
   .map(normalizarOrigem)
   .filter(Boolean);
 // Deploys de preview da Vercel (girakidsfrontend-<hash>-<time>.vercel.app).
-const PREVIEW_VERCEL = /^https:\/\/girakidsfrontend(-[a-z0-9-]+)?\.vercel\.app$/;
+// Com VERCEL_TIME (slug do time na Vercel) só os previews do próprio time
+// passam; sem ele, qualquer projeto "girakidsfrontend-*" na Vercel passaria.
+const TIME_VERCEL = String(process.env.VERCEL_TIME || "").trim().toLowerCase().replace(/[^a-z0-9-]/g, "");
+const PREVIEW_VERCEL = TIME_VERCEL
+  ? new RegExp(`^https://girakidsfrontend(-[a-z0-9-]+)?-${TIME_VERCEL}\\.vercel\\.app$`)
+  : /^https:\/\/girakidsfrontend(-[a-z0-9-]+)?\.vercel\.app$/;
+if (!TIME_VERCEL) console.warn("[Segurança] Defina VERCEL_TIME (slug do time na Vercel) para restringir o CORS dos previews.");
 
 app.use(
   cors({
@@ -54,15 +65,17 @@ app.use(
 );
 
 // rawBody fica disponível para validar assinatura de webhooks de pagamento.
+// JSON pequeno: arquivos vão por multipart (multer, com limite próprio).
+// Corpo gigante só serviria para esgotar memória/CPU.
 app.use(
   express.json({
-    limit: "10mb",
+    limit: "2mb",
     verify: (req, res, buf) => {
       req.rawBody = buf;
     },
   }),
 );
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({ extended: true, limit: "200kb", parameterLimit: 200 }));
 morgan.token("url-segura", (req) =>
   String(req.originalUrl || req.url)
     .split("?")[0]
@@ -70,6 +83,15 @@ morgan.token("url-segura", (req) =>
 );
 if (process.env.NODE_ENV !== "test") app.use(morgan(":method :url-segura :status :response-time ms"));
 
+// Limite geral por IP contra flood (folgado para uso normal: telas fazem
+// polling de alertas e o catálogo pagina). Rotas sensíveis têm limites próprios.
+app.use("/api", limitarTaxa({ janelaMs: 60_000, maximo: 600, bloqueioMs: 2 * 60_000 }));
+// Respostas da API têm dados de clientes/pedidos: nada em cache de navegador
+// ou proxy.
+app.use("/api", (req, res, next) => {
+  res.set("Cache-Control", "no-store");
+  next();
+});
 app.use("/api", routes);
 
 app.use((req, res) => res.status(404).json({ error: "Rota não encontrada" }));

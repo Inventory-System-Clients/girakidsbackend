@@ -14,6 +14,10 @@ export const status = (req, res) => res.json(statusPagamentos());
 const confirmarPagamentoOnline = async (pedido, valorPago, origem) => {
   let semEstoque = null;
   await sequelize.transaction(async (transaction) => {
+    // Trava a linha: webhook, conciliação e "consultar" ao mesmo tempo não
+    // registram o pagamento nem baixam o estoque duas vezes (o segundo espera
+    // e vê o pedido já PAGO).
+    await Pedido.findByPk(pedido.id, { transaction, lock: transaction.LOCK.UPDATE });
     const atual = await Pedido.findByPk(pedido.id, { include: INCLUDE_COMPLETO, transaction });
     if (atual.statusFinanceiro === "PAGO") return;
     // Pedido cancelado não volta a andar sozinho: vira alerta (devolver o dinheiro).
@@ -77,6 +81,27 @@ const alertar = (dados) => AlertaPagamento.create(dados).catch((e) => console.er
 // Aplica o resultado de um retorno/consulta do banco ao pedido. Valor
 // diferente do pedido não confirma: vira alerta para o financeiro.
 const aplicarResultado = async (pedido, resultado, provedor, bruto = null) => {
+  // Estorno/chargeback: em pedido já pago, alerta crítico (não expedir sem
+  // conferir); em pedido não pago, conta como recusado.
+  if (resultado.status === "ESTORNADO") {
+    if (pedido.statusFinanceiro === "PAGO") {
+      const jaAlertado = await AlertaPagamento.count({ where: { pedidoId: pedido.id, motivo: "estorno", status: "ATIVO" } });
+      if (!jaAlertado) {
+        await alertar({
+          pedidoId: pedido.id,
+          pedidoNumero: String(pedido.numero),
+          provedor: provedor.nome,
+          severidade: "critical",
+          motivo: "estorno",
+          mensagem: `Pagamento do pedido ${pedido.numero} foi estornado ou contestado no banco. Não expeça antes de conferir.`,
+          valorEsperado: arredondar(Number(pedido.total)),
+          detalhes: bruto,
+        });
+      }
+      return;
+    }
+    resultado = { ...resultado, status: "RECUSADO" };
+  }
   if (resultado.status === "PAGO") {
     if (pedido.statusFinanceiro === "PAGO") return;
     const esperado = arredondar(Number(pedido.total));

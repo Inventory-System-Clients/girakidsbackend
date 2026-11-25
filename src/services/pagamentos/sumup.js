@@ -46,7 +46,15 @@ const lerArtefato = async (artefato) => {
   if (!artefato) return null;
   if (artefato.content) return String(artefato.content);
   if (!artefato.location) return null;
-  const resposta = await fetch(artefato.location, { headers: { Authorization: `Bearer ${credenciaisDe("sumup")?.apiKey}` } });
+  // A chave da SumUp só vai para a própria SumUp.
+  let destino;
+  try {
+    destino = new URL(artefato.location);
+  } catch {
+    return null;
+  }
+  if (destino.protocol !== "https:" || !/(^|\.)sumup\.com$/i.test(destino.hostname)) return null;
+  const resposta = await fetch(destino, { headers: { Authorization: `Bearer ${credenciaisDe("sumup")?.apiKey}` } });
   return resposta.ok ? (await resposta.text()).trim() : null;
 };
 

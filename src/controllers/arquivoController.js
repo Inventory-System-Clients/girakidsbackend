@@ -60,6 +60,10 @@ export const servir = async (req, res) => {
     res.set("X-Content-Type-Options", "nosniff");
     res.set("Cache-Control", "public, max-age=31536000, immutable");
     res.set("Cross-Origin-Resource-Policy", "cross-origin");
+    // Imagem aberta direto no navegador não carrega nem executa nada. (PDF
+    // fica sem sandbox: o Chrome não exibe PDF sandboxado, e o script de PDF
+    // já roda isolado no visualizador.)
+    if (String(arquivo.mime).startsWith("image/")) res.set("Content-Security-Policy", "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox");
     res.send(arquivo.dados);
   } catch (error) {
     responderErro(res, error, "Erro ao abrir arquivo");

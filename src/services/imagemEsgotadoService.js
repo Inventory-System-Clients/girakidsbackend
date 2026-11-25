@@ -1,13 +1,15 @@
 import crypto from "crypto";
 import { Op } from "sequelize";
 import { Produto } from "../models/index.js";
+import { fetchPublico } from "../utils/urlSegura.js";
 
 // Descobre se a "imagem de esgotado" de um produto é só uma cópia da imagem
 // em estoque (mesmo arquivo em outro endereço — comum nos produtos vindos da
 // loja antiga). Nesse caso o catálogo mostra a foto em preto e branco.
 
 const hashDaImagem = async (url) => {
-  const resposta = await fetch(url, { signal: AbortSignal.timeout(20000) });
+  // Só endereços públicos (a URL vem do cadastro do produto).
+  const resposta = await fetchPublico(url, { signal: AbortSignal.timeout(20000) });
   if (!resposta.ok) throw new Error(`HTTP ${resposta.status}`);
   return crypto.createHash("md5").update(Buffer.from(await resposta.arrayBuffer())).digest("hex");
 };

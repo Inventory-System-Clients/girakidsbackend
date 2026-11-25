@@ -73,6 +73,17 @@ export const proximoNumero = async (tipo, transaction) => {
   return Math.max(Number(maior || 0) + 1, inicial);
 };
 
+// Parcelas do cartão vindas do checkout: só inteiro de 1 a 12. Fora de
+// cartão, não se aplica (null).
+export const lerParcelasCartao = (valor, forma) => {
+  const config = FORMAS_PAGAMENTO[forma];
+  if (!config?.cartao && forma !== "CREDITO_ONLINE") return valor ? Number(valor) || null : null;
+  if (valor == null || valor === "") return null; // taxa e banco usam 1x
+  const n = Number(valor);
+  if (!Number.isInteger(n) || n < 1 || n > 12) throw erroHttp(400, "Número de parcelas inválido (1 a 12).");
+  return n;
+};
+
 // Taxa (%) cobrada na forma de pagamento escolhida.
 export const percentualTaxa = async (forma, parcelasCartao) => {
   const config = FORMAS_PAGAMENTO[forma];
@@ -479,8 +490,11 @@ export const criarPedido = async (corpo, usuario, tipo = "PEDIDO", { reabrirId =
 
     let frete = 0;
     let prazoEntregaDias = null;
+    // Frete cotado com as quantidades já validadas (inteiras, ≥ 1), não com as
+    // que o navegador mandou.
+    const itensFrete = itens.map((i) => ({ produtoId: i.produtoId, quantidade: i.quantidade }));
     if (metodoEnvio === "PAC" || metodoEnvio === "SEDEX") {
-      const { opcoes } = await cotarFrete({ cep: cliente.cep, uf: cliente.estado, itens: corpo.itens, semBraspress: true });
+      const { opcoes } = await cotarFrete({ cep: cliente.cep, uf: cliente.estado, itens: itensFrete, semBraspress: true });
       const opcao = opcoes.find((o) => o.metodo === metodoEnvio);
       if (!opcao?.disponivel) throw erroHttp(400, opcao?.motivo || "Frete indisponível.");
       frete = opcao.valor;
@@ -490,7 +504,7 @@ export const criarPedido = async (corpo, usuario, tipo = "PEDIDO", { reabrirId =
       const { opcoes } = await cotarFrete({
         cep: cliente.cep,
         uf: cliente.estado,
-        itens: corpo.itens,
+        itens: itensFrete,
         documento: cliente.documento,
         braspressAjuste: usuario?.role === "ADMIN" ? corpo.braspressAjuste : null,
       });
@@ -502,11 +516,19 @@ export const criarPedido = async (corpo, usuario, tipo = "PEDIDO", { reabrirId =
 
     const desconto = interno ? Math.min(subtotal, Math.max(0, numero(corpo.desconto))) : 0;
     const freteAdicional = interno ? Math.max(0, numero(corpo.freteAdicional)) : 0;
-    const creditoDisponivel = Number(cadastroCliente?.credito || 0);
+    // Saldo relido com a linha travada: pedidos em paralelo não usam o mesmo
+    // crédito duas vezes (o segundo espera o primeiro e vê o saldo já gasto).
+    const contaCredito =
+      corpo.usarCredito && !showroom && cadastroCliente?.id
+        ? await Usuario.findByPk(cadastroCliente.id, { transaction, lock: transaction.LOCK.UPDATE })
+        : null;
+    const creditoDisponivel = Number((contaCredito || cadastroCliente)?.credito || 0);
     const creditoUsado = corpo.usarCredito && !showroom
       ? Math.min(creditoDisponivel, Math.max(0, subtotal - desconto))
       : 0;
-    const parcelasCartao = corpo.parcelasCartao ? Number(corpo.parcelasCartao) : null;
+    // Parcelas do cartão: inteiro de 1 a 12 (a taxa cobrada e o máximo
+    // liberado no banco usam o mesmo número).
+    const parcelasCartao = lerParcelasCartao(corpo.parcelasCartao, formaPagamento);
     const { taxas, total, composicao } = await calcularTotais({
       subtotal,
       desconto,
@@ -546,7 +568,7 @@ export const criarPedido = async (corpo, usuario, tipo = "PEDIDO", { reabrirId =
         parcelasCartao,
         composicaoPagamento: formaPagamento === "MESCLA" ? composicao : null,
         boletoConfig: formaPagamento === "BOLETO" ? lerBoletoConfig(corpo.boleto) : null,
-        orcamentoOrigemId: corpo.orcamentoOrigemId || null,
+        orcamentoOrigemId: interno ? corpo.orcamentoOrigemId || null : null,
     };
     let pedido;
     if (reaberto) {
@@ -611,8 +633,8 @@ export const criarPedido = async (corpo, usuario, tipo = "PEDIDO", { reabrirId =
       );
     }
 
-    if (creditoUsado > 0 && cadastroCliente && tipo === "PEDIDO") {
-      await cadastroCliente.update(
+    if (creditoUsado > 0 && (contaCredito || cadastroCliente) && tipo === "PEDIDO") {
+      await (contaCredito || cadastroCliente).update(
         { credito: arredondar(creditoDisponivel - creditoUsado) },
         { transaction },
       );
@@ -678,6 +700,9 @@ export const serializarPedido = (pedido, { completo = true, usuario = null } = {
   const dados = serializarPedidoInterno(pedido, { completo });
   if (!usuario || ehInterno(usuario)) return dados;
   for (const campo of CAMPOS_INTERNOS) delete dados[campo];
+  // Cliente vê só o tipo da cobrança (pix:, reader:...): o id do banco é o que
+  // confirma o pagamento em alguns provedores e não sai do servidor.
+  if (dados.pagamentoReferencia) dados.pagamentoReferencia = `${String(dados.pagamentoReferencia).split(":")[0]}:***`;
   dados.itens = dados.itens.map((item) => {
     const limpo = { ...item };
     for (const campo of CAMPOS_INTERNOS_ITEM) delete limpo[campo];
