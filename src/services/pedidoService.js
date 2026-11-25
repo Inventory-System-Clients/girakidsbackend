@@ -670,7 +670,7 @@ const CAMPOS_INTERNOS = [
   "observacaoQuitacao", "liberadoPor", "observacaoLiberacao", "expedidoPor", "montagemConcluidaPor",
   "observacoesExpedicao", "transportadoraObs", "transportadoraCotacao", "transportadoraCotacaoCom", "canceladoPor",
   "criadoPorId", "criadoPorNome", "criadoPorRole", "legadoId", "legadoAssinatura", "alertaComercial", "alertaVistoEm",
-  "alertaVistoPor", "origemCliente", "estoqueBaixado", "cliente",
+  "alertaVistoPor", "origemCliente", "estoqueBaixado", "cliente", "reservaPor",
 ];
 const CAMPOS_INTERNOS_ITEM = ["custoUnitario", "conferido", "conferidoEm", "conferidoPor", "liberadoSemEstoque"];
 
@@ -742,6 +742,9 @@ export const montarFiltroPedidos = (query) => {
   if (query.envio) and.push({ metodoEnvio: { [Op.in]: lista(query.envio) } });
   if (query.vendas) and.push({ statusVendas: { [Op.in]: lista(query.vendas) } });
   if (query.expedicao) and.push({ statusExpedicao: { [Op.in]: lista(query.expedicao) } });
+  // reserva=1: só os em reserva (aguardando estoque); reserva=0: sem eles.
+  if (query.reserva === "1") and.push({ reservaEm: { [Op.ne]: null } });
+  if (query.reserva === "0") and.push({ reservaEm: null });
   if (query.financeiro) {
     const financeiro = lista(query.financeiro).filter((s) => s !== "ATRASADO");
     const ou = [];

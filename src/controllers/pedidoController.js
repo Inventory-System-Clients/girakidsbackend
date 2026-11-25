@@ -292,6 +292,34 @@ export const marcarRetirado = async (req, res) => {
   }
 };
 
+// Time de vendas: coloca o pedido em reserva (aguardando estoque) ou tira
+// ("Produto chegou"), devolvendo à lista normal e à expedição.
+export const alterarReserva = async (req, res) => {
+  try {
+    const reserva = req.body?.reserva !== false;
+    await sequelize.transaction(async (transaction) => {
+      const pedido = await carregarParaAlterar(req.params.id, transaction);
+      if (pedido.tipo !== "PEDIDO") throw erroHttp(400, "Só pedidos podem ir para a reserva.");
+      if (reserva) {
+        garantirNaoCancelado(pedido);
+        if (pedido.statusExpedicao === "EXPEDIDO") throw erroHttp(400, "Pedido já expedido.");
+      }
+      if (Boolean(pedido.reservaEm) === reserva) return;
+      await pedido.update(
+        {
+          reservaEm: reserva ? new Date() : null,
+          reservaPor: reserva ? req.usuario.nome : null,
+          historico: evento(pedido, req.usuario, reserva ? "RESERVA" : "PRODUTO_CHEGOU"),
+        },
+        { transaction },
+      );
+    });
+    await responderPedido(res, req.params.id);
+  } catch (error) {
+    responderErro(res, error, "Erro ao alterar a reserva do pedido");
+  }
+};
+
 export const obter = async (req, res) => {
   try {
     const pedido = await Pedido.findByPk(req.params.id, { include: [...INCLUDE_COMPLETO, INCLUDE_CLIENTE] });
@@ -363,14 +391,15 @@ export const buscarParaCarregar = async (req, res) => {
 
 export const contadores = async (req, res) => {
   try {
-    const [aguardandoLiberacao, aguardandoExpedicao, alertas] = await Promise.all([
-      Pedido.count({ where: { tipo: "PEDIDO", statusVendas: "AGUARDANDO" } }),
+    const [aguardandoLiberacao, aguardandoExpedicao, alertas, emReserva] = await Promise.all([
+      Pedido.count({ where: { tipo: "PEDIDO", statusVendas: "AGUARDANDO", reservaEm: null } }),
       Pedido.count({
-        where: { tipo: "PEDIDO", statusVendas: "LIBERADO", statusExpedicao: { [Op.ne]: "EXPEDIDO" }, numero: { [Op.gte]: PRIMEIRO_PEDIDO_EXPEDICAO } },
+        where: { tipo: "PEDIDO", statusVendas: "LIBERADO", statusExpedicao: { [Op.ne]: "EXPEDIDO" }, reservaEm: null, numero: { [Op.gte]: PRIMEIRO_PEDIDO_EXPEDICAO } },
       }),
       AlertaPagamento.count({ where: { status: "ATIVO" } }),
+      Pedido.count({ where: { tipo: "PEDIDO", reservaEm: { [Op.ne]: null }, statusVendas: { [Op.ne]: "CANCELADO" } } }),
     ]);
-    res.json({ aguardandoLiberacao, aguardandoExpedicao, alertasPagamento: alertas });
+    res.json({ aguardandoLiberacao, aguardandoExpedicao, alertasPagamento: alertas, emReserva });
   } catch (error) {
     responderErro(res, error, "Erro ao carregar contadores");
   }

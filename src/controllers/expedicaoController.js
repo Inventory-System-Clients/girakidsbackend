@@ -21,7 +21,8 @@ const FILTRO_ABA = {
 // Só pedidos do sistema novo (a partir do nº 70000): os antigos importados
 // não aparecem na expedição.
 export const PRIMEIRO_PEDIDO_EXPEDICAO = 70000;
-const BASE = { tipo: "PEDIDO", statusVendas: "LIBERADO", numero: { [Op.gte]: PRIMEIRO_PEDIDO_EXPEDICAO } };
+// Pedidos em reserva (aguardando estoque) não aparecem até "Produto chegou".
+const BASE = { tipo: "PEDIDO", statusVendas: "LIBERADO", reservaEm: null, numero: { [Op.gte]: PRIMEIRO_PEDIDO_EXPEDICAO } };
 
 // Pedido montado e não expedido há mais que isso vira alerta (pedido parado).
 export const DIAS_PARADO = 2;
@@ -119,6 +120,7 @@ const carregarLiberado = async (id, transaction) => {
   const pedido = await Pedido.findByPk(id, { include: INCLUDE_COMPLETO, transaction });
   if (!pedido) throw erroHttp(404, "Pedido não encontrado.");
   if (pedido.statusVendas !== "LIBERADO") throw erroHttp(400, "Pedido não liberado para expedição.");
+  if (pedido.reservaEm) throw erroHttp(400, "Pedido em reserva (aguardando estoque): volta para a expedição quando o time de vendas marcar \"Produto chegou\".");
   return pedido;
 };
 
