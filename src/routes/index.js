@@ -47,6 +47,11 @@ router.get("/health", (req, res) => res.json({ status: "ok", servico: "girakids-
 // Autenticação e perfil
 // Limite por IP contra robôs testando senhas e criando contas em massa.
 router.post("/auth/login", limitarTaxa({ janelaMs: 60_000, maximo: 10 }), auth.login);
+// Verificação em duas etapas (2FA).
+router.post("/auth/login/mfa", limitarTaxa({ janelaMs: 60_000, maximo: 10 }), registrarLog("LOGIN_MFA", "Usuario"), auth.loginMfa);
+router.post("/auth/mfa/iniciar", limitarTaxa({ janelaMs: 60_000, maximo: 10 }), autenticar, auth.iniciarMfa);
+router.post("/auth/mfa/ativar", limitarTaxa({ janelaMs: 60_000, maximo: 10 }), autenticar, registrarLog("ATIVAR_MFA", "Usuario"), auth.ativarMfa);
+router.post("/auth/mfa/codigos", limitarTaxa({ janelaMs: 60_000, maximo: 10 }), autenticar, registrarLog("NOVOS_CODIGOS_MFA", "Usuario"), auth.novosCodigosMfa);
 router.post("/auth/registrar", limitarTaxa({ janelaMs: 60 * 60_000, maximo: 10 }), auth.registrar);
 router.get("/auth/perfil", autenticar, auth.perfil);
 router.put("/auth/perfil", autenticar, auth.atualizarPerfil);
@@ -242,6 +247,7 @@ router.get("/usuarios", ...usr, usuarios.listar);
 router.post("/usuarios", ...usr, registrarLog("CRIAR_USUARIO", "Usuario"), usuarios.criar);
 router.put("/usuarios/:id", ...usr, registrarLog("ATUALIZAR_USUARIO", "Usuario"), usuarios.atualizar);
 router.put("/usuarios/:id/senha", ...usr, registrarLog("RESETAR_SENHA", "Usuario"), usuarios.resetarSenha);
+router.post("/usuarios/:id/mfa/resetar", autenticar, exigirAdmin, registrarLog("RESETAR_MFA", "Usuario"), usuarios.resetarMfa);
 router.delete("/usuarios/:id", ...usr, registrarLog("EXCLUIR_USUARIO", "Usuario"), usuarios.excluir);
 
 // Time Financeiro (dashboard)

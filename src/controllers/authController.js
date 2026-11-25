@@ -1,6 +1,15 @@
 import bcrypt from "bcryptjs";
 import { Usuario } from "../models/index.js";
-import { gerarToken } from "../middlewares/auth.js";
+import { gerarDesafioMfa, gerarToken, lerDesafioMfa } from "../middlewares/auth.js";
+import {
+  cifrarSegredo,
+  conferirCodigo,
+  consumirCodigoRecuperacao,
+  decifrarSegredo,
+  gerarCodigosRecuperacao,
+  novoSegredo,
+  urlAutenticador,
+} from "../utils/mfa.js";
 import { documentoValido, erroHttp, responderErro, somenteDigitos } from "../utils/helpers.js";
 import { definirAvisosCliente } from "../services/whatsappService.js";
 import { problemaSenhaAdmin } from "../utils/senhaForte.js";
@@ -45,9 +54,93 @@ export const login = async (req, res) => {
     if (usuario.role === "ADMIN" && !usuario.trocarSenha && problemaSenhaAdmin(senha, { email: usuario.email, nome: usuario.nome })) {
       await usuario.update({ trocarSenha: true });
     }
+    // Com 2FA: senha certa ainda não abre sessão; falta o código do app.
+    if (usuario.mfaAtivo) return res.json({ mfaNecessario: true, desafio: gerarDesafioMfa(usuario) });
     res.json({ token: gerarToken(usuario), usuario });
   } catch (error) {
     responderErro(res, error, "Erro ao fazer login");
+  }
+};
+
+// Segunda etapa do login: código do app autenticador (ou de recuperação).
+// Erros contam no mesmo bloqueio do login (5 erros = 15 min).
+export const loginMfa = async (req, res) => {
+  try {
+    let usuario;
+    try {
+      usuario = await lerDesafioMfa(req.body?.desafio);
+    } catch {
+      throw erroHttp(401, "A verificação expirou. Entre com e-mail e senha de novo.");
+    }
+    const chave = `mfa:${usuario.id}`;
+    if (bloqueadoAte(chave) || bloqueadoAte(usuario.email)) throw erroHttp(429, "Muitas tentativas erradas. Aguarde 15 minutos e tente de novo.");
+    const codigo = String(req.body?.codigo || "").trim();
+    const passo = conferirCodigo(decifrarSegredo(usuario.id, usuario.mfaSegredo), codigo, usuario.mfaUltimoPasso);
+    if (passo) {
+      await usuario.update({ mfaUltimoPasso: passo });
+    } else {
+      const restantes = consumirCodigoRecuperacao(usuario.mfaRecuperacao, codigo);
+      if (!restantes) {
+        registrarErroLogin(chave);
+        throw erroHttp(401, "Código inválido.");
+      }
+      await usuario.update({ mfaRecuperacao: restantes });
+    }
+    errosLogin.delete(chave);
+    res.json({ token: gerarToken(usuario), usuario, ...(passo ? {} : { usouCodigoRecuperacao: true }) });
+  } catch (error) {
+    responderErro(res, error, "Erro ao verificar o código");
+  }
+};
+
+// Configurar 2FA (1/2): gera o segredo e devolve o link do app (QR code).
+export const iniciarMfa = async (req, res) => {
+  try {
+    if (req.usuario.mfaAtivo) throw erroHttp(400, "A verificação em duas etapas já está ativa.");
+    const segredo = novoSegredo();
+    await req.usuario.update({ mfaPendente: cifrarSegredo(req.usuario.id, segredo) });
+    res.json({ segredo, url: urlAutenticador(req.usuario.email, segredo) });
+  } catch (error) {
+    responderErro(res, error, "Erro ao iniciar a verificação em duas etapas");
+  }
+};
+
+// Configurar 2FA (2/2): confere o primeiro código e ativa. Devolve os códigos
+// de recuperação (mostrados uma única vez) e um token novo (as sessões
+// anteriores caem).
+export const ativarMfa = async (req, res) => {
+  try {
+    if (req.usuario.mfaAtivo) throw erroHttp(400, "A verificação em duas etapas já está ativa.");
+    if (!req.usuario.mfaPendente) throw erroHttp(400, "Comece a configuração de novo.");
+    const segredo = decifrarSegredo(req.usuario.id, req.usuario.mfaPendente);
+    const passo = conferirCodigo(segredo, req.body?.codigo);
+    if (!passo) throw erroHttp(400, "Código inválido. Confira o horário do celular e digite o código atual do app.");
+    const { codigos, hashes } = gerarCodigosRecuperacao();
+    await req.usuario.update({
+      mfaAtivo: true,
+      mfaSegredo: req.usuario.mfaPendente,
+      mfaPendente: null,
+      mfaRecuperacao: hashes,
+      mfaUltimoPasso: passo,
+      mfaAtivadoEm: new Date(),
+    });
+    res.json({ codigosRecuperacao: codigos, token: gerarToken(req.usuario), usuario: req.usuario });
+  } catch (error) {
+    responderErro(res, error, "Erro ao ativar a verificação em duas etapas");
+  }
+};
+
+// Novos códigos de recuperação (pede o código atual do app).
+export const novosCodigosMfa = async (req, res) => {
+  try {
+    if (!req.usuario.mfaAtivo) throw erroHttp(400, "A verificação em duas etapas não está ativa.");
+    const passo = conferirCodigo(decifrarSegredo(req.usuario.id, req.usuario.mfaSegredo), req.body?.codigo, req.usuario.mfaUltimoPasso);
+    if (!passo) throw erroHttp(400, "Código inválido.");
+    const { codigos, hashes } = gerarCodigosRecuperacao();
+    await req.usuario.update({ mfaRecuperacao: hashes, mfaUltimoPasso: passo });
+    res.json({ codigosRecuperacao: codigos });
+  } catch (error) {
+    responderErro(res, error, "Erro ao gerar códigos de recuperação");
   }
 };
 

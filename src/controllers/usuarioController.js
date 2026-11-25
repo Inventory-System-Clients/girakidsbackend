@@ -217,6 +217,20 @@ export const resetarSenha = async (req, res) => {
   }
 };
 
+// Admin: zera a verificação em duas etapas de alguém que perdeu o celular.
+// As sessões dele caem e, se for ADMIN, configura de novo no próximo login.
+export const resetarMfa = async (req, res) => {
+  try {
+    const usuario = await Usuario.findByPk(req.params.id);
+    if (!usuario) throw erroHttp(404, "Usuário não encontrado.");
+    if (usuario.id === req.usuario.id) throw erroHttp(400, "Para trocar o seu próprio 2FA, use um código de recuperação no login.");
+    await usuario.update({ mfaAtivo: false, mfaSegredo: null, mfaPendente: null, mfaRecuperacao: [], mfaUltimoPasso: null, mfaAtivadoEm: null });
+    res.json({ message: "Verificação em duas etapas resetada. A pessoa vai configurar de novo no próximo login." });
+  } catch (error) {
+    responderErro(res, error, "Erro ao resetar a verificação em duas etapas");
+  }
+};
+
 // Usuário com pedidos é desativado (mantém o histórico); sem pedidos é
 // excluído de fato.
 export const excluir = async (req, res) => {

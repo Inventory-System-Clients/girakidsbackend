@@ -127,6 +127,14 @@ const Usuario = sequelize.define(
       type: DataTypes.STRING(150),
       allowNull: true,
     },
+    // Verificação em duas etapas (app autenticador). Obrigatória para ADMIN.
+    // Segredos cifrados (utils/mfa.js); nunca saem na API (ver toJSON).
+    mfaAtivo: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    mfaSegredo: { type: DataTypes.TEXT, allowNull: true },
+    mfaPendente: { type: DataTypes.TEXT, allowNull: true },
+    mfaRecuperacao: { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },
+    mfaUltimoPasso: { type: DataTypes.INTEGER, allowNull: true },
+    mfaAtivadoEm: { type: DataTypes.DATE, allowNull: true },
   },
   {
     tableName: "usuarios",
@@ -164,6 +172,11 @@ Usuario.prototype.temPermissao = function (...permissoes) {
 Usuario.prototype.toJSON = function () {
   const valores = { ...this.get() };
   delete valores.senha;
+  delete valores.mfaSegredo;
+  delete valores.mfaPendente;
+  delete valores.mfaUltimoPasso;
+  valores.mfaCodigosRestantes = Array.isArray(valores.mfaRecuperacao) ? valores.mfaRecuperacao.length : 0;
+  delete valores.mfaRecuperacao;
   return valores;
 };
 
