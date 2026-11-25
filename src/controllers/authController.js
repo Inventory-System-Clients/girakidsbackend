@@ -3,6 +3,7 @@ import { Usuario } from "../models/index.js";
 import { gerarToken } from "../middlewares/auth.js";
 import { documentoValido, erroHttp, responderErro, somenteDigitos } from "../utils/helpers.js";
 import { definirAvisosCliente } from "../services/whatsappService.js";
+import { problemaSenhaAdmin } from "../utils/senhaForte.js";
 
 // Contra adivinhação de senha: 5 erros seguidos no mesmo e-mail bloqueiam
 // esse e-mail por 15 min (em memória; uma instância na Render).
@@ -39,6 +40,11 @@ export const login = async (req, res) => {
       throw erroHttp(401, "E-mail ou senha inválidos.");
     }
     errosLogin.delete(email);
+    // Admin com senha fraca (de antes da regra, ou que virou admin depois):
+    // entra, mas é levado a trocar a senha antes de usar o sistema.
+    if (usuario.role === "ADMIN" && !usuario.trocarSenha && problemaSenhaAdmin(senha, { email: usuario.email, nome: usuario.nome })) {
+      await usuario.update({ trocarSenha: true });
+    }
     res.json({ token: gerarToken(usuario), usuario });
   } catch (error) {
     responderErro(res, error, "Erro ao fazer login");

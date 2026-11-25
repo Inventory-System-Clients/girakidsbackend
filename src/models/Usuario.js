@@ -1,6 +1,7 @@
 import { DataTypes } from "sequelize";
 import bcrypt from "bcryptjs";
 import { sequelize } from "../database/connection.js";
+import { problemaSenhaAdmin } from "../utils/senhaForte.js";
 
 // Telas internas que um FUNCIONARIO pode receber (o ADMIN acessa todas).
 // Mesmas opções do "Criar Novo Usuário" da loja original + a aba Comercial.
@@ -133,6 +134,15 @@ const Usuario = sequelize.define(
     hooks: {
       beforeSave: async (usuario) => {
         if (usuario.changed("senha")) {
+          // Administrador: não aceita senha fraca (123456, 12345678...).
+          if (usuario.role === "ADMIN") {
+            const problema = problemaSenhaAdmin(usuario.senha, { email: usuario.email, nome: usuario.nome });
+            if (problema) {
+              const erro = new Error(problema);
+              erro.status = 400;
+              throw erro;
+            }
+          }
           usuario.senha = await bcrypt.hash(usuario.senha, 10);
         }
       },

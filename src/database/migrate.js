@@ -86,13 +86,18 @@ export const sincronizarBanco = async () => {
   if (email && senha) {
     const existente = await Usuario.findOne({ where: { email: email.toLowerCase() } });
     if (!existente) {
-      await Usuario.create({
-        nome: process.env.ADMIN_NOME || "Administrador",
-        email,
-        senha,
-        role: "ADMIN",
-      });
-      console.log(`👤 Administrador ${email} criado.`);
+      try {
+        await Usuario.create({
+          nome: process.env.ADMIN_NOME || "Administrador",
+          email,
+          senha,
+          role: "ADMIN",
+        });
+        console.log(`👤 Administrador ${email} criado.`);
+      } catch (error) {
+        // Senha fraca em ADMIN_PASSWORD: não derruba o servidor.
+        console.warn(`[migrate] Administrador ${email} não criado: ${error.message}`);
+      }
     }
   }
 };
