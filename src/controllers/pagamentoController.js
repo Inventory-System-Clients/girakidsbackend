@@ -4,7 +4,9 @@ import { Pedido, PedidoParcela, AlertaPagamento } from "../models/index.js";
 import { obterProvedor, provedorAtivo, provedorMaquininha, statusPagamentos } from "../services/pagamentos/index.js";
 import { configPagamentos } from "../services/pagamentos/config.js";
 import { baixarEstoquePedido, verificarEstoque } from "../services/estoqueService.js";
-import { INCLUDE_COMPLETO, serializarPedido } from "../services/pedidoService.js";
+import { INCLUDE_COMPLETO, formatarNumero, serializarPedido } from "../services/pedidoService.js";
+import { FINALIDADE_CARTAO } from "../services/pagamentos/sumup.js";
+import { assinaturaConfere } from "../utils/linkSeguro.js";
 import { arredondar, erroHttp, hojeISO, responderErro } from "../utils/helpers.js";
 
 export const status = (req, res) => res.json(statusPagamentos());
@@ -249,6 +251,62 @@ export const gerarCobranca = async (req, res) => {
     res.json(serializarPedido(atualizado, { usuario: req.usuario }));
   } catch (error) {
     responderErro(res, error, "Erro ao gerar a cobrança");
+  }
+};
+
+// Página pública de cartão parcelado (SumUp): link assinado por pedido, sem
+// login. Só mostra o mínimo para pagar (número, valor, parcelas, 1º nome).
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const pedidoDoLinkCartao = async (req) => {
+  const { id, assinatura } = req.params;
+  if (!UUID.test(id) || !assinaturaConfere(FINALIDADE_CARTAO, id, assinatura)) throw erroHttp(404, "Link de pagamento inválido.");
+  const pedido = await Pedido.findByPk(id, { include: INCLUDE_COMPLETO });
+  if (!pedido || pedido.tipo !== "PEDIDO") throw erroHttp(404, "Pedido não encontrado.");
+  return pedido;
+};
+
+const dadosCartao = (pedido, extras = {}) => ({
+  numeroFormatado: formatarNumero(pedido),
+  clienteNome: String(pedido.clienteNome || "").split(" ")[0],
+  total: Number(pedido.total),
+  parcelas: Math.min(12, Math.max(1, Math.trunc(Number(pedido.parcelasCartao) || 1))),
+  pago: pedido.statusFinanceiro === "PAGO",
+  cancelado: pedido.statusVendas === "CANCELADO",
+  ...extras,
+});
+
+export const cartaoPublico = async (req, res) => {
+  try {
+    let pedido = await pedidoDoLinkCartao(req);
+    if (pedido.statusFinanceiro === "PAGO" || pedido.statusVendas === "CANCELADO") return res.json(dadosCartao(pedido));
+    if (pedido.formaPagamento !== "CREDITO_ONLINE") throw erroHttp(400, "Este pedido não é de pagamento com cartão online.");
+    const provedor = obterProvedor("sumup");
+    if (!provedor?.configurado?.() || (pedido.pagamentoProvedor && pedido.pagamentoProvedor !== "sumup")) throw erroHttp(400, "Pagamento com cartão indisponível para este pedido. Fale com o nosso comercial.");
+    if (!pedido.estoqueBaixado) await verificarEstoque(pedido.itens);
+    const preparo = await provedor.prepararCartao(pedido);
+    if (preparo.pago) {
+      await aplicarResultado(pedido, { status: "PAGO", valorPago: preparo.valorPago }, provedor);
+      pedido = await Pedido.findByPk(pedido.id);
+      return res.json(dadosCartao(pedido));
+    }
+    if (preparo.novaReferencia) await pedido.update({ pagamentoProvedor: "sumup", pagamentoReferencia: preparo.novaReferencia });
+    res.json(dadosCartao(pedido, { checkoutId: preparo.checkoutId }));
+  } catch (error) {
+    responderErro(res, error, "Erro ao abrir o pagamento");
+  }
+};
+
+// Depois do formulário da SumUp: confere na SumUp e confirma o pedido.
+export const cartaoPublicoConsultar = async (req, res) => {
+  try {
+    const pedido = await pedidoDoLinkCartao(req);
+    const provedor = obterProvedor(pedido.pagamentoProvedor);
+    if (provedor && pedido.pagamentoReferencia && pedido.statusFinanceiro !== "PAGO") {
+      await aplicarResultado(pedido, await provedor.consultarCobranca(pedido.pagamentoReferencia, pedido), provedor);
+    }
+    res.json(dadosCartao(await Pedido.findByPk(pedido.id)));
+  } catch (error) {
+    responderErro(res, error, "Erro ao consultar o pagamento");
   }
 };
 

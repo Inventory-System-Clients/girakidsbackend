@@ -77,6 +77,10 @@ router.get("/catalogo/produtos/:id", produtos.obterPublico);
 const limiteAcompanhamento = limitarTaxa({ janelaMs: 60_000, maximo: 30 });
 router.get("/acompanhamento/:id/:assinatura", limiteAcompanhamento, pedidos.acompanhamentoPublico);
 router.get("/acompanhamento/:id/:assinatura/rastreio", limiteAcompanhamento, pedidos.rastreioPublico);
+// Pagamento com cartão parcelado (SumUp), link assinado enviado ao cliente.
+const limiteCartaoPublico = limitarTaxa({ janelaMs: 60_000, maximo: 30 });
+router.get("/publico/pagar-cartao/:id/:assinatura", limiteCartaoPublico, pagamentos.cartaoPublico);
+router.post("/publico/pagar-cartao/:id/:assinatura/consultar", limiteCartaoPublico, pagamentos.cartaoPublicoConsultar);
 
 // Checkout e pedidos do cliente
 router.get("/checkout/opcoes", autenticar, pedidos.opcoesCheckout);

@@ -1,5 +1,11 @@
 import { credenciaisDe, urlFrontend } from "./config.js";
 import { erroHttp, somenteDigitos } from "../../utils/helpers.js";
+import { assinar } from "../../utils/linkSeguro.js";
+
+// Link da nossa página de cartão parcelado (sem login; assinado por pedido).
+export const FINALIDADE_CARTAO = "pagar-cartao-sumup";
+export const linkCartaoParcelado = (pedidoId) => `${urlFrontend()}/pagar-cartao/${pedidoId}/${assinar(FINALIDADE_CARTAO, pedidoId)}`;
+const parcelasDe = (valor) => Math.min(12, Math.max(1, Math.trunc(Number(valor) || 1)));
 
 // SumUp (copiado e adaptado do Dubob):
 // - PIX online: checkout com QR Code e copia e cola na tela;
@@ -134,7 +140,7 @@ export default {
 
   // PIX: tenta "pix" (cai direto na conta SumUp) e, se a conta não aceitar,
   // "qr_code_pix" (repasse normal da SumUp). Cada tentativa usa um checkout novo.
-  async criarCobranca({ pedido, metodo }) {
+  async criarCobranca({ pedido, metodo, parcelas }) {
     if (metodo === "PIX_ONLINE") {
       let ultimoErro = null;
       for (const tipo of ["pix", "qr_code_pix"]) {
@@ -148,6 +154,13 @@ export default {
         }
       }
       throw erroHttp(502, `A SumUp não gerou o PIX${ultimoErro ? ` (${ultimoErro.message})` : ""}. Confira se o PIX está ativo na conta SumUp.`);
+    }
+    // Crédito parcelado: a página hospedada da SumUp só cobra à vista (a API
+    // não deixa escolher parcelas nela). O link vai para a nossa página, que
+    // abre o formulário de cartão da própria SumUp já no número de parcelas.
+    if (metodo === "CREDITO_ONLINE" && parcelasDe(parcelas ?? pedido.parcelasCartao) > 1) {
+      const checkout = await criarCheckout(pedido);
+      return { referencia: `checkout:${checkout.id}`, link: linkCartaoParcelado(pedido.id) };
     }
     const checkout = await criarCheckout(pedido, {
       hosted_checkout: { enabled: true },
@@ -184,6 +197,23 @@ export default {
     return { status: "PENDENTE" };
   },
 
+  // Página de cartão parcelado: devolve o checkout que o formulário da SumUp
+  // vai processar. Checkout pago fica como está; recusado, vencido ou com
+  // valor diferente do pedido (total mudou) ganha um novo.
+  async prepararCartao(pedido) {
+    const [tipo, ...resto] = String(pedido.pagamentoReferencia || "").split(":");
+    if (tipo === "checkout" && resto.length) {
+      const checkout = await chamar("GET", `/v0.1/checkouts/${resto.join(":")}`);
+      const status = String(checkout?.status || "").toUpperCase();
+      if (status === "PAID") return { pago: true, valorPago: Number(checkout.amount) };
+      if (status === "PENDING" && Math.abs(Number(checkout.amount) - Number(pedido.total)) < 0.01 && !checkout.hosted_checkout?.enabled) {
+        return { checkoutId: checkout.id };
+      }
+    }
+    const novo = await criarCheckout(pedido);
+    return { checkoutId: novo.id, novaReferencia: `checkout:${novo.id}` };
+  },
+
   async interpretarWebhook() {
     return { ignorar: true };
   },
@@ -192,7 +222,7 @@ export default {
     // Parcelado no sistema: a cobrança já chega na maquininha como crédito
     // parcelado (sem isso a SumUp cobra à vista e não oferece parcelar).
     // À vista (1x): a maquininha pergunta crédito ou débito ao cliente.
-    const parcelas = Math.min(12, Math.max(1, Math.trunc(Number(pedido.parcelasCartao) || 1)));
+    const parcelas = parcelasDe(pedido.parcelasCartao);
     const dados = await chamar("POST", `/v0.1/merchants/${await merchant()}/readers/${maquininha.identificador}/checkout`, {
       total_amount: { currency: "BRL", minor_unit: 2, value: centavos(pedido.total) },
       description: descricao(pedido),
