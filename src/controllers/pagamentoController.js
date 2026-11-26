@@ -301,10 +301,15 @@ export const cartaoPublicoConsultar = async (req, res) => {
   try {
     const pedido = await pedidoDoLinkCartao(req);
     const provedor = obterProvedor(pedido.pagamentoProvedor);
+    let situacao = pedido.statusFinanceiro === "PAGO" ? "PAGO" : "PENDENTE";
     if (provedor && pedido.pagamentoReferencia && pedido.statusFinanceiro !== "PAGO") {
-      await aplicarResultado(pedido, await provedor.consultarCobranca(pedido.pagamentoReferencia, pedido), provedor);
+      const resultado = await provedor.consultarCobranca(pedido.pagamentoReferencia, pedido);
+      await aplicarResultado(pedido, resultado, provedor);
+      situacao = resultado.status;
     }
-    res.json(dadosCartao(await Pedido.findByPk(pedido.id)));
+    // situacao: PAGO, RECUSADO, EXPIRADO ou PENDENTE (a página decide se
+    // abre um novo formulário).
+    res.json(dadosCartao(await Pedido.findByPk(pedido.id), { situacao }));
   } catch (error) {
     responderErro(res, error, "Erro ao consultar o pagamento");
   }

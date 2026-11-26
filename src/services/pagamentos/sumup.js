@@ -177,9 +177,17 @@ export default {
       const checkout = await chamar("GET", `/v0.1/checkouts/${resto.join(":")}`);
       const status = String(checkout?.status || "").toUpperCase();
       if (status === "PAID") return { status: "PAGO", valorPago: Number(checkout.amount) };
-      if (status === "FAILED") return { status: "RECUSADO" };
+      // Tentativa recusada: o checkout pode ficar FAILED ou continuar PENDING
+      // com a transação FAILED/CANCELLED.
+      const transacoes = Array.isArray(checkout?.transactions) ? checkout.transactions : [];
+      const ultima = transacoes.at(-1);
+      const statusTransacao = String(ultima?.status || "").toUpperCase();
+      if (status === "FAILED" || ["FAILED", "CANCELLED"].includes(statusTransacao)) {
+        console.warn(`[SumUp] Checkout ${checkout?.id} recusado (checkout ${status}, transação ${statusTransacao || "-"}, ${ultima?.installments_count || 1}x).`);
+        return { status: "RECUSADO" };
+      }
       if (status === "EXPIRED") return { status: "EXPIRADO" };
-      return { status: "PENDENTE" };
+      return { status: "PENDENTE", tentativa: transacoes.length > 0 };
     }
     if (tipo === "reader") {
       const [, clientTransactionId] = resto;
@@ -206,7 +214,11 @@ export default {
       const checkout = await chamar("GET", `/v0.1/checkouts/${resto.join(":")}`);
       const status = String(checkout?.status || "").toUpperCase();
       if (status === "PAID") return { pago: true, valorPago: Number(checkout.amount) };
-      if (status === "PENDING" && Math.abs(Number(checkout.amount) - Number(pedido.total)) < 0.01 && !checkout.hosted_checkout?.enabled) {
+      // Última tentativa recusada: formulário novo em checkout novo. Tentativa
+      // ainda em andamento (ex.: 3-D Secure) mantém o mesmo checkout, para
+      // não haver duas cobranças abertas do mesmo pedido.
+      const recusada = ["FAILED", "CANCELLED"].includes(String((checkout.transactions || []).at(-1)?.status || "").toUpperCase());
+      if (status === "PENDING" && !recusada && Math.abs(Number(checkout.amount) - Number(pedido.total)) < 0.01 && !checkout.hosted_checkout?.enabled) {
         return { checkoutId: checkout.id };
       }
     }
