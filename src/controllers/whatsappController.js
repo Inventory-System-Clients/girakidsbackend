@@ -1,5 +1,6 @@
 import { LogAtividade } from "../models/index.js";
 import * as whatsapp from "../services/whatsappService.js";
+import * as campanhas from "../services/whatsappCampanhaService.js";
 import { erroHttp, responderErro } from "../utils/helpers.js";
 
 // Avisos de pedido no WhatsApp (aba só do ADMIN). Sem registrarLog com o
@@ -78,3 +79,50 @@ export const webhook = async (req, res) => {
     res.json({ ok: true });
   }
 };
+
+// ---------------------------------------------------------------------------
+// Listas de clientes (novidades, promoções, vídeos)
+// ---------------------------------------------------------------------------
+
+const acao = (fn, mensagem) => async (req, res) => {
+  try {
+    res.json(await fn(req));
+  } catch (error) {
+    responderErro(res, error, mensagem);
+  }
+};
+
+export const campanhasListar = acao(() => campanhas.listar(), "Erro ao carregar as listas");
+export const campanhaObter = acao((req) => campanhas.obter(req.params.id), "Erro ao carregar a lista");
+export const campanhaCriar = acao((req) => campanhas.salvar(req.body, req.usuario), "Erro ao salvar a lista");
+export const campanhaAtualizar = acao((req) => campanhas.salvar(req.body, req.usuario, req.params.id), "Erro ao salvar a lista");
+export const campanhaProgramar = acao(async (req) => {
+  const r = await campanhas.programar(req.params.id, { quando: req.body?.quando || null });
+  registrar(req, req.body?.quando ? "AGENDAR_LISTA_WHATSAPP" : "ENVIAR_LISTA_WHATSAPP", { campanhaId: r.id, nome: r.nome, clientes: r.clientes.length, quando: r.agendadaPara });
+  return r;
+}, "Erro ao programar o envio");
+export const campanhaCancelar = acao(async (req) => {
+  const r = await campanhas.cancelar(req.params.id);
+  registrar(req, "CANCELAR_LISTA_WHATSAPP", { campanhaId: r.id, nome: r.nome });
+  return r;
+}, "Erro ao cancelar o envio");
+export const campanhaExcluir = acao(async (req) => {
+  const r = await campanhas.excluir(req.params.id);
+  registrar(req, "EXCLUIR_LISTA_WHATSAPP", { campanhaId: req.params.id });
+  return r;
+}, "Erro ao excluir a lista");
+export const campanhaDuplicar = acao((req) => campanhas.duplicar(req.params.id, req.usuario), "Erro ao duplicar a lista");
+export const campanhaRecomendar = acao(
+  (req) =>
+    campanhas.recomendar({
+      dias: req.body?.dias,
+      excluir: req.body?.excluir,
+      campanhaId: req.body?.campanhaId || null,
+      semRepetirDias: req.body?.semRepetirDias ?? 7,
+      quantidade: req.body?.quantidade,
+    }),
+  "Erro ao recomendar clientes",
+);
+export const campanhaBuscarClientes = acao((req) => campanhas.buscarClientes(req.query.q, req.query.dias), "Erro ao buscar clientes");
+export const campanhaMidia = acao((req) => campanhas.salvarMidia(req.file, req.usuario), "Erro ao enviar o arquivo");
+export const campanhaTextoIA = acao((req) => campanhas.gerarTextoIA(req.body || {}), "Erro ao gerar a mensagem");

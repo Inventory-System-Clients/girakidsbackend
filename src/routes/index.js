@@ -313,6 +313,21 @@ router.post("/whatsapp/avisos/conectar", ...adminWhats, registrarLog("CONECTAR_W
 router.post("/whatsapp/avisos/teste", ...adminWhats, registrarLog("TESTE_WHATSAPP", "WhatsApp"), whatsapp.teste);
 router.post("/whatsapp/avisos/mensagens/:id/reenviar", ...adminWhats, registrarLog("REENVIAR_WHATSAPP", "WhatsApp"), whatsapp.reenviar);
 router.post("/whatsapp/webhook/:token", whatsapp.webhook);
+// Listas de clientes (novidades, promoções e vídeos; até 20 por lista).
+const uploadMidiaWhats = multer({ storage: multer.memoryStorage(), limits: { fileSize: 16 * 1024 * 1024 } });
+const limiteIaWhats = limitarTaxa({ janelaMs: 60_000, maximo: 15 });
+router.get("/whatsapp/campanhas", ...adminWhats, whatsapp.campanhasListar);
+router.post("/whatsapp/campanhas", ...adminWhats, whatsapp.campanhaCriar);
+router.get("/whatsapp/campanhas/clientes", ...adminWhats, whatsapp.campanhaBuscarClientes);
+router.post("/whatsapp/campanhas/recomendar", ...adminWhats, whatsapp.campanhaRecomendar);
+router.post("/whatsapp/campanhas/midia", ...adminWhats, uploadMidiaWhats.single("arquivo"), whatsapp.campanhaMidia);
+router.post("/whatsapp/campanhas/ia", ...adminWhats, limiteIaWhats, whatsapp.campanhaTextoIA);
+router.get("/whatsapp/campanhas/:id", ...adminWhats, whatsapp.campanhaObter);
+router.put("/whatsapp/campanhas/:id", ...adminWhats, whatsapp.campanhaAtualizar);
+router.post("/whatsapp/campanhas/:id/programar", ...adminWhats, whatsapp.campanhaProgramar);
+router.post("/whatsapp/campanhas/:id/cancelar", ...adminWhats, whatsapp.campanhaCancelar);
+router.post("/whatsapp/campanhas/:id/duplicar", ...adminWhats, whatsapp.campanhaDuplicar);
+router.delete("/whatsapp/campanhas/:id", ...adminWhats, whatsapp.campanhaExcluir);
 
 // Sincronização com o sistema antigo (Krion) — só ADMIN
 const adminLegado = [autenticar, legado.soAdmin];

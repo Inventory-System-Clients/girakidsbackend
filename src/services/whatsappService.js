@@ -1,7 +1,7 @@
 import crypto from "crypto";
 import { Op } from "sequelize";
 import { sequelize } from "../database/connection.js";
-import { Pedido, Usuario, WhatsappMensagem, WhatsappOptOut } from "../models/index.js";
+import { Arquivo, Pedido, Usuario, WhatsappCampanha, WhatsappCampanhaEnvio, WhatsappMensagem, WhatsappOptOut } from "../models/index.js";
 import { lerConfiguracao, salvarConfiguracao } from "../models/Configuracao.js";
 import { cifrarCredenciais, decifrarCredenciais } from "../utils/cofreCredenciais.js";
 import { ENDERECO_LOJA_PADRAO } from "../utils/formasPagamento.js";
@@ -103,7 +103,7 @@ const usuariosDoTelefone = async (chave) => {
 // Configuração (chave da Evolution criptografada no cofre)
 // ---------------------------------------------------------------------------
 
-const lerConfig = async () => {
+export const lerConfig = async () => {
   const salvo = (await lerConfiguracao(CHAVE_CONFIG)) || {};
   let apiKey = null;
   if (salvo.apiKeyCifrada) {
@@ -250,7 +250,7 @@ const evolution = async (config, caminho, { method = "GET", body } = {}) => {
   return dados;
 };
 
-const estadoConexao = async (config) => {
+export const estadoConexao = async (config) => {
   const r = await evolution(config, `/instance/connectionState/${encodeURIComponent(config.instancia)}`);
   return r?.instance?.state || r?.state || "unknown";
 };
@@ -347,6 +347,21 @@ const numeroNoWhatsapp = async (config, numero) => {
     return numero;
   }
 };
+
+// Imagem ou vídeo com a legenda (Evolution v2: base64 sem o "data:").
+const enviarMidia = (config, numero, { tipo, mime, nome, base64 }, legenda) =>
+  evolution(config, `/message/sendMedia/${encodeURIComponent(config.instancia)}`, {
+    method: "POST",
+    body: {
+      number: numero,
+      mediatype: tipo === "VIDEO" ? "video" : "image",
+      mimetype: mime,
+      caption: legenda,
+      media: base64,
+      fileName: nome || (tipo === "VIDEO" ? "video.mp4" : "imagem.jpg"),
+      delay: 1200,
+    },
+  });
 
 const enviarTexto = (config, numero, texto) =>
   evolution(config, `/message/sendText/${encodeURIComponent(config.instancia)}`, {
@@ -447,6 +462,10 @@ const sairDosAvisos = async (telefone, origem) => {
   for (const m of naFila.filter((x) => chaveTelefone(x.telefone) === chave)) {
     await m.update({ status: "DESCARTADA", erro: "Cliente pediu para não receber avisos." });
   }
+  const naFilaCampanha = await WhatsappCampanhaEnvio.findAll({ where: { status: "FILA", [Op.and]: [mesmoTelefoneSql("telefone", chave)] } });
+  for (const m of naFilaCampanha.filter((x) => chaveTelefone(x.telefone) === chave)) {
+    await m.update({ status: "DESCARTADA", erro: "Cliente pediu para não receber mensagens." });
+  }
 };
 
 const voltarAosAvisos = async (telefone) => {
@@ -513,13 +532,18 @@ export const receberWebhook = async (body) => {
     const recebeuAviso = (await WhatsappMensagem.findAll({ where: { status: "ENVIADO", [Op.and]: [mesmoTelefoneSql("telefone", chave)] }, attributes: ["telefone"], limit: 20 })).some(
       (m) => chaveTelefone(m.telefone) === chave,
     );
-    if (!recebeuAviso) continue;
+    const recebeuCampanha =
+      !recebeuAviso &&
+      (await WhatsappCampanhaEnvio.findAll({ where: { status: "ENVIADO", [Op.and]: [mesmoTelefoneSql("telefone", chave)] }, attributes: ["telefone"], limit: 20 })).some(
+        (m) => chaveTelefone(m.telefone) === chave,
+      );
+    if (!recebeuAviso && !recebeuCampanha) continue;
 
     const config = await lerConfig();
     if (sair) {
       await sairDosAvisos(telefone, "WHATSAPP");
       resultados.push({ optOut: telefone });
-      enviarTexto(config, telefone, "Pronto! Você não vai mais receber os avisos automáticos de pedido da Gira Kids. Se mudar de ideia, é só responder VOLTAR. 💛").catch((error) =>
+      enviarTexto(config, telefone, "Pronto! Você não vai mais receber as mensagens automáticas da Gira Kids. Se mudar de ideia, é só responder VOLTAR. 💛").catch((error) =>
         console.error("[whatsapp] confirmação SAIR:", error.message),
       );
     } else {
@@ -616,7 +640,49 @@ export const reenviar = async (id) => {
   return { reenviado: true };
 };
 
+// Listas de clientes: pausa maior que a dos avisos (no mínimo 30 s, ±30%).
+const INTERVALO_CAMPANHA_MINIMO = 30;
+// Mensagem de lista que não saiu até 12 h depois do horário marcado é descartada.
+const VALIDADE_CAMPANHA_HORAS = 12;
+
+// Próxima mensagem de lista já no horário (a mais antiga primeiro).
+const proximoEnvioCampanha = () =>
+  WhatsappCampanhaEnvio.findOne({
+    where: { status: "FILA", programadoPara: { [Op.lte]: new Date() } },
+    order: [
+      ["programadoPara", "ASC"],
+      ["ordem", "ASC"],
+    ],
+  });
+
+// Daqui a quanto tempo sai a próxima mensagem de lista agendada (null = nenhuma).
+const esperaProximaCampanha = async () => {
+  const proxima = await WhatsappCampanhaEnvio.findOne({ where: { status: "FILA" }, order: [["programadoPara", "ASC"]], attributes: ["programadoPara"] });
+  if (!proxima) return null;
+  return Math.max(1000, Math.min(5 * 60 * 1000, new Date(proxima.programadoPara).getTime() - Date.now()));
+};
+
+// Lista sem nada pendente fica CONCLUIDA; a primeira mensagem marca ENVIANDO.
+export const atualizarStatusCampanha = async (campanhaId) => {
+  const campanha = await WhatsappCampanha.findByPk(campanhaId);
+  if (!campanha || campanha.status === "CANCELADA" || campanha.status === "RASCUNHO") return;
+  const pendentes = await WhatsappCampanhaEnvio.count({ where: { campanhaId, status: { [Op.in]: ["FILA", "ENVIANDO"] } } });
+  const andou = await WhatsappCampanhaEnvio.count({ where: { campanhaId, status: { [Op.ne]: "FILA" } } });
+  if (!pendentes) await campanha.update({ status: "CONCLUIDA", concluidaEm: campanha.concluidaEm || new Date() });
+  else if (andou && campanha.status === "AGENDADA") await campanha.update({ status: "ENVIANDO" });
+};
+
+const midiaDaCampanha = async (campanhaId) => {
+  const campanha = await WhatsappCampanha.findByPk(campanhaId, { attributes: ["midiaArquivoId", "midiaTipo", "midiaNome"] });
+  if (!campanha?.midiaArquivoId) return null;
+  const arquivo = await Arquivo.findByPk(campanha.midiaArquivoId);
+  if (!arquivo) throw Object.assign(new Error("O arquivo de imagem/vídeo da lista não existe mais."), { semWhatsapp: true });
+  return { tipo: campanha.midiaTipo, mime: arquivo.mime, nome: campanha.midiaNome || arquivo.nome, base64: Buffer.from(arquivo.dados).toString("base64") };
+};
+
 // Um envio por vez; se o número estiver desconectado, espera 1 minuto.
+// Avisos de pedido têm prioridade (e só saem com os avisos ligados); as
+// mensagens das listas saem mesmo com os avisos de pedido desligados.
 export const processarFila = async () => {
   if (processando) return;
   processando = true;
@@ -624,17 +690,24 @@ export const processarFila = async () => {
   let proximaEm = null;
   try {
     const config = await lerConfig();
-    if (!config.ativo || !config.evolutionUrl || !config.apiKey || !config.instancia) {
+    if (!config.evolutionUrl || !config.apiKey || !config.instancia) {
       pausa = null;
       return;
     }
-    const aviso = await WhatsappMensagem.findOne({ where: { status: "FILA" }, order: [["createdAt", "ASC"]] });
+    let aviso = config.ativo ? await WhatsappMensagem.findOne({ where: { status: "FILA" }, order: [["createdAt", "ASC"]] }) : null;
+    const deCampanha = !aviso;
+    if (!aviso) aviso = await proximoEnvioCampanha();
     if (!aviso) {
       pausa = null;
+      proximaEm = await esperaProximaCampanha();
       return;
     }
-    if (Date.now() - new Date(aviso.createdAt).getTime() > VALIDADE_HORAS * 60 * 60 * 1000) {
-      await aviso.update({ status: "DESCARTADA", erro: `Ficou mais de ${VALIDADE_HORAS}h na fila (não enviado atrasado).` });
+    const Modelo = deCampanha ? WhatsappCampanhaEnvio : WhatsappMensagem;
+    const horas = deCampanha ? VALIDADE_CAMPANHA_HORAS : VALIDADE_HORAS;
+    const referencia = deCampanha ? aviso.programadoPara : aviso.createdAt;
+    if (Date.now() - new Date(referencia).getTime() > horas * 60 * 60 * 1000) {
+      await aviso.update({ status: "DESCARTADA", erro: `Ficou mais de ${horas}h na fila (não enviado atrasado).` });
+      if (deCampanha) await atualizarStatusCampanha(aviso.campanhaId);
       proximaEm = 500;
       return;
     }
@@ -656,10 +729,7 @@ export const processarFila = async () => {
     pausa = null;
 
     // Reserva (só se ainda estiver na fila).
-    const [reservadas] = await WhatsappMensagem.update(
-      { status: "ENVIANDO", tentativas: aviso.tentativas + 1 },
-      { where: { id: aviso.id, status: "FILA" } },
-    );
+    const [reservadas] = await Modelo.update({ status: "ENVIANDO", tentativas: aviso.tentativas + 1 }, { where: { id: aviso.id, status: "FILA" } });
     if (!reservadas) {
       proximaEm = 500;
       return;
@@ -667,7 +737,7 @@ export const processarFila = async () => {
 
     try {
       if (await telefoneSaiu(aviso.telefone)) {
-        await aviso.update({ status: "DESCARTADA", erro: "Cliente pediu para não receber avisos." });
+        await aviso.update({ status: "DESCARTADA", erro: "Cliente pediu para não receber mensagens." });
         proximaEm = 500;
         return;
       }
@@ -675,18 +745,22 @@ export const processarFila = async () => {
       if (!destino) {
         await aviso.update({ status: "ERRO", erro: "Este número não tem WhatsApp." });
       } else {
-        await enviarTexto(config, destino, aviso.texto);
+        const midia = deCampanha ? await midiaDaCampanha(aviso.campanhaId) : null;
+        if (midia) await enviarMidia(config, destino, midia, aviso.texto);
+        else await enviarTexto(config, destino, aviso.texto);
         await aviso.update({ status: "ENVIADO", enviadoEm: new Date(), erro: null, telefone: destino });
       }
     } catch (error) {
       const tentativas = aviso.tentativas + 1;
       const tentarDeNovo = !error.semWhatsapp && tentativas < MAX_TENTATIVAS;
       await aviso.update({ status: tentarDeNovo ? "FILA" : "ERRO", erro: String(error.message).slice(0, 500) });
-      console.error(`[whatsapp] pedido ${aviso.pedidoNumero}:`, error.message);
+      console.error(deCampanha ? `[whatsapp] lista ${aviso.campanhaId}:` : `[whatsapp] pedido ${aviso.pedidoNumero}:`, error.message);
+    } finally {
+      if (deCampanha) await atualizarStatusCampanha(aviso.campanhaId).catch(() => {});
     }
     // Pausa variada (±30%) para não parecer disparo automático.
-    const base = Math.max(INTERVALO_MINIMO, config.intervaloSegundos) * 1000;
-    proximaEm = Math.round(base * (0.7 + Math.random() * 0.6));
+    const segundos = deCampanha ? Math.max(INTERVALO_CAMPANHA_MINIMO, config.intervaloSegundos) : Math.max(INTERVALO_MINIMO, config.intervaloSegundos);
+    proximaEm = Math.round(segundos * 1000 * (0.7 + Math.random() * 0.6));
   } catch (error) {
     console.error("[whatsapp] fila:", error.message);
     proximaEm = 60 * 1000;
@@ -696,7 +770,7 @@ export const processarFila = async () => {
   }
 };
 
-function agendar(ms) {
+export function agendar(ms) {
   if (timer) clearTimeout(timer);
   timer = setTimeout(() => {
     processarFila().catch((error) => console.error("[whatsapp] fila:", error.message));
@@ -708,6 +782,7 @@ function agendar(ms) {
 export const iniciarFila = async () => {
   try {
     await WhatsappMensagem.update({ status: "FILA" }, { where: { status: "ENVIANDO" } });
+    await WhatsappCampanhaEnvio.update({ status: "FILA" }, { where: { status: "ENVIANDO" } });
   } catch (error) {
     console.error("[whatsapp] iniciar:", error.message);
     return;
