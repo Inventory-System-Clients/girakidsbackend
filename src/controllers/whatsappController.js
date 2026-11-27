@@ -120,9 +120,27 @@ export const campanhaRecomendar = acao(
       campanhaId: req.body?.campanhaId || null,
       semRepetirDias: req.body?.semRepetirDias ?? 7,
       quantidade: req.body?.quantidade,
+      filtro: req.body?.filtro || null,
     }),
   "Erro ao recomendar clientes",
 );
 export const campanhaBuscarClientes = acao((req) => campanhas.buscarClientes(req.query.q, req.query.dias), "Erro ao buscar clientes");
 export const campanhaMidia = acao((req) => campanhas.salvarMidia(req.file, req.usuario), "Erro ao enviar o arquivo");
 export const campanhaTextoIA = acao((req) => campanhas.gerarTextoIA(req.body || {}), "Erro ao gerar a mensagem");
+export const campanhaCategorias = acao(() => campanhas.categoriasCatalogo(), "Erro ao carregar as categorias");
+export const campanhaProdutos = acao((req) => campanhas.buscarProdutos(req.query.q), "Erro ao buscar produtos");
+
+// Listas nichadas salvas
+export const publicosListar = acao(() => campanhas.listarPublicos(), "Erro ao carregar as listas salvas");
+export const publicoCriar = acao(async (req) => {
+  const r = await campanhas.salvarPublico(req.body, req.usuario);
+  registrar(req, "SALVAR_PUBLICO_WHATSAPP", { publicoId: r.id, nome: r.nome, tipo: r.tipo, clientes: r.clientes.length });
+  return r;
+}, "Erro ao salvar a lista");
+export const publicoAtualizar = acao((req) => campanhas.salvarPublico(req.body, req.usuario, req.params.id), "Erro ao salvar a lista");
+export const publicoUsar = acao((req) => campanhas.usarPublico(req.params.id), "Erro ao abrir a lista salva");
+export const publicoExcluir = acao(async (req) => {
+  const r = await campanhas.excluirPublico(req.params.id);
+  registrar(req, "EXCLUIR_PUBLICO_WHATSAPP", { publicoId: req.params.id });
+  return r;
+}, "Erro ao excluir a lista salva");

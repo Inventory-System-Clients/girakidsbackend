@@ -1,6 +1,6 @@
 import { Op, QueryTypes } from "sequelize";
 import { sequelize } from "../database/connection.js";
-import { Arquivo, Usuario, WhatsappCampanha, WhatsappCampanhaEnvio, WhatsappOptOut } from "../models/index.js";
+import { Arquivo, Categoria, Produto, Usuario, WhatsappCampanha, WhatsappCampanhaEnvio, WhatsappOptOut, WhatsappPublico } from "../models/index.js";
 import { erroHttp } from "../utils/helpers.js";
 import { contem } from "../utils/busca.js";
 import { agendar, atualizarStatusCampanha, chaveTelefone, lerConfig, normalizarTelefone, preencherTexto } from "./whatsappService.js";
@@ -10,6 +10,8 @@ import { agendar, atualizarStatusCampanha, chaveTelefone, lerConfig, normalizarT
 // - recomendação: quem mais FAZ pedidos no período (quantidade, não valor);
 // - "outra lista": recomenda clientes que ainda não estão nesta lista nem
 //   foram sugeridos antes;
+// - recomendação nichada: quem mais compra de uma categoria ou de um produto
+//   específico; essas listas podem ser salvas para usar depois;
 // - a IA escreve a mensagem a partir do produto e da foto/vídeo;
 // - envio na hora ou agendado, pela mesma fila dos avisos (um por vez, com
 //   pausa variada entre as mensagens).
@@ -61,8 +63,9 @@ const chavesSairam = async () => new Set((await WhatsappOptOut.findAll({ attribu
 // Quem mais fez pedidos no período (quantidade). Fica de fora: quem já está
 // na lista/foi sugerido (excluir), quem pediu SAIR, quem está sem celular e,
 // por padrão, quem recebeu mensagem de lista nos últimos dias.
-export const recomendar = async ({ dias = 90, excluir = [], campanhaId = null, semRepetirDias = 7, quantidade = MAX_CLIENTES } = {}) => {
-  const periodo = Math.min(730, Math.max(7, Number(dias) || 90));
+export const recomendar = async ({ dias = 90, excluir = [], campanhaId = null, semRepetirDias = 7, quantidade = MAX_CLIENTES, filtro = null } = {}) => {
+  const criterio = normalizarFiltro({ ...(filtro || {}), dias });
+  const periodo = criterio.dias;
   const limite = Math.min(MAX_CLIENTES, Math.max(1, Number(quantidade) || MAX_CLIENTES));
   const desde = new Date(Date.now() - periodo * 24 * 60 * 60 * 1000);
   const uuid = /^[0-9a-f-]{36}$/i;
@@ -80,18 +83,28 @@ export const recomendar = async ({ dias = 90, excluir = [], campanhaId = null, s
     recentes.forEach((e) => fora.add(e.usuarioId));
   }
 
+  // Nichada: conta só os pedidos que tiveram itens da categoria/produto (a
+  // categoria vale a atual do produto; item sem produto usa a do pedido).
+  const nicho = criterio.tipo !== "GERAL";
+  const condicaoItem =
+    criterio.tipo === "PRODUTO"
+      ? `i."produtoId" = :produtoId`
+      : `LOWER(TRIM(COALESCE(pr.categoria, i.categoria))) = LOWER(TRIM(:categoria))`;
   const linhas = await sequelize.query(
-    `SELECT u.id, u.nome, u.telefone, u."documentoTipo", COUNT(p.id)::int AS pedidos, MAX(p."createdAt") AS "ultimoPedido"
+    `SELECT u.id, u.nome, u.telefone, u."documentoTipo", COUNT(DISTINCT p.id)::int AS pedidos, MAX(p."createdAt") AS "ultimoPedido"
+            ${nicho ? `, COALESCE(SUM(i.quantidade), 0)::int AS itens` : ""}
        FROM usuarios u
        JOIN pedidos p ON p."clienteId" = u.id
+       ${nicho ? `JOIN pedido_itens i ON i."pedidoId" = p.id LEFT JOIN produtos pr ON pr.id = i."produtoId"` : ""}
       WHERE u.role = 'CLIENTE' AND u.ativo = true AND u."whatsappAvisos" IS NOT FALSE
         AND u.telefone IS NOT NULL AND u.telefone <> ''
         AND p.tipo = 'PEDIDO' AND p."statusVendas" <> 'CANCELADO' AND p."createdAt" >= :desde
+        ${nicho ? `AND ${condicaoItem}` : ""}
         ${fora.size ? "AND u.id NOT IN (:fora)" : ""}
       GROUP BY u.id
-      ORDER BY pedidos DESC, "ultimoPedido" DESC
+      ORDER BY pedidos DESC, ${nicho ? "itens DESC, " : ""}"ultimoPedido" DESC
       LIMIT 200`,
-    { replacements: { desde, fora: [...fora] }, type: QueryTypes.SELECT },
+    { replacements: { desde, fora: [...fora], categoria: criterio.categoria || "", produtoId: criterio.produtoId || null }, type: QueryTypes.SELECT },
   );
 
   const sairam = await chavesSairam();
@@ -101,10 +114,60 @@ export const recomendar = async ({ dias = 90, excluir = [], campanhaId = null, s
     const chave = chaveTelefone(l.telefone);
     if (!chave || sairam.has(chave) || telefones.has(chave)) continue;
     telefones.add(chave);
-    lista.push({ usuarioId: l.id, nome: l.nome, telefone: normalizarTelefone(l.telefone), pedidos: l.pedidos, ultimoPedido: l.ultimoPedido });
+    lista.push({
+      usuarioId: l.id,
+      nome: l.nome,
+      telefone: normalizarTelefone(l.telefone),
+      pedidos: l.pedidos,
+      ...(nicho ? { itens: l.itens } : {}),
+      ultimoPedido: l.ultimoPedido,
+    });
     if (lista.length >= limite) break;
   }
-  return { periodoDias: periodo, clientes: lista };
+  return { periodoDias: periodo, filtro: criterio, clientes: lista };
+};
+
+// Critério da recomendação (geral, por categoria ou por produto).
+const normalizarFiltro = (f = {}) => {
+  const dias = Math.min(730, Math.max(7, Number(f?.dias) || 90));
+  const categoria = String(f?.categoria || "").trim().slice(0, 100);
+  const produtoId = /^[0-9a-f-]{36}$/i.test(String(f?.produtoId || "")) ? String(f.produtoId) : null;
+  if (f?.tipo === "PRODUTO") {
+    if (!produtoId) throw erroHttp(400, "Escolha o produto.");
+    return { tipo: "PRODUTO", produtoId, produtoNome: String(f.produtoNome || "").trim().slice(0, 200) || null, categoria: null, dias };
+  }
+  if (f?.tipo === "CATEGORIA") {
+    if (!categoria) throw erroHttp(400, "Escolha a categoria.");
+    return { tipo: "CATEGORIA", categoria, produtoId: null, produtoNome: null, dias };
+  }
+  return { tipo: "GERAL", categoria: null, produtoId: null, produtoNome: null, dias };
+};
+
+// Categorias do catálogo (cadastradas + as que estão nos produtos).
+export const categoriasCatalogo = async () => {
+  const cadastradas = (await Categoria.findAll({ attributes: ["nome"] })).map((c) => c.nome);
+  const usadas = (
+    await sequelize.query(`SELECT DISTINCT categoria FROM produtos WHERE categoria IS NOT NULL AND categoria <> ''`, { type: QueryTypes.SELECT })
+  ).map((l) => l.categoria);
+  const porChave = new Map();
+  for (const nome of [...cadastradas, ...usadas]) {
+    const chave = String(nome).trim().toLowerCase();
+    if (chave && !porChave.has(chave)) porChave.set(chave, String(nome).trim());
+  }
+  return [...porChave.values()].sort((a, b) => a.localeCompare(b, "pt-BR"));
+};
+
+// Busca de produto para a recomendação por produto (nome ou SKU).
+export const buscarProdutos = async (termo) => {
+  const t = String(termo || "").trim();
+  if (t.length < 2) return [];
+  const produtos = await Produto.findAll({
+    where: { [Op.or]: [contem("nome", t), contem("sku", t)] },
+    attributes: ["id", "nome", "sku", "categoria"],
+    order: [["nome", "ASC"]],
+    limit: 15,
+  });
+  return produtos.map((p) => ({ id: p.id, nome: p.nome, sku: p.sku, categoria: p.categoria }));
 };
 
 // Busca manual para incluir alguém na lista (nome, e-mail ou celular).
@@ -165,6 +228,7 @@ const serializar = (c, envios = null, resumo = {}) => ({
   midiaTipo: c.midiaTipo,
   midiaNome: c.midiaNome,
   clientes: c.clientes || [],
+  filtro: c.filtro || null,
   status: c.status,
   agendadaPara: c.agendadaPara,
   concluidaEm: c.concluidaEm,
@@ -261,6 +325,7 @@ export const salvar = async (payload = {}, usuario, id = null) => {
     detalhes: String(payload.detalhes || "").trim().slice(0, 2000) || null,
     texto,
     clientes,
+    filtro: payload.filtro ? filtroSeguro(payload.filtro) : null,
     ...midia,
   };
 
@@ -346,9 +411,79 @@ export const duplicar = async (id, usuario) => {
     midiaTipo: c.midiaTipo,
     midiaNome: c.midiaNome,
     clientes: [],
+    filtro: c.filtro,
     criadoPor: usuario?.nome || null,
   });
   return obter(nova.id);
+};
+
+// ---------------------------------------------------------------------------
+// Listas nichadas salvas (públicos)
+// ---------------------------------------------------------------------------
+
+// Filtro guardado sem quebrar quando estiver incompleto.
+const filtroSeguro = (f) => {
+  try {
+    return normalizarFiltro(f);
+  } catch {
+    return null;
+  }
+};
+
+const serializarPublico = (p) => ({
+  id: p.id,
+  nome: p.nome,
+  tipo: p.tipo,
+  categoria: p.categoria,
+  produtoId: p.produtoId,
+  produtoNome: p.produtoNome,
+  periodoDias: p.periodoDias,
+  clientes: p.clientes || [],
+  usadaEm: p.usadaEm,
+  criadoPor: p.criadoPor,
+  createdAt: p.createdAt,
+  updatedAt: p.updatedAt,
+});
+
+export const listarPublicos = async () =>
+  (await WhatsappPublico.findAll({ order: [["updatedAt", "DESC"]], limit: 100 })).map(serializarPublico);
+
+export const salvarPublico = async (payload = {}, usuario, id = null) => {
+  const filtro = normalizarFiltro({ ...(payload.filtro || payload), dias: payload.periodoDias ?? payload.filtro?.dias ?? payload.dias });
+  const itens = Object.fromEntries((Array.isArray(payload.clientes) ? payload.clientes : []).map((c) => [String(c?.usuarioId || ""), Number(c?.itens) || 0]));
+  const clientes = (await carregarClientes(payload.clientes || [])).map((c) => ({ ...c, ...(itens[c.usuarioId] ? { itens: itens[c.usuarioId] } : {}) }));
+  if (!clientes.length) throw erroHttp(400, "A lista salva precisa de pelo menos um cliente.");
+  const padrao =
+    filtro.tipo === "PRODUTO" ? `Quem mais compra: ${filtro.produtoNome || "produto"}` : filtro.tipo === "CATEGORIA" ? `Quem mais compra: ${filtro.categoria}` : "Quem mais compra";
+  const dados = {
+    nome: (String(payload.nome || "").trim() || padrao).slice(0, 120),
+    tipo: filtro.tipo,
+    categoria: filtro.categoria,
+    produtoId: filtro.produtoId,
+    produtoNome: filtro.produtoNome,
+    periodoDias: filtro.dias,
+    clientes,
+  };
+  if (!id) return serializarPublico(await WhatsappPublico.create({ ...dados, criadoPor: usuario?.nome || null }));
+  const atual = await WhatsappPublico.findByPk(id);
+  if (!atual) throw erroHttp(404, "Lista salva não encontrada.");
+  await atual.update(dados);
+  return serializarPublico(atual);
+};
+
+// Marca quando a lista salva foi usada (ordenação e conferência).
+export const usarPublico = async (id) => {
+  const p = await WhatsappPublico.findByPk(id);
+  if (!p) throw erroHttp(404, "Lista salva não encontrada.");
+  await p.update({ usadaEm: new Date() });
+  return serializarPublico(p);
+};
+
+export const excluirPublico = async (id) => {
+  const p = await WhatsappPublico.findByPk(id);
+  if (!p) throw erroHttp(404, "Lista salva não encontrada.");
+  await p.destroy();
+  return { ok: true };
 };
 
 // ---------------------------------------------------------------------------

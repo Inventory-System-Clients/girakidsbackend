@@ -62,6 +62,9 @@ export const WhatsappCampanha = sequelize.define(
     midiaNome: { type: DataTypes.STRING(200), allowNull: true },
     // [{ usuarioId, nome, telefone, pedidos }]
     clientes: { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },
+    // Critério usado na recomendação: { tipo: GERAL|CATEGORIA|PRODUTO,
+    // categoria, produtoId, produtoNome, dias } (para "gerar outra lista").
+    filtro: { type: DataTypes.JSONB, allowNull: true },
     status: { type: DataTypes.STRING(12), allowNull: false, defaultValue: "RASCUNHO" },
     agendadaPara: { type: DataTypes.DATE, allowNull: true },
     concluidaEm: { type: DataTypes.DATE, allowNull: true },
@@ -93,4 +96,25 @@ export const WhatsappCampanhaEnvio = sequelize.define(
     timestamps: true,
     indexes: [{ unique: true, fields: ["campanhaId", "usuarioId"] }, { fields: ["status", "programadoPara"] }, { fields: ["usuarioId", "enviadoEm"] }],
   },
+);
+
+// Listas nichadas salvas (quem mais compra de uma categoria ou de um produto),
+// para reaproveitar nos envios. Até 20 clientes, como as listas de envio.
+export const WhatsappPublico = sequelize.define(
+  "WhatsappPublico",
+  {
+    id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
+    nome: { type: DataTypes.STRING(120), allowNull: false },
+    // GERAL, CATEGORIA ou PRODUTO
+    tipo: { type: DataTypes.STRING(10), allowNull: false, defaultValue: "GERAL" },
+    categoria: { type: DataTypes.STRING(100), allowNull: true },
+    produtoId: { type: DataTypes.UUID, allowNull: true },
+    produtoNome: { type: DataTypes.STRING(200), allowNull: true },
+    periodoDias: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 90 },
+    // [{ usuarioId, nome, telefone, pedidos, itens }]
+    clientes: { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },
+    usadaEm: { type: DataTypes.DATE, allowNull: true },
+    criadoPor: { type: DataTypes.STRING(150), allowNull: true },
+  },
+  { tableName: "whatsapp_publicos", timestamps: true },
 );

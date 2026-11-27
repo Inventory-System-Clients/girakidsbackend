@@ -14,7 +14,7 @@ import Arquivo from "./Arquivo.js";
 import Banner from "./Banner.js";
 import PedidoCustoExtra from "./PedidoCustoExtra.js";
 import CredencialPagamento from "./CredencialPagamento.js";
-import { WhatsappCampanha, WhatsappCampanhaEnvio, WhatsappMensagem, WhatsappOptOut } from "./Whatsapp.js";
+import { WhatsappCampanha, WhatsappCampanhaEnvio, WhatsappMensagem, WhatsappOptOut, WhatsappPublico } from "./Whatsapp.js";
 import { PreRecebimento, PreRecebimentoItem, OrdemMontagem } from "./PreRecebimento.js";
 import Cheque from "./Cheque.js";
 
@@ -78,5 +78,6 @@ export {
   WhatsappOptOut,
   WhatsappCampanha,
   WhatsappCampanhaEnvio,
+  WhatsappPublico,
   Cheque,
 };

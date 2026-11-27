@@ -322,12 +322,20 @@ router.get("/whatsapp/campanhas/clientes", ...adminWhats, whatsapp.campanhaBusca
 router.post("/whatsapp/campanhas/recomendar", ...adminWhats, whatsapp.campanhaRecomendar);
 router.post("/whatsapp/campanhas/midia", ...adminWhats, uploadMidiaWhats.single("arquivo"), whatsapp.campanhaMidia);
 router.post("/whatsapp/campanhas/ia", ...adminWhats, limiteIaWhats, whatsapp.campanhaTextoIA);
+router.get("/whatsapp/campanhas/categorias", ...adminWhats, whatsapp.campanhaCategorias);
+router.get("/whatsapp/campanhas/produtos", ...adminWhats, whatsapp.campanhaProdutos);
 router.get("/whatsapp/campanhas/:id", ...adminWhats, whatsapp.campanhaObter);
 router.put("/whatsapp/campanhas/:id", ...adminWhats, whatsapp.campanhaAtualizar);
 router.post("/whatsapp/campanhas/:id/programar", ...adminWhats, whatsapp.campanhaProgramar);
 router.post("/whatsapp/campanhas/:id/cancelar", ...adminWhats, whatsapp.campanhaCancelar);
 router.post("/whatsapp/campanhas/:id/duplicar", ...adminWhats, whatsapp.campanhaDuplicar);
 router.delete("/whatsapp/campanhas/:id", ...adminWhats, whatsapp.campanhaExcluir);
+// Listas nichadas salvas (quem mais compra de uma categoria/produto)
+router.get("/whatsapp/publicos", ...adminWhats, whatsapp.publicosListar);
+router.post("/whatsapp/publicos", ...adminWhats, whatsapp.publicoCriar);
+router.put("/whatsapp/publicos/:id", ...adminWhats, whatsapp.publicoAtualizar);
+router.post("/whatsapp/publicos/:id/usar", ...adminWhats, whatsapp.publicoUsar);
+router.delete("/whatsapp/publicos/:id", ...adminWhats, whatsapp.publicoExcluir);
 
 // Sincronização com o sistema antigo (Krion) — só ADMIN
 const adminLegado = [autenticar, legado.soAdmin];
