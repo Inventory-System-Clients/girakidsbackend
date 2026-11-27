@@ -7,17 +7,12 @@ import { Usuario } from "../models/index.js";
  * X-API-Key. Quem entra com ela vira o usuário "Integração IA" (ADMIN, criado
  * na primeira chamada, com senha aleatória: ninguém faz login com ele).
  *
- * Lê qualquer rota (GET). Escrita só nas rotas que a IA já usa para vender;
- * o resto é recusado. Desativar o usuário "Integração IA" corta a chave.
+ * Acesso total, como um ADMIN: o Maestro faz o que o Gabriel e o Leo pedirem
+ * (as escritas só saem depois do "sim" deles, do lado da ia-central). Tudo
+ * fica no log de atividades em nome de "Integração IA". Desativar esse
+ * usuário corta a chave.
  */
 export const EMAIL_IA = "ia-central@integracao.girakids";
-
-const ESCRITAS_PERMITIDAS = [
-  /^\/api\/orcamentos$/, // monta orçamento
-  /^\/api\/orcamentos\/[^/]+\/gerar-pedido$/, // com o sim do cliente vira pedido
-  /^\/api\/checkout\/frete$/, // cota o frete (só calcula)
-  /^\/api\/usuarios$/, // cria a conta do cliente
-];
 
 export const chaveIaConfere = (req) => {
   const esperado = process.env.IA_CENTRAL_API_KEY || "";
@@ -26,12 +21,6 @@ export const chaveIaConfere = (req) => {
   const a = crypto.createHash("sha256").update(recebido).digest();
   const b = crypto.createHash("sha256").update(esperado).digest();
   return crypto.timingSafeEqual(a, b);
-};
-
-export const escritaPermitidaIa = (req) => {
-  if (["GET", "HEAD", "OPTIONS"].includes(req.method)) return true;
-  const caminho = String(req.originalUrl || "").split("?")[0].replace(/\/+$/, "");
-  return ESCRITAS_PERMITIDAS.some((r) => r.test(caminho));
 };
 
 let cache = null;

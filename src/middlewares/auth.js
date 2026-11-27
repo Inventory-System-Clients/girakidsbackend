@@ -1,7 +1,7 @@
 import crypto from "crypto";
 import jwt from "jsonwebtoken";
 import { Usuario, LogAtividade } from "../models/index.js";
-import { chaveIaConfere, escritaPermitidaIa, usuarioIa } from "./chaveIa.js";
+import { chaveIaConfere, usuarioIa } from "./chaveIa.js";
 
 // Selo da senha atual dentro do token: trocar (ou resetar) a senha derruba
 // todas as sessões abertas com a senha antiga.
@@ -50,9 +50,6 @@ export const autenticar = async (req, res, next) => {
         .status(401)
         .json({ error: "Usuário não encontrado ou inativo" });
     }
-    if (req.viaChaveIa && !escritaPermitidaIa(req)) {
-      return res.status(403).json({ error: "Chave da IA só lê; esta escrita não está liberada." });
-    }
     if (fornecedorForaDoPortal(req, usuario)) {
       return res.status(403).json({ error: "Acesso restrito ao portal do fornecedor." });
     }
@@ -67,7 +64,6 @@ export const autenticar = async (req, res, next) => {
 export const autenticarOpcional = async (req, res, next) => {
   try {
     req.usuario = await lerUsuarioDoToken(req);
-    if (req.viaChaveIa && !escritaPermitidaIa(req)) req.usuario = null;
     if (fornecedorForaDoPortal(req, req.usuario)) req.usuario = null;
   } catch {
     req.usuario = null;
