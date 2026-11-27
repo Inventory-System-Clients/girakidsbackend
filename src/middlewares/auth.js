@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import jwt from "jsonwebtoken";
 import { Usuario, LogAtividade } from "../models/index.js";
+import { chaveIaConfere, escritaPermitidaIa, usuarioIa } from "./chaveIa.js";
 
 // Selo da senha atual dentro do token: trocar (ou resetar) a senha derruba
 // todas as sessões abertas com a senha antiga.
@@ -14,6 +15,13 @@ export const gerarToken = (usuario) =>
   });
 
 const lerUsuarioDoToken = async (req) => {
+  if (req.headers["x-api-key"]) {
+    if (!chaveIaConfere(req)) return null;
+    const ia = await usuarioIa();
+    if (!ia?.ativo) return null;
+    req.viaChaveIa = true;
+    return ia;
+  }
   const token = req.headers.authorization?.replace("Bearer ", "");
   if (!token) return null;
   const decoded = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ["HS256"] });
@@ -33,7 +41,7 @@ const fornecedorForaDoPortal = (req, usuario) =>
 
 export const autenticar = async (req, res, next) => {
   try {
-    if (!req.headers.authorization) {
+    if (!req.headers.authorization && !req.headers["x-api-key"]) {
       return res.status(401).json({ error: "Token não fornecido" });
     }
     const usuario = await lerUsuarioDoToken(req);
@@ -41,6 +49,9 @@ export const autenticar = async (req, res, next) => {
       return res
         .status(401)
         .json({ error: "Usuário não encontrado ou inativo" });
+    }
+    if (req.viaChaveIa && !escritaPermitidaIa(req)) {
+      return res.status(403).json({ error: "Chave da IA só lê; esta escrita não está liberada." });
     }
     if (fornecedorForaDoPortal(req, usuario)) {
       return res.status(403).json({ error: "Acesso restrito ao portal do fornecedor." });
@@ -56,6 +67,7 @@ export const autenticar = async (req, res, next) => {
 export const autenticarOpcional = async (req, res, next) => {
   try {
     req.usuario = await lerUsuarioDoToken(req);
+    if (req.viaChaveIa && !escritaPermitidaIa(req)) req.usuario = null;
     if (fornecedorForaDoPortal(req, req.usuario)) req.usuario = null;
   } catch {
     req.usuario = null;
