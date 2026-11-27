@@ -675,7 +675,7 @@ export const editar = async (req, res) => {
       const desconto = corpo.desconto !== undefined ? numero(corpo.desconto) : Number(pedido.desconto);
       atualizacao.desconto = Math.min(subtotal, Math.max(0, desconto));
 
-      const { taxas, total } = await calcularTotais({
+      let { taxas, total } = await calcularTotais({
         subtotal,
         desconto: atualizacao.desconto,
         frete: atualizacao.frete ?? Number(pedido.frete),
@@ -685,6 +685,11 @@ export const editar = async (req, res) => {
         parcelasCartao: pedido.parcelasCartao,
         composicaoPagamento: pedido.composicaoPagamento,
       });
+      // Valor cobrado definido à mão: o acréscimo combinado continua o mesmo.
+      if (pedido.taxasManuais && pedido.formaPagamento !== "MESCLA") {
+        total = arredondar(total - taxas + Number(pedido.taxas));
+        taxas = Number(pedido.taxas);
+      }
       atualizacao.taxas = taxas;
       atualizacao.total = total;
       if (pedido.pendenciaStatus === "ABERTA") {
@@ -713,10 +718,15 @@ export const alterarFormaPagamento = async (req, res) => {
     if (!FORMAS_PAGAMENTO[formaPagamento]) throw erroHttp(400, "Forma de pagamento inválida.");
     const parcelasCartao = lerParcelasCartao(req.body?.parcelasCartao, formaPagamento);
     const boletoConfig = formaPagamento === "BOLETO" ? lerBoletoConfig(req.body?.boleto) : null;
+    // Valor cobrado informado à mão (opcional; não vale para a mescla, que tem
+    // os valores de cada forma).
+    const manualInformado = req.body?.valorManual !== undefined && req.body?.valorManual !== null && req.body?.valorManual !== "";
+    const valorManual = manualInformado && formaPagamento !== "MESCLA" ? arredondar(Number(req.body.valorManual)) : null;
+    if (valorManual !== null && !(valorManual > 0)) throw erroHttp(400, "Informe um valor cobrado maior que zero.");
     await sequelize.transaction(async (transaction) => {
       const pedido = await carregarParaAlterar(req.params.id, transaction);
       garantirNaoCancelado(pedido);
-      const { taxas, total, composicao } = await calcularTotais({
+      let { taxas, total, composicao } = await calcularTotais({
         subtotal: Number(pedido.subtotal),
         desconto: Number(pedido.desconto),
         frete: Number(pedido.frete),
@@ -726,6 +736,25 @@ export const alterarFormaPagamento = async (req, res) => {
         parcelasCartao,
         composicaoPagamento,
       });
+      // Valor manual: acima do valor sem taxas, a diferença fica como taxa;
+      // abaixo, vira desconto (o frete não entra no desconto).
+      let desconto = Number(pedido.desconto);
+      if (valorManual !== null) {
+        const base = arredondar(total - taxas);
+        const diferenca = arredondar(valorManual - base);
+        if (diferenca >= 0) {
+          taxas = diferenca;
+        } else {
+          const maximo = Math.max(0, Number(pedido.subtotal) - Number(pedido.creditoUsado));
+          if (desconto - diferenca > maximo + 0.009) {
+            const piso = arredondar(base - (maximo - desconto));
+            throw erroHttp(400, `O valor cobrado não pode ser menor que ${piso.toFixed(2).replace(".", ",")} (frete do pedido).`);
+          }
+          desconto = arredondar(desconto - diferenca);
+          taxas = 0;
+        }
+        total = valorManual;
+      }
       if (formaPagamento === "MESCLA") {
         // Parte no cartão com a taxa dela já somada (valorCobrado).
         const linhas = composicao;
@@ -758,6 +787,8 @@ export const alterarFormaPagamento = async (req, res) => {
           boletoConfig,
           taxas,
           total,
+          desconto,
+          taxasManuais: valorManual !== null,
           ...(pedido.pendenciaStatus === "ABERTA"
             ? { pendenciaValor: arredondar(total - totalRecebido(pedido)) }
             : {}),
@@ -766,6 +797,8 @@ export const alterarFormaPagamento = async (req, res) => {
             para: formaPagamento,
             totalAnterior: Number(pedido.total),
             totalNovo: total,
+            valorManual: valorManual !== null,
+            ...(valorManual !== null && desconto !== Number(pedido.desconto) ? { descontoAnterior: Number(pedido.desconto), descontoNovo: desconto } : {}),
             motivo: motivo || null,
           }),
         },

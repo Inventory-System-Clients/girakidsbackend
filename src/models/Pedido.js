@@ -70,6 +70,9 @@ export const Pedido = sequelize.define(
     subtotal: { type: DataTypes.DECIMAL(12, 2), allowNull: false, defaultValue: 0 },
     desconto: { type: DataTypes.DECIMAL(12, 2), allowNull: false, defaultValue: 0 },
     taxas: { type: DataTypes.DECIMAL(12, 2), allowNull: false, defaultValue: 0 },
+    // Valor cobrado definido à mão ao trocar a forma de pagamento: as taxas
+    // ficam fixas (não são recalculadas pelo percentual nas edições).
+    taxasManuais: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     creditoUsado: {
       type: DataTypes.DECIMAL(12, 2),
       allowNull: false,
